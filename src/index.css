@@ -325,6 +325,10 @@ button:hover {
   opacity: 0.6;
 }
 
+.chord-block-active {
+  background: #ff0;
+}
+
 .resize-handle {
   position: absolute;
   right: 0;
