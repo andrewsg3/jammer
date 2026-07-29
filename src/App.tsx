@@ -20,25 +20,25 @@ import {
 
 const STARTER_PLACEMENTS: ChordPlacement[] = [
   { id: 'starter-0', selection: { type: 'diatonic', degree: 0 }, startBeat: 0, lengthBeats: 4 },
-  { id: 'starter-1', selection: { type: 'diatonic', degree: 3 }, startBeat: 4, lengthBeats: 4 },
-  { id: 'starter-2', selection: { type: 'diatonic', degree: 4 }, startBeat: 8, lengthBeats: 4 },
-  { id: 'starter-3', selection: { type: 'diatonic', degree: 0 }, startBeat: 12, lengthBeats: 4 },
+  { id: 'starter-1', selection: { type: 'secondaryDominant', degree: 5 }, startBeat: 4, lengthBeats: 4 },
+  { id: 'starter-2', selection: { type: 'diatonic', degree: 5 }, startBeat: 8, lengthBeats: 4 },
+  { id: 'starter-3', selection: { type: 'diatonic', degree: 1 }, startBeat: 12, lengthBeats: 4 },
 ];
 
 function App() {
   const [musicalKey, setMusicalKey] = useState('C');
   const [scale, setScale] = useState<ScaleName>('major');
   const [placements, setPlacements] = useState<ChordPlacement[]>(STARTER_PLACEMENTS);
-  const [tempo, setTempo] = useState(100);
-  const [drumStyle, setDrumStyle] = useState(drumStyles.find((s) => s.name === 'Rock')!);
-  const [bassStyle, setBassStyle] = useState(bassStyles.find((s) => s.name === 'Root-Fifth')!);
-  const [keysStyle, setKeysStyle] = useState(keysStyles.find((s) => s.name === 'Power Chords')!);
+  const [tempo, setTempo] = useState(124);
+  const [drumStyle, setDrumStyle] = useState(drumStyles.find((s) => s.name === 'Funk')!);
+  const [bassStyle, setBassStyle] = useState(bassStyles.find((s) => s.name === 'Walking')!);
+  const [keysStyle, setKeysStyle] = useState(keysStyles.find((s) => s.name === 'Sustained 7ths')!);
   const [metronomeOn, setMetronomeOn] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [customDrumStyle, setCustomDrumStyle] = useState<DrumStyle | null>(null);
   const [midiError, setMidiError] = useState<string | null>(null);
   const [loopStart, setLoopStart] = useState(0);
-  const [loopEnd, setLoopEnd] = useState(TOTAL_BEATS);
+  const [loopEnd, setLoopEnd] = useState(16);
   const [playheadBeat, setPlayheadBeat] = useState<number | null>(null);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ function App() {
     }
     let frameId: number;
     const tick = () => {
-      setPlayheadBeat(getCurrentBeat());
+      setPlayheadBeat(Math.floor(getCurrentBeat()));
       frameId = requestAnimationFrame(tick);
     };
     frameId = requestAnimationFrame(tick);
