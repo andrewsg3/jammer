@@ -813,6 +813,16 @@ button:hover {
   z-index: 1;
 }
 
+/* A chord that spans multiple rows renders as one segment per row — dashed edges
+   mark the "cut" so it still reads as a single continuous chord wrapping lines. */
+.chord-block-continued {
+  border-left-style: dashed;
+}
+
+.chord-block-continues {
+  border-right-style: dashed;
+}
+
 .resize-handle {
   position: absolute;
   right: 0;

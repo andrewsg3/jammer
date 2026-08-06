@@ -51,10 +51,8 @@ function overlaps(a: ChordPlacement, startBeat: number, lengthBeats: number): bo
   return startBeat < a.startBeat + a.lengthBeats && a.startBeat < startBeat + lengthBeats;
 }
 
-function crossesRow(startBeat: number, lengthBeats: number): boolean {
-  return rowOf(startBeat) !== rowOf(startBeat + lengthBeats - 1);
-}
-
+// Placements are free to span multiple rows — canPlace only rejects going off the
+// front/back of the grid or overlapping another chord in time, never crossing a row.
 function canPlace(
   placements: ChordPlacement[],
   excludeId: string | null,
@@ -62,8 +60,38 @@ function canPlace(
   lengthBeats: number,
 ): boolean {
   if (startBeat < 0 || lengthBeats <= 0 || startBeat + lengthBeats > TOTAL_BEATS) return false;
-  if (crossesRow(startBeat, lengthBeats)) return false;
   return placements.every((p) => p.id === excludeId || !overlaps(p, startBeat, lengthBeats));
+}
+
+type ChordSegment = {
+  placement: ChordPlacement;
+  row: number;
+  localStart: number;
+  span: number;
+  isFirst: boolean;
+  isLast: boolean;
+};
+
+/** Splits a placement into one segment per row it visually spans. */
+function segmentsFor(placement: ChordPlacement): ChordSegment[] {
+  const segments: ChordSegment[] = [];
+  const end = placement.startBeat + placement.lengthBeats;
+  let cursor = placement.startBeat;
+  while (cursor < end) {
+    const row = rowOf(cursor);
+    const rowStart = row * BEATS_PER_ROW;
+    const segEnd = Math.min(end, rowStart + BEATS_PER_ROW);
+    segments.push({
+      placement,
+      row,
+      localStart: cursor - rowStart,
+      span: segEnd - cursor,
+      isFirst: cursor === placement.startBeat,
+      isLast: segEnd === end,
+    });
+    cursor = segEnd;
+  }
+  return segments;
 }
 
 function maxFittingLength(placements: ChordPlacement[], current: ChordPlacement): number {
@@ -238,21 +266,23 @@ export function ChordGrid({
     // than always resetting to a bar — makes dropping a run of same-length chords
     // (e.g. a string of half-bar changes) not require resizing every single one.
     const defaultLength = placements.find((p) => p.id === anchorId)?.lengthBeats ?? 4;
-    if (!canPlace(placements, null, dropBeat, defaultLength)) return; // reject overlapping/row-crossing drops
+    if (!canPlace(placements, null, dropBeat, defaultLength)) return; // reject overlapping/off-grid drops
 
     onDropChord(selection, dropBeat, defaultLength);
   };
 
+  // Resize/move both use clientPosToGlobalBeat (2D — row-aware) rather than a
+  // horizontal-only pixel delta, so dragging across a row boundary works correctly.
   const handleResizeStart = (placement: ChordPlacement) => (e: ReactMouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const startX = e.clientX;
-    const startLength = placement.lengthBeats;
-    const beatWidth = (wrapperRef.current?.getBoundingClientRect().width ?? 0) / BEATS_PER_ROW;
+    if (!wrapperRef.current) return;
+    const wrapperRect = wrapperRef.current.getBoundingClientRect();
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaBeats = Math.round((moveEvent.clientX - startX) / beatWidth);
-      const target = Math.max(MIN_LENGTH_BEATS, startLength + deltaBeats);
+      // +1 — dragging targets "the beat after" the cursor, matching the loop-end handle.
+      const targetEnd = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY) + 1;
+      const target = Math.max(MIN_LENGTH_BEATS, targetEnd - placement.startBeat);
       const maxFit = maxFittingLength(placements, placement);
       const finalLength = Math.min(target, maxFit);
       if (finalLength !== placement.lengthBeats) onResize(placement, finalLength);
@@ -267,14 +297,16 @@ export function ChordGrid({
 
   const handleMoveStart = (placement: ChordPlacement) => (e: ReactMouseEvent) => {
     e.preventDefault();
-    const startX = e.clientX;
-    const originStartBeat = placement.startBeat;
-    let lastEmitted = originStartBeat;
-    const beatWidth = (wrapperRef.current?.getBoundingClientRect().width ?? 0) / BEATS_PER_ROW;
+    if (!wrapperRef.current) return;
+    const wrapperRect = wrapperRef.current.getBoundingClientRect();
+    // Where within the block the user grabbed it, so the block doesn't jump to have
+    // its start snap under the cursor on the first move event.
+    const grabOffset = clientPosToGlobalBeat(wrapperRect, e.clientX, e.clientY) - placement.startBeat;
+    let lastEmitted = placement.startBeat;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaBeats = Math.round((moveEvent.clientX - startX) / beatWidth);
-      const target = originStartBeat + deltaBeats;
+      const pointerBeat = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY);
+      const target = clamp(pointerBeat - grabOffset, 0, TOTAL_BEATS - placement.lengthBeats);
       if (target !== lastEmitted && canPlace(placements, placement.id, target, placement.lengthBeats)) {
         lastEmitted = target;
         onMove(placement, target);
@@ -328,6 +360,7 @@ export function ChordGrid({
   const loopStartRow = rowOf(loopStart);
   const loopEndHomeRow = rowOf(Math.max(0, loopEnd - 1));
   const playheadRow = playheadBeat === null ? null : clamp(rowOf(playheadBeat), 0, ROWS - 1);
+  const allSegments = placements.flatMap(segmentsFor);
 
   return (
     <div className="chord-grid-wrapper">
@@ -352,7 +385,7 @@ export function ChordGrid({
           {Array.from({ length: ROWS }, (_, row) => {
           const rowStart = row * BEATS_PER_ROW;
           const rowEnd = rowStart + BEATS_PER_ROW;
-          const rowPlacements = placements.filter((p) => rowOf(p.startBeat) === row);
+          const rowSegments = allSegments.filter((s) => s.row === row);
           const dimBefore = clamp(loopStart - rowStart, 0, BEATS_PER_ROW);
           const dimAfter = clamp(rowEnd - loopEnd, 0, BEATS_PER_ROW);
 
@@ -404,15 +437,23 @@ export function ChordGrid({
                     style={{ left: `${((playheadBeat - rowStart) / BEATS_PER_ROW) * 100}%` }}
                   />
                 )}
-                {rowPlacements.map((placement) => {
-                  const localStart = placement.startBeat - rowStart;
+                {rowSegments.map((seg) => {
+                  const placement = seg.placement;
                   const chord = resolveSelection(musicalKey, scale, placement.selection);
+                  const classNames = [
+                    'chord-block',
+                    selectedIds.has(placement.id) && 'chord-block-selected',
+                    !seg.isFirst && 'chord-block-continued',
+                    !seg.isLast && 'chord-block-continues',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
                   return (
                     <div
-                      key={placement.id}
-                      className={`chord-block${selectedIds.has(placement.id) ? ' chord-block-selected' : ''}`}
+                      key={`${placement.id}-${seg.row}`}
+                      className={classNames}
                       style={{
-                        gridColumn: `${localStart + 1} / span ${placement.lengthBeats}`,
+                        gridColumn: `${seg.localStart + 1} / span ${seg.span}`,
                         gridRow: 1,
                       }}
                     >
@@ -421,18 +462,26 @@ export function ChordGrid({
                         onMouseDown={handleMoveStart(placement)}
                         onClick={handleChordClick(placement, chord)}
                       >
-                        <span className="chord-block-name">{chordName(chord)}</span>
+                        <span className="chord-block-name">
+                          {!seg.isFirst && '⟵ '}
+                          {chordName(chord)}
+                          {!seg.isLast && ' ⟶'}
+                        </span>
                       </div>
-                      <button
-                        type="button"
-                        className="chord-block-remove"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={() => onRemove(placement)}
-                        aria-label="Remove chord"
-                      >
-                        ×
-                      </button>
-                      <div className="resize-handle" onMouseDown={handleResizeStart(placement)} />
+                      {seg.isFirst && (
+                        <button
+                          type="button"
+                          className="chord-block-remove"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={() => onRemove(placement)}
+                          aria-label="Remove chord"
+                        >
+                          ×
+                        </button>
+                      )}
+                      {seg.isLast && (
+                        <div className="resize-handle" onMouseDown={handleResizeStart(placement)} />
+                      )}
                     </div>
                   );
                 })}
