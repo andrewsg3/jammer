@@ -195,6 +195,20 @@ const ROMAN_NUMERALS: Record<ScaleName, string[]> = {
   locrian: ['i°', 'II', 'iii', 'iv', 'V', 'VI', 'vii'],
 };
 
+// Same idea as DEGREE_QUALITIES, but stacking four scale-thirds (root/3rd/5th/7th)
+// instead of three. Every mode here is a rotation of the plain major scale, so only
+// maj7/dom7/min7/m7b5 ever come up — dim7 and augmented-7th chords only arise from
+// harmonic/melodic minor, which isn't one of these seven modes.
+const DEGREE_SEVENTH_QUALITIES: Record<ScaleName, ChordQuality[]> = {
+  major: ['maj7', 'min7', 'min7', 'maj7', 'dom7', 'min7', 'm7b5'],
+  minor: ['min7', 'm7b5', 'maj7', 'min7', 'min7', 'maj7', 'dom7'],
+  dorian: ['min7', 'min7', 'maj7', 'dom7', 'min7', 'm7b5', 'maj7'],
+  phrygian: ['min7', 'maj7', 'dom7', 'min7', 'm7b5', 'maj7', 'min7'],
+  lydian: ['maj7', 'dom7', 'min7', 'm7b5', 'maj7', 'min7', 'min7'],
+  mixolydian: ['dom7', 'min7', 'm7b5', 'maj7', 'min7', 'min7', 'maj7'],
+  locrian: ['m7b5', 'maj7', 'min7', 'min7', 'maj7', 'maj7', 'min7'],
+};
+
 export function rootSemitone(root: string): number {
   const semitone = NOTE_TO_SEMITONE[root];
   if (semitone === undefined) throw new Error(`Unknown note: "${root}"`);
@@ -229,6 +243,13 @@ export function diatonicChords(key: string, scale: ScaleName): Chord[] {
   return [0, 1, 2, 3, 4, 5, 6].map((degree) => diatonicChord(key, scale, degree as ScaleDegree));
 }
 
+/** The diatonic *seventh* chord built on a given scale degree of a key. */
+export function diatonicSeventhChord(key: string, scale: ScaleName, degree: ScaleDegree): Chord {
+  const root = rootSemitone(key);
+  const shifted = (root + SCALE_INTERVALS[scale][degree]) % 12;
+  return { root: SEMITONE_TO_NOTE[shifted], quality: DEGREE_SEVENTH_QUALITIES[scale][degree] };
+}
+
 /** e.g. "I", "vii°" */
 export function romanNumeral(scale: ScaleName, degree: ScaleDegree): string {
   return ROMAN_NUMERALS[scale][degree];
@@ -236,6 +257,7 @@ export function romanNumeral(scale: ScaleName, degree: ScaleDegree): string {
 
 export type ChordSelection =
   | { type: 'diatonic'; degree: ScaleDegree }
+  | { type: 'diatonicSeventh'; degree: ScaleDegree }
   | { type: 'borrowed'; index: number }
   | { type: 'secondaryDominant'; degree: ScaleDegree }
   // Any of the 12 chromatic roots (0-11 semitones above the tonic) at any quality —
@@ -254,6 +276,8 @@ export function serializeSelection(selection: ChordSelection): string {
   switch (selection.type) {
     case 'diatonic':
       return `diatonic:${selection.degree}`;
+    case 'diatonicSeventh':
+      return `diatonicSeventh:${selection.degree}`;
     case 'borrowed':
       return `borrowed:${selection.index}`;
     case 'secondaryDominant':
@@ -268,6 +292,8 @@ export function deserializeSelection(value: string): ChordSelection {
   switch (type) {
     case 'diatonic':
       return { type: 'diatonic', degree: Number(rest[0]) as ScaleDegree };
+    case 'diatonicSeventh':
+      return { type: 'diatonicSeventh', degree: Number(rest[0]) as ScaleDegree };
     case 'borrowed':
       return { type: 'borrowed', index: Number(rest[0]) };
     case 'secondaryDominant':
@@ -333,6 +359,19 @@ export function diatonicOptions(key: string, scale: ScaleName): ChordOption[] {
   });
 }
 
+export function diatonicSeventhOptions(key: string, scale: ScaleName): ChordOption[] {
+  return [0, 1, 2, 3, 4, 5, 6].map((degree) => {
+    const d = degree as ScaleDegree;
+    return {
+      selection: { type: 'diatonicSeventh', degree: d },
+      chord: diatonicSeventhChord(key, scale, d),
+      // Same roman numeral as the triad row — the quality is already spelled out in
+      // the full chord name (chordName) that renders alongside it in the palette.
+      label: romanNumeral(scale, d),
+    };
+  });
+}
+
 export function borrowedOptions(key: string, scale: ScaleName): ChordOption[] {
   return (BORROWED_CHORDS[scale] ?? []).map((def, index) => ({
     selection: { type: 'borrowed', index },
@@ -373,6 +412,8 @@ export function resolveSelection(key: string, scale: ScaleName, selection: Chord
   switch (selection.type) {
     case 'diatonic':
       return diatonicChord(key, scale, selection.degree);
+    case 'diatonicSeventh':
+      return diatonicSeventhChord(key, scale, selection.degree);
     case 'borrowed': {
       // Falls back to the tonic triad if this scale has no borrowed-chord list (or a
       // song preset saved under a different scale references an out-of-range index) —

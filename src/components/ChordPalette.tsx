@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   chordName,
   diatonicOptions,
+  diatonicSeventhOptions,
   borrowedOptions,
   secondaryDominantOptions,
   chromaticOptions,
@@ -95,6 +96,11 @@ export function ChordPalette({ musicalKey, scale, onAudition }: Props) {
   return (
     <div className="chord-palette">
       <PaletteRow title="Diatonic" options={diatonicOptions(musicalKey, scale)} onAudition={onAudition} />
+      <PaletteRow
+        title="Diatonic 7ths"
+        options={diatonicSeventhOptions(musicalKey, scale)}
+        onAudition={onAudition}
+      />
       <PaletteRow title="Borrowed" options={borrowedOptions(musicalKey, scale)} onAudition={onAudition} />
       <PaletteRow
         title="Secondary Dominants"

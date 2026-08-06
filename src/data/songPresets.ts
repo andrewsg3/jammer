@@ -39,7 +39,9 @@ export type SongPreset = {
 function isChordSelection(value: unknown): value is ChordSelection {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  if (v.type === 'diatonic' || v.type === 'secondaryDominant') return typeof v.degree === 'number';
+  if (v.type === 'diatonic' || v.type === 'diatonicSeventh' || v.type === 'secondaryDominant') {
+    return typeof v.degree === 'number';
+  }
   if (v.type === 'borrowed') return typeof v.index === 'number';
   if (v.type === 'chromatic') return typeof v.offset === 'number' && typeof v.quality === 'string';
   return false;

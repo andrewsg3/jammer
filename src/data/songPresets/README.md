@@ -69,7 +69,7 @@ Each entry in `placements` is:
 
 ## Chord selection types
 
-All four are relative to the preset's `key`/`scale`, so the same preset transposes
+All five are relative to the preset's `key`/`scale`, so the same preset transposes
 correctly if you change the key later.
 
 ### `diatonic` — a scale-degree chord
@@ -93,6 +93,18 @@ fifth above its tonic, not because it's "compared" to major or minor.
 | 4      | V     | v     | v      | v°       | V      | v          | V       |
 | 5      | vi    | VI    | vi°    | VI       | vi     | vi         | VI      |
 | 6      | vii°  | VII   | VII    | vii      | vii    | VII        | vii     |
+
+### `diatonicSeventh` — the diatonic 7th chord on a scale degree
+
+```json
+{ "type": "diatonicSeventh", "degree": 0 }
+```
+
+Same `degree`/mode table as `diatonic` above, but stacks four scale-thirds
+(root/3rd/5th/7th) instead of three — e.g. major's `degree: 0` is `maj7` rather than
+a plain `maj` triad. Every mode here only ever produces `maj7`, `dom7`, `min7`, or
+`m7b5` (never `dim7` or an augmented 7th — those only arise from harmonic/melodic
+minor, not these seven natural modes).
 
 ### `secondaryDominant` — V7 of a diatonic degree
 
