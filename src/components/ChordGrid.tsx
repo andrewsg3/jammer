@@ -288,14 +288,18 @@ export function ChordGrid({
                     className="loop-handle loop-handle-start"
                     style={{ left: `${((loopStart - rowStart) / BEATS_PER_ROW) * 100}%` }}
                     onMouseDown={handleLoopStartDrag}
-                  />
+                  >
+                    <span className="loop-handle-dots" />
+                  </div>
                 )}
                 {loopEndHomeRow === row && (
                   <div
                     className="loop-handle loop-handle-end"
                     style={{ left: `${((loopEnd - rowStart) / BEATS_PER_ROW) * 100}%` }}
                     onMouseDown={handleLoopEndDrag}
-                  />
+                  >
+                    <span className="loop-handle-dots" />
+                  </div>
                 )}
               </div>
               <div

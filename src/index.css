@@ -586,34 +586,54 @@ button:hover {
   height: 14px;
 }
 
+/* Musical repeat-barline symbol: two stacked dots, a thin line, a gap, then a
+   thick line (left to right) — the standard "end repeat" shape. loop-handle-start
+   mirrors the whole thing via scaleX(-1) to read thick, gap, thin, dots — the
+   "start repeat" shape — rather than duplicating the layout for both directions. */
 .loop-handle {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 10px;
-  margin-left: -5px;
+  width: 14px;
+  margin-left: -7px;
   cursor: ew-resize;
 }
 
+.loop-handle-start {
+  transform: scaleX(-1);
+}
+
+.loop-handle-dots {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 6px 0 var(--accent);
+}
+
 .loop-handle::before {
+  /* thin line */
   content: '';
   position: absolute;
+  left: 6px;
   top: 0;
-  width: 0;
-  height: 0;
-  border-style: solid;
+  bottom: 0;
+  width: 1.5px;
+  background: var(--accent);
 }
 
-.loop-handle-start::before {
-  left: 3px;
-  border-width: 7px 0 7px 7px;
-  border-color: transparent transparent transparent var(--accent);
-}
-
-.loop-handle-end::before {
-  left: 0;
-  border-width: 7px 7px 7px 0;
-  border-color: transparent var(--accent) transparent transparent;
+.loop-handle::after {
+  /* thick line */
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
 }
 
 .chord-grid-row {
