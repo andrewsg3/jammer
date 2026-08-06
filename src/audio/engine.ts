@@ -1,9 +1,24 @@
 import * as Tone from 'tone';
 import { chordTones, type Chord, type ChordPlacement, type ScaleName } from '../data/progressions';
 import type { DrumPattern, BassRule, KeysRule } from '../data/instrumentStyles';
-import { scheduleDrums, disposeDrums, setVolume as setDrumsOutputVolume } from './drums';
-import { scheduleBass, disposeBass, setVolume as setBassOutputVolume } from './bass';
-import { scheduleKeys, disposeKeys, setVolume as setKeysOutputVolume } from './keys';
+import {
+  scheduleDrums,
+  disposeDrums,
+  setVolume as setDrumsOutputVolume,
+  setInstrument as setDrumsInstrumentImpl,
+} from './drums';
+import {
+  scheduleBass,
+  disposeBass,
+  setVolume as setBassOutputVolume,
+  setInstrument as setBassInstrumentImpl,
+} from './bass';
+import {
+  scheduleKeys,
+  disposeKeys,
+  setVolume as setKeysOutputVolume,
+  setInstrument as setKeysInstrumentImpl,
+} from './keys';
 import { scheduleMetronome, disposeMetronome, setVolume as setMetronomeOutputVolume } from './metronome';
 
 const AUDITION_OCTAVE = 4;
@@ -67,6 +82,18 @@ export function setDrumsVolume(percent: number): void {
 
 export function setMetronomeVolume(percent: number): void {
   setMetronomeOutputVolume(percentToDb(percent));
+}
+
+export function setChordsInstrument(name: string): void {
+  setKeysInstrumentImpl(name);
+}
+
+export function setBassInstrument(name: string): void {
+  setBassInstrumentImpl(name);
+}
+
+export function setDrumsInstrument(name: string): void {
+  setDrumsInstrumentImpl(name);
 }
 
 export async function play(params: PlaybackParams): Promise<void> {

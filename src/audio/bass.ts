@@ -6,31 +6,50 @@ const BASS_OCTAVE = 2;
 
 const output = new Tone.Volume(0).toDestination();
 
-let synth: Tone.MonoSynth | null = null;
+let synth: Tone.MonoSynth | Tone.PluckSynth | null = null;
+let currentInstrument = 'Electric';
 let part: Tone.Part<{ time: string; note: string }> | null = null;
 
-function ensureSynth() {
-  if (!synth) {
-    // Sawtooth through a lowpass filter that closes down after the pluck —
-    // brighter attack settling into a warmer sustain, like a plucked bass string.
-    synth = new Tone.MonoSynth({
-      oscillator: { type: 'sawtooth' },
-      envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.3 },
-      filter: { type: 'lowpass', rolloff: -24, Q: 1 },
-      filterEnvelope: {
-        attack: 0.005,
-        decay: 0.2,
-        sustain: 0.3,
-        release: 0.3,
-        baseFrequency: 100,
-        octaves: 3,
-      },
+function buildSynth() {
+  if (currentInstrument === 'Upright') {
+    // Karplus-Strong string synthesis — genuinely plucked/woody, a good fit for
+    // upright pizzicato without needing sampled strings.
+    return new Tone.PluckSynth({
+      attackNoise: 1,
+      dampening: 3000,
+      resonance: 0.92,
     }).connect(output);
   }
+  // Sawtooth through a lowpass filter that closes down after the pluck —
+  // brighter attack settling into a warmer sustain, like a plucked bass string.
+  return new Tone.MonoSynth({
+    oscillator: { type: 'sawtooth' },
+    envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.3 },
+    filter: { type: 'lowpass', rolloff: -24, Q: 1 },
+    filterEnvelope: {
+      attack: 0.005,
+      decay: 0.2,
+      sustain: 0.3,
+      release: 0.3,
+      baseFrequency: 100,
+      octaves: 3,
+    },
+  }).connect(output);
+}
+
+function ensureSynth() {
+  if (!synth) synth = buildSynth();
 }
 
 export function setVolume(db: number): void {
   output.volume.value = db;
+}
+
+export function setInstrument(name: string): void {
+  if (name === currentInstrument) return;
+  currentInstrument = name;
+  synth?.dispose();
+  synth = null;
 }
 
 function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null {

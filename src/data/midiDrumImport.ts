@@ -30,9 +30,11 @@ const GM_TO_DRUM_NOTE: Record<number, DrumStep['note']> = {
   59: 'hihat',
 };
 
-export async function parseMidiDrumPattern(file: File): Promise<DrumPattern> {
-  const buffer = await file.arrayBuffer();
+/** Parses raw MIDI bytes into a drum pattern, plus the file's track name if it has one. */
+export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; pattern: DrumPattern } {
   const midi = parseMidi(new Uint8Array(buffer));
+  const nameEvent = midi.tracks.flat().find((event) => event.type === 'trackName');
+  const name = nameEvent && 'text' in nameEvent ? nameEvent.text : null;
   const ppq = midi.header.ticksPerBeat ?? 128;
   const ticksPer16th = ppq / 4;
 
@@ -70,5 +72,10 @@ export async function parseMidiDrumPattern(file: File): Promise<DrumPattern> {
     velocity,
   }));
 
-  return { bars, steps };
+  return { name, pattern: { bars, steps } };
+}
+
+export async function parseMidiDrumPattern(file: File): Promise<DrumPattern> {
+  const buffer = await file.arrayBuffer();
+  return parseMidiDrumBytes(buffer).pattern;
 }

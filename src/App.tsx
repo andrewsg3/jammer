@@ -8,7 +8,17 @@ import { MidiUpload } from './components/MidiUpload';
 import { ProgressionPresetPicker } from './components/ProgressionPresetPicker';
 import { SongPresetControls } from './components/SongPresetControls';
 import type { Chord, ChordPlacement, ChordSelection, ScaleName } from './data/progressions';
-import { drumStyles, bassStyles, keysStyles, type DrumStyle } from './data/instrumentStyles';
+import {
+  baseDrumStyles,
+  bassStyles,
+  keysStyles,
+  keysInstruments,
+  bassInstruments,
+  drumsInstruments,
+  type DrumStyle,
+  type Instrument,
+} from './data/instrumentStyles';
+import { loadBundledDrumStyles } from './data/drumLibrary';
 import { parseMidiDrumPattern } from './data/midiDrumImport';
 import { progressionPresets, type ProgressionPreset } from './data/progressionPresets';
 import {
@@ -28,6 +38,9 @@ import {
   setBassVolume,
   setDrumsVolume,
   setMetronomeVolume,
+  setChordsInstrument,
+  setBassInstrument,
+  setDrumsInstrument,
 } from './audio/engine';
 
 const STARTER_PLACEMENTS: ChordPlacement[] = [
@@ -42,7 +55,8 @@ function App() {
   const [scale, setScale] = useState<ScaleName>('major');
   const [placements, setPlacements] = useState<ChordPlacement[]>(STARTER_PLACEMENTS);
   const [tempo, setTempo] = useState(124);
-  const [drumStyle, setDrumStyle] = useState(drumStyles.find((s) => s.name === 'Funk')!);
+  const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
+  const [drumStyle, setDrumStyle] = useState<DrumStyle>(baseDrumStyles[0]);
   const [bassStyle, setBassStyle] = useState(bassStyles.find((s) => s.name === 'Walking')!);
   const [keysStyle, setKeysStyle] = useState(keysStyles.find((s) => s.name === 'Sustained 7ths')!);
   const [metronomeOn, setMetronomeOn] = useState(false);
@@ -57,6 +71,28 @@ function App() {
   const [bassVolume, setBassVolumeState] = useState(100);
   const [drumsVolume, setDrumsVolumeState] = useState(100);
   const [metronomeVolume, setMetronomeVolumeState] = useState(100);
+  const [chordsInstrument, setChordsInstrumentState] = useState<Instrument>(keysInstruments[0]);
+  const [bassInstrument, setBassInstrumentState] = useState<Instrument>(bassInstruments[0]);
+  const [drumsInstrument, setDrumsInstrumentState] = useState<Instrument>(drumsInstruments[0]);
+
+  useEffect(() => setChordsInstrument(chordsInstrument.name), [chordsInstrument]);
+  useEffect(() => setBassInstrument(bassInstrument.name), [bassInstrument]);
+  useEffect(() => setDrumsInstrument(drumsInstrument.name), [drumsInstrument]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadBundledDrumStyles().then((loaded) => {
+      if (cancelled) return;
+      const all = [...baseDrumStyles, ...loaded];
+      setDrumStyles(all);
+      // Upgrade the initial "None" placeholder to the real default once it's ready —
+      // but leave it alone if the user already picked something during the brief load.
+      setDrumStyle((current) => (current.name === 'None' ? (all.find((s) => s.name === 'Funk') ?? current) : current));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => setChordsVolume(chordsVolume), [chordsVolume]);
   useEffect(() => setBassVolume(bassVolume), [bassVolume]);
@@ -157,6 +193,13 @@ function App() {
     }
     setBassStyle(bassStyles.find((s) => s.name === preset.bassStyle) ?? bassStyles[0]);
     setKeysStyle(keysStyles.find((s) => s.name === preset.keysStyle) ?? keysStyles[0]);
+    setChordsInstrumentState(
+      keysInstruments.find((i) => i.name === preset.chordsInstrument) ?? keysInstruments[0],
+    );
+    setBassInstrumentState(bassInstruments.find((i) => i.name === preset.bassInstrument) ?? bassInstruments[0]);
+    setDrumsInstrumentState(
+      drumsInstruments.find((i) => i.name === preset.drumsInstrument) ?? drumsInstruments[0],
+    );
     setSongPresetError(null);
   };
 
@@ -176,6 +219,9 @@ function App() {
       drumStyle: drumStyle.name,
       bassStyle: bassStyle.name,
       keysStyle: keysStyle.name,
+      chordsInstrument: chordsInstrument.name,
+      bassInstrument: bassInstrument.name,
+      drumsInstrument: drumsInstrument.name,
       customDrumPattern:
         customDrumStyle && drumStyle.name === customDrumStyle.name ? customDrumStyle.pattern : null,
       placements: placements.map(({ selection, startBeat, lengthBeats }) => ({
@@ -254,6 +300,26 @@ function App() {
             />
             <StylePicker label="Bass" options={bassStyles} selected={bassStyle} onSelect={setBassStyle} />
             <StylePicker label="Harmony" options={keysStyles} selected={keysStyle} onSelect={setKeysStyle} />
+          </div>
+          <div className="style-pickers">
+            <StylePicker
+              label="Drum Sound"
+              options={drumsInstruments}
+              selected={drumsInstrument}
+              onSelect={setDrumsInstrumentState}
+            />
+            <StylePicker
+              label="Bass Sound"
+              options={bassInstruments}
+              selected={bassInstrument}
+              onSelect={setBassInstrumentState}
+            />
+            <StylePicker
+              label="Chord Sound"
+              options={keysInstruments}
+              selected={chordsInstrument}
+              onSelect={setChordsInstrumentState}
+            />
           </div>
           <MidiUpload onFile={handleMidiUpload} error={midiError} />
           <MixerControls

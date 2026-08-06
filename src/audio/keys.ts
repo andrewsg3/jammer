@@ -6,27 +6,45 @@ const KEYS_OCTAVE = 3;
 
 const output = new Tone.Volume(0).toDestination();
 
-let synth: Tone.PolySynth<Tone.FMSynth> | null = null;
+let synth: Tone.PolySynth<Tone.FMSynth> | Tone.PolySynth<Tone.Synth> | null = null;
+let currentInstrument = 'Electric Piano';
 let part: Tone.Part<{ time: string; notes: string[]; lengthBeats: number; rhythm: KeysRule['rhythm'] }> | null =
   null;
 
-function ensureSynth() {
-  if (!synth) {
-    // FM synthesis gets closer to an electric-piano character than a plain
-    // oscillator — real piano samples are out of scope (see CLAUDE.md).
-    synth = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 3,
-      modulationIndex: 2,
-      oscillator: { type: 'sine' },
-      modulation: { type: 'square' },
-      envelope: { attack: 0.005, decay: 1.2, sustain: 0.2, release: 1.2 },
-      modulationEnvelope: { attack: 0.005, decay: 0.3, sustain: 0.1, release: 0.5 },
+function buildSynth() {
+  if (currentInstrument === 'Guitar') {
+    // A plain oscillator with a fast decay/low sustain approximates a picked/strummed
+    // guitar chord well enough without physical modeling — real samples are out of
+    // scope (see CLAUDE.md).
+    return new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
+      envelope: { attack: 0.005, decay: 0.5, sustain: 0.15, release: 0.8 },
     }).connect(output);
   }
+  // FM synthesis gets closer to an electric-piano character than a plain oscillator.
+  return new Tone.PolySynth(Tone.FMSynth, {
+    harmonicity: 3,
+    modulationIndex: 2,
+    oscillator: { type: 'sine' },
+    modulation: { type: 'square' },
+    envelope: { attack: 0.005, decay: 1.2, sustain: 0.2, release: 1.2 },
+    modulationEnvelope: { attack: 0.005, decay: 0.3, sustain: 0.1, release: 0.5 },
+  }).connect(output);
+}
+
+function ensureSynth() {
+  if (!synth) synth = buildSynth();
 }
 
 export function setVolume(db: number): void {
   output.volume.value = db;
+}
+
+export function setInstrument(name: string): void {
+  if (name === currentInstrument) return;
+  currentInstrument = name;
+  synth?.dispose();
+  synth = null;
 }
 
 function voicingNotes(chord: Chord, voicing: KeysRule['voicing']): string[] {

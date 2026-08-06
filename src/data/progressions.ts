@@ -15,7 +15,13 @@ export type ChordQuality =
   | 'add9'
   | 'dom9'
   | 'maj9'
-  | 'm9';
+  | 'm9'
+  | 'dom7sharp9'
+  | 'dom7flat9'
+  | 'dom7sharp5'
+  | 'dom13'
+  | 'm11'
+  | 'maj13';
 
 export type Chord = {
   root: string;
@@ -62,6 +68,12 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   dom9: [0, 4, 7, 10, 14],
   maj9: [0, 4, 7, 11, 14],
   m9: [0, 3, 7, 10, 14],
+  dom7sharp9: [0, 4, 7, 10, 15], // "Hendrix chord" — e.g. E7#9
+  dom7flat9: [0, 4, 7, 10, 13],
+  dom7sharp5: [0, 4, 8, 10],
+  dom13: [0, 4, 7, 10, 14, 21],
+  m11: [0, 3, 7, 10, 14, 17],
+  maj13: [0, 4, 7, 11, 14, 21],
 };
 
 const QUALITY_SUFFIX: Record<ChordQuality, string> = {
@@ -82,6 +94,12 @@ const QUALITY_SUFFIX: Record<ChordQuality, string> = {
   dom9: '9',
   maj9: 'maj9',
   m9: 'm9',
+  dom7sharp9: '7#9',
+  dom7flat9: '7b9',
+  dom7sharp5: '7#5',
+  dom13: '13',
+  m11: 'm11',
+  maj13: 'maj13',
 };
 
 export const QUALITY_GROUPS: { label: string; qualities: ChordQuality[] }[] = [
@@ -89,6 +107,10 @@ export const QUALITY_GROUPS: { label: string; qualities: ChordQuality[] }[] = [
   { label: 'Sixths', qualities: ['6', 'm6'] },
   { label: 'Sevenths', qualities: ['dom7', 'maj7', 'min7', 'dim7', 'm7b5'] },
   { label: 'Extensions', qualities: ['add9', 'dom9', 'maj9', 'm9'] },
+  {
+    label: 'Altered / Exotic',
+    qualities: ['dom7sharp9', 'dom7flat9', 'dom7sharp5', 'dom13', 'm11', 'maj13'],
+  },
 ];
 
 export const QUALITY_LABELS: Record<ChordQuality, string> = {
@@ -109,6 +131,12 @@ export const QUALITY_LABELS: Record<ChordQuality, string> = {
   dom9: 'Dominant 9',
   maj9: 'Major 9',
   m9: 'Minor 9',
+  dom7sharp9: 'Dominant 7♯9 (Hendrix)',
+  dom7flat9: 'Dominant 7♭9',
+  dom7sharp5: 'Dominant 7♯5',
+  dom13: 'Dominant 13',
+  m11: 'Minor 11',
+  maj13: 'Major 13',
 };
 
 const SCALE_INTERVALS: Record<ScaleName, number[]> = {

@@ -24,6 +24,11 @@ export type SongPreset = {
   // Only set when drumStyle isn't one of the bundled names (e.g. a MIDI import) —
   // embeds the pattern so the preset stays portable across machines.
   customDrumPattern?: DrumPattern | null;
+  // Instrument/timbre variants — optional so presets written before this existed
+  // still load fine (App.tsx falls back to the default instrument for each track).
+  chordsInstrument?: string;
+  bassInstrument?: string;
+  drumsInstrument?: string;
   placements: SongPresetPlacement[];
 };
 
