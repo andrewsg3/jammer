@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ChordGrid, TOTAL_BEATS } from './components/ChordGrid';
 import { ChordPalette } from './components/ChordPalette';
-import { StylePicker } from './components/StylePicker';
-import { TransportControls } from './components/TransportControls';
-import { MixerControls } from './components/MixerControls';
+import { TopBar } from './components/TopBar';
+import { TrackPanel } from './components/TrackPanel';
+import { VolumeSlider } from './components/VolumeSlider';
 import { MidiUpload } from './components/MidiUpload';
-import { SongPresetControls } from './components/SongPresetControls';
+import { SongPresetFileControls } from './components/SongPresetFileControls';
 import type { Chord, ChordPlacement, ChordSelection, ScaleName } from './data/progressions';
 import {
   baseDrumStyles,
@@ -307,96 +307,108 @@ function App() {
   };
 
   return (
-    <main className="app">
-      <div className="layout">
-        <div className="layout-sidebar">
-          <h1>trackback</h1>
-          <SongPresetControls
-            presets={bundledSongPresets}
-            onLoad={handleLoadSongPreset}
-            onSave={handleSaveSongPreset}
-            onImportFile={handleImportSongPresetFile}
-            error={songPresetError}
-          />
-          <ChordPalette musicalKey={musicalKey} scale={scale} onAudition={handleAudition} />
-          <div className="style-pickers">
-            <StylePicker
-              label="Drums"
-              options={customDrumStyle ? [...drumStyles, customDrumStyle] : drumStyles}
-              selected={drumStyle}
-              onSelect={setDrumStyle}
-            />
-            <StylePicker label="Bass" options={bassStyles} selected={bassStyle} onSelect={setBassStyle} />
-            <StylePicker label="Harmony" options={keysStyles} selected={keysStyle} onSelect={setKeysStyle} />
+    <>
+      <TopBar
+        songPresets={bundledSongPresets}
+        onLoadSongPreset={handleLoadSongPreset}
+        musicalKey={musicalKey}
+        onKeyChange={setMusicalKey}
+        scale={scale}
+        onScaleChange={setScale}
+        tempo={tempo}
+        onTempoChange={setTempo}
+        metronomeOn={metronomeOn}
+        onMetronomeChange={setMetronomeOn}
+        isPlaying={isPlaying}
+        onTogglePlay={handleTogglePlay}
+      />
+      <main className="app">
+        <div className="layout">
+          <div className="layout-sidebar">
+            <ChordPalette musicalKey={musicalKey} scale={scale} onAudition={handleAudition} />
+
+            <div className="track-panels">
+              <TrackPanel
+                label="Drums"
+                accent="drums"
+                styleOptions={customDrumStyle ? [...drumStyles, customDrumStyle] : drumStyles}
+                selectedStyle={drumStyle}
+                onStyleChange={setDrumStyle}
+                instrumentOptions={drumsInstruments}
+                selectedInstrument={drumsInstrument}
+                onInstrumentChange={setDrumsInstrumentState}
+                volume={drumsVolume}
+                onVolumeChange={setDrumsVolumeState}
+              />
+              <TrackPanel
+                label="Bass"
+                accent="bass"
+                styleOptions={bassStyles}
+                selectedStyle={bassStyle}
+                onStyleChange={setBassStyle}
+                instrumentOptions={bassInstruments}
+                selectedInstrument={bassInstrument}
+                onInstrumentChange={setBassInstrumentState}
+                volume={bassVolume}
+                onVolumeChange={setBassVolumeState}
+              />
+              <TrackPanel
+                label="Harmony"
+                accent="harmony"
+                styleOptions={keysStyles}
+                selectedStyle={keysStyle}
+                onStyleChange={setKeysStyle}
+                instrumentOptions={keysInstruments}
+                selectedInstrument={chordsInstrument}
+                onInstrumentChange={setChordsInstrumentState}
+                volume={chordsVolume}
+                onVolumeChange={setChordsVolumeState}
+              />
+            </div>
+
+            <details className="more-section">
+              <summary>More</summary>
+              <div className="more-section-content">
+                <VolumeSlider
+                  id="volume-metronome"
+                  label="Metronome volume"
+                  value={metronomeVolume}
+                  onChange={setMetronomeVolumeState}
+                />
+                <MidiUpload onFile={handleMidiUpload} error={midiError} />
+                <SongPresetFileControls
+                  onSave={handleSaveSongPreset}
+                  onImportFile={handleImportSongPresetFile}
+                  error={songPresetError}
+                />
+              </div>
+            </details>
           </div>
-          <div className="style-pickers">
-            <StylePicker
-              label="Drum Sound"
-              options={drumsInstruments}
-              selected={drumsInstrument}
-              onSelect={setDrumsInstrumentState}
-            />
-            <StylePicker
-              label="Bass Sound"
-              options={bassInstruments}
-              selected={bassInstrument}
-              onSelect={setBassInstrumentState}
-            />
-            <StylePicker
-              label="Chord Sound"
-              options={keysInstruments}
-              selected={chordsInstrument}
-              onSelect={setChordsInstrumentState}
+          <div className="layout-grid">
+            <ChordGrid
+              placements={placements}
+              musicalKey={musicalKey}
+              scale={scale}
+              loopStart={loopStart}
+              loopEnd={loopEnd}
+              playheadBeat={playheadBeat}
+              onDropChord={handleDropChord}
+              onReplaceChord={handleReplaceChord}
+              onResize={handleResize}
+              onMove={handleMove}
+              onRemove={handleRemove}
+              onClear={handleClear}
+              onLoopChange={handleLoopChange}
+              title={songTitle}
+              onTitleChange={setSongTitle}
+              author={songAuthor}
+              onAuthorChange={setSongAuthor}
+              tempo={tempo}
             />
           </div>
-          <MidiUpload onFile={handleMidiUpload} error={midiError} />
-          <MixerControls
-            chordsVolume={chordsVolume}
-            onChordsVolumeChange={setChordsVolumeState}
-            bassVolume={bassVolume}
-            onBassVolumeChange={setBassVolumeState}
-            drumsVolume={drumsVolume}
-            onDrumsVolumeChange={setDrumsVolumeState}
-            metronomeVolume={metronomeVolume}
-            onMetronomeVolumeChange={setMetronomeVolumeState}
-          />
-          <TransportControls
-            musicalKey={musicalKey}
-            onKeyChange={setMusicalKey}
-            scale={scale}
-            onScaleChange={setScale}
-            tempo={tempo}
-            onTempoChange={setTempo}
-            metronomeOn={metronomeOn}
-            onMetronomeChange={setMetronomeOn}
-            isPlaying={isPlaying}
-            onTogglePlay={handleTogglePlay}
-          />
         </div>
-        <div className="layout-grid">
-          <ChordGrid
-            placements={placements}
-            musicalKey={musicalKey}
-            scale={scale}
-            loopStart={loopStart}
-            loopEnd={loopEnd}
-            playheadBeat={playheadBeat}
-            onDropChord={handleDropChord}
-            onReplaceChord={handleReplaceChord}
-            onResize={handleResize}
-            onMove={handleMove}
-            onRemove={handleRemove}
-            onClear={handleClear}
-            onLoopChange={handleLoopChange}
-            title={songTitle}
-            onTitleChange={setSongTitle}
-            author={songAuthor}
-            onAuthorChange={setSongAuthor}
-            tempo={tempo}
-          />
-        </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
 

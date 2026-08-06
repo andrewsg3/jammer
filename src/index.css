@@ -24,11 +24,117 @@ body {
 
 .app {
   max-width: 1100px;
-  margin: 48px auto;
+  margin: 24px auto;
   padding: 0 16px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 10px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 4px 6px 0;
+  white-space: nowrap;
+}
+
+.top-bar-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.top-bar-field-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
+.top-bar-field select,
+.top-bar-field input {
+  padding: 6px 8px;
+  width: auto;
+}
+
+#song-preset-quick {
+  min-width: 140px;
+}
+
+.top-bar-key-group {
+  display: flex;
+  gap: 4px;
+}
+
+#top-bar-key {
+  width: 58px;
+}
+
+#top-bar-scale {
+  width: 78px;
+}
+
+.top-bar-tempo-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.top-bar-tempo-group input[type='number'] {
+  width: 56px;
+}
+
+.top-bar-tempo-group span {
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.top-bar-metronome {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  padding-bottom: 7px;
+}
+
+.top-bar-metronome input {
+  cursor: pointer;
+}
+
+.play-button-prominent {
+  margin-left: auto;
+  padding: 12px 28px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
 .layout {
@@ -80,27 +186,7 @@ select {
   margin: 4px 0 0;
 }
 
-.transport-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.transport-row {
-  display: flex;
-  gap: 12px;
-}
-
-.transport-row > div {
-  flex: 1;
-  min-width: 0;
-}
-
-.play-button {
-  width: 100%;
-}
-
-.song-preset-controls {
+.song-preset-file-controls {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -133,12 +219,6 @@ select {
   width: 100%;
 }
 
-.mixer-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .volume-slider {
   display: flex;
   align-items: center;
@@ -154,23 +234,73 @@ select {
   flex: 1;
 }
 
-.metronome-toggle label {
+.track-panels {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0;
-  font-size: 14px;
-  opacity: 1;
-}
-
-.style-pickers {
-  display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 12px;
 }
 
-.style-pickers > div {
-  flex: 1 1 120px;
+.track-panel {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--track-accent, var(--border));
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.track-panel-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--track-accent, var(--text));
+}
+
+.track-panel-drums {
+  --track-accent: #e0803f;
+}
+
+.track-panel-bass {
+  --track-accent: #3f8fe0;
+}
+
+.track-panel-harmony {
+  --track-accent: #9f5fe0;
+}
+
+.more-section {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.more-section summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.7;
+  list-style: none;
+}
+
+.more-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-section summary::before {
+  content: '▸ ';
+}
+
+.more-section[open] summary::before {
+  content: '▾ ';
+}
+
+.more-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
 }
 
 button {
