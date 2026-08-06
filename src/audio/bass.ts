@@ -295,4 +295,7 @@ export function scheduleBass(
 export function disposeBass(): void {
   part?.dispose();
   part = null;
+  // See disposeKeys's comment — an already-scheduled note's release time is baked
+  // into the Web Audio graph at trigger time, so force-release the active voice too.
+  synth?.triggerRelease();
 }

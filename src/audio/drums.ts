@@ -232,4 +232,16 @@ export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal
 export function disposeDrums(): void {
   loop?.dispose();
   loop = null;
+  // See keys.ts's disposeKeys comment — force-release every voice so a long-tailed
+  // hit (crash, ride) doesn't keep ringing after stop.
+  kick?.triggerRelease();
+  snare?.triggerRelease();
+  rim?.triggerRelease();
+  hihat?.triggerRelease();
+  hihatOpen?.triggerRelease();
+  hihatFoot?.triggerRelease();
+  ride?.triggerRelease();
+  rideBell?.triggerRelease();
+  crash?.triggerRelease();
+  toms?.triggerRelease();
 }

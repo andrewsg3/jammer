@@ -137,20 +137,23 @@ export function scheduleKeys(
         synth!.triggerAttackRelease(note, '8n', time + Tone.Time(offsetTime(s / 4 / factor)).toSeconds(), 0.5);
       }
     } else if (event.rhythm === 'blues-shuffle' || event.rhythm === 'blues-shuffle-swing') {
-      // Classic boogie/blues rhythm-guitar figure: a power chord on the "and" of 1,
-      // then the same shape with the 5th raised to a 6th on the "and" of 2 — repeated
-      // every 2 beats for the placement's full length. Swing delays the offbeat from
-      // the exact midpoint (0.5) to 2/3 of the way through the beat, the same
-      // long-short ratio as an 8th-note triplet.
+      // Classic boogie/blues rhythm-guitar figure, continuous 8th notes over a 4-beat
+      // (1-bar) cycle: power chord on 1 & 1+, root-and-6th on 2 & 2+, power chord on
+      // 3 & 3+, root-and-6th on 4 & 4+ — the shape alternates every full beat, not
+      // every 8th note. Swing delays each "+" from the exact midpoint (0.5) to 2/3 of
+      // the way through the beat, the same long-short ratio as an 8th-note triplet.
       const offbeat = event.rhythm === 'blues-shuffle-swing' ? 2 / 3 : 0.5;
-      const virtualLength = Math.max(2, Math.round(event.lengthBeats * factor));
+      const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
       const pushShuffleHit = (beatOffset: number, notes: string[]) => {
         if (beatOffset >= virtualLength) return;
         synth!.triggerAttackRelease(notes, '8n', time + Tone.Time(offsetTime(beatOffset / factor)).toSeconds(), 0.7);
       };
-      for (let cellStart = 0; cellStart < virtualLength; cellStart += 2) {
-        pushShuffleHit(cellStart + offbeat, event.powerFive);
-        pushShuffleHit(cellStart + 1 + offbeat, event.powerSix);
+      for (let cellStart = 0; cellStart < virtualLength; cellStart += 4) {
+        for (let beatInCell = 0; beatInCell < 4; beatInCell++) {
+          const notes = beatInCell % 2 === 0 ? event.powerFive : event.powerSix;
+          pushShuffleHit(cellStart + beatInCell, notes);
+          pushShuffleHit(cellStart + beatInCell + offbeat, notes);
+        }
       }
     } else {
       const virtualLength = Math.max(2, Math.round(event.lengthBeats * factor));
@@ -169,4 +172,9 @@ export function scheduleKeys(
 export function disposeKeys(): void {
   part?.dispose();
   part = null;
+  // triggerAttackRelease bakes an absolute release time into the Web Audio graph at
+  // call time — stopping Transport or disposing the Part doesn't retroactively cancel
+  // an already-scheduled long sustain, so an in-flight chord keeps ringing after stop
+  // unless every active voice is force-released here too.
+  synth?.releaseAll();
 }
