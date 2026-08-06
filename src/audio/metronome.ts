@@ -1,5 +1,7 @@
 import * as Tone from 'tone';
 
+const output = new Tone.Volume(0).toDestination();
+
 let synth: Tone.MembraneSynth | null = null;
 let loop: Tone.Loop | null = null;
 let beatCount = 0;
@@ -10,8 +12,12 @@ function ensureSynth() {
       pitchDecay: 0.008,
       octaves: 2,
       envelope: { attack: 0.001, decay: 0.06, sustain: 0 },
-    }).toDestination();
+    }).connect(output);
   }
+}
+
+export function setVolume(db: number): void {
+  output.volume.value = db;
 }
 
 export function scheduleMetronome(): void {

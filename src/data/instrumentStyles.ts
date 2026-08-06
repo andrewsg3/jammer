@@ -11,12 +11,12 @@ export type DrumPattern = {
 };
 
 export type BassRule = {
-  style: 'root-fifth' | 'walking' | 'syncopated' | 'octaves' | 'pedal';
+  style: 'root-fifth' | 'walking' | 'syncopated' | 'octaves' | 'pedal' | 'walk-updown';
 };
 
 export type KeysRule = {
   voicing: 'triad' | 'power-chord' | 'seventh';
-  rhythm: 'sustained' | 'comped';
+  rhythm: 'sustained' | 'comped' | 'la-pompe';
 };
 
 export type DrumStyle = { name: string; pattern: DrumPattern | null };
@@ -101,6 +101,30 @@ export const drumStyles: DrumStyle[] = [
       ],
     },
   },
+  {
+    name: 'Jazz Swing',
+    pattern: {
+      bars: 1,
+      steps: [
+        // Ride pattern ("ding, ding-a-ding"): onbeat + a swung "and", approximated on the
+        // 16th grid by pushing the "and" to the 4th 16th of each beat instead of the 3rd.
+        { time: 0, note: 'hihat', velocity: 0.75 },
+        { time: 3, note: 'hihat', velocity: 0.4 },
+        { time: 4, note: 'hihat', velocity: 0.65 },
+        { time: 7, note: 'hihat', velocity: 0.4 },
+        { time: 8, note: 'hihat', velocity: 0.75 },
+        { time: 11, note: 'hihat', velocity: 0.4 },
+        { time: 12, note: 'hihat', velocity: 0.65 },
+        { time: 15, note: 'hihat', velocity: 0.4 },
+        // Soft brush-style backbeat.
+        { time: 4, note: 'snare', velocity: 0.5 },
+        { time: 12, note: 'snare', velocity: 0.55 },
+        // Light kick, feathering beats 1 and 3.
+        { time: 0, note: 'kick', velocity: 0.35 },
+        { time: 8, note: 'kick', velocity: 0.3 },
+      ],
+    },
+  },
 ];
 
 export const bassStyles: BassStyle[] = [
@@ -110,6 +134,7 @@ export const bassStyles: BassStyle[] = [
   { name: 'Syncopated', rule: { style: 'syncopated' } },
   { name: 'Octaves', rule: { style: 'octaves' } },
   { name: 'Pedal', rule: { style: 'pedal' } },
+  { name: 'Walk Up & Down', rule: { style: 'walk-updown' } },
 ];
 
 export const keysStyles: KeysStyle[] = [
@@ -120,4 +145,5 @@ export const keysStyles: KeysStyle[] = [
   { name: 'Comped Power Chords', rule: { voicing: 'power-chord', rhythm: 'comped' } },
   { name: 'Sustained Triads', rule: { voicing: 'triad', rhythm: 'sustained' } },
   { name: 'Comped 7ths', rule: { voicing: 'seventh', rhythm: 'comped' } },
+  { name: 'La Pompe', rule: { voicing: 'seventh', rhythm: 'la-pompe' } },
 ];

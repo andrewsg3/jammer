@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "Rock Anthem",
+  "key": "E",
+  "scale": "minor",
+  "tempo": 138,
+  "metronome": false,
+  "loopStart": 0,
+  "loopEnd": 16,
+  "drumStyle": "Rock",
+  "bassStyle": "Root-Fifth",
+  "keysStyle": "Power Chords",
+  "placements": [
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 0, "lengthBeats": 4 },
+    { "selection": { "type": "diatonic", "degree": 5 }, "startBeat": 4, "lengthBeats": 4 },
+    { "selection": { "type": "diatonic", "degree": 3 }, "startBeat": 8, "lengthBeats": 4 },
+    { "selection": { "type": "diatonic", "degree": 4 }, "startBeat": 12, "lengthBeats": 4 }
+  ]
+}

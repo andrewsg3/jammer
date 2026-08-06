@@ -1,10 +1,10 @@
 import * as Tone from 'tone';
 import { chordTones, type Chord, type ChordPlacement, type ScaleName } from '../data/progressions';
 import type { DrumPattern, BassRule, KeysRule } from '../data/instrumentStyles';
-import { scheduleDrums, disposeDrums } from './drums';
-import { scheduleBass, disposeBass } from './bass';
-import { scheduleKeys, disposeKeys } from './keys';
-import { scheduleMetronome, disposeMetronome } from './metronome';
+import { scheduleDrums, disposeDrums, setVolume as setDrumsOutputVolume } from './drums';
+import { scheduleBass, disposeBass, setVolume as setBassOutputVolume } from './bass';
+import { scheduleKeys, disposeKeys, setVolume as setKeysOutputVolume } from './keys';
+import { scheduleMetronome, disposeMetronome, setVolume as setMetronomeOutputVolume } from './metronome';
 
 const AUDITION_OCTAVE = 4;
 let auditionSynth: Tone.PolySynth<Tone.Synth> | null = null;
@@ -46,6 +46,27 @@ export function getCurrentBeat(): number {
 export function setMetronomeEnabled(enabled: boolean): void {
   if (enabled) scheduleMetronome();
   else disposeMetronome();
+}
+
+// Sliders work in 0-100 (%); dB conversion keeps 100 at unity gain and 0 fully silent.
+function percentToDb(percent: number): number {
+  return Tone.gainToDb(Math.max(0, Math.min(100, percent)) / 100);
+}
+
+export function setChordsVolume(percent: number): void {
+  setKeysOutputVolume(percentToDb(percent));
+}
+
+export function setBassVolume(percent: number): void {
+  setBassOutputVolume(percentToDb(percent));
+}
+
+export function setDrumsVolume(percent: number): void {
+  setDrumsOutputVolume(percentToDb(percent));
+}
+
+export function setMetronomeVolume(percent: number): void {
+  setMetronomeOutputVolume(percentToDb(percent));
 }
 
 export async function play(params: PlaybackParams): Promise<void> {

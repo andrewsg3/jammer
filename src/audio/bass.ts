@@ -4,6 +4,8 @@ import type { BassRule } from '../data/instrumentStyles';
 
 const BASS_OCTAVE = 2;
 
+const output = new Tone.Volume(0).toDestination();
+
 let synth: Tone.MonoSynth | null = null;
 let part: Tone.Part<{ time: string; note: string }> | null = null;
 
@@ -23,14 +25,19 @@ function ensureSynth() {
         baseFrequency: 100,
         octaves: 3,
       },
-    }).toDestination();
+    }).connect(output);
   }
 }
 
-function noteForBeat(chord: Chord, rule: BassRule, beatInBar: number): string | null {
+export function setVolume(db: number): void {
+  output.volume.value = db;
+}
+
+function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null {
   const tones = chordTones(chord, BASS_OCTAVE);
   const root = tones[0];
   const fifth = tones[2] ?? root;
+  const beatInBar = beat % 4;
 
   switch (rule.style) {
     case 'root-fifth':
@@ -47,6 +54,14 @@ function noteForBeat(chord: Chord, rule: BassRule, beatInBar: number): string | 
     }
     case 'pedal':
       return root;
+    case 'walk-updown': {
+      // Climbs root -> ...chord tones... -> octave, then back down, running
+      // continuously across the chord's full duration rather than resetting each bar.
+      const octaveRoot = chordTones(chord, BASS_OCTAVE + 1)[0];
+      const up = [...tones, octaveRoot];
+      const updown = [...up, ...up.slice(1, -1).reverse()];
+      return updown[beat % updown.length];
+    }
   }
 }
 
@@ -62,7 +77,7 @@ export function scheduleBass(
   for (const placement of placements) {
     const chord = resolveSelection(key, scale, placement.selection);
     for (let beat = 0; beat < placement.lengthBeats; beat++) {
-      const note = noteForBeat(chord, rule, beat % 4);
+      const note = noteForBeat(chord, rule, beat);
       if (note) events.push({ time: `0:${placement.startBeat + beat}:0`, note });
     }
   }

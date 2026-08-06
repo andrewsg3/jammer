@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "Minor Swing (Django Reinhardt)",
+  "key": "A",
+  "scale": "minor",
+  "tempo": 190,
+  "metronome": false,
+  "loopStart": 0,
+  "loopEnd": 64,
+  "drumStyle": "None",
+  "bassStyle": "Walking",
+  "keysStyle": "La Pompe",
+  "placements": [
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 0, "lengthBeats": 8 },
+    { "selection": { "type": "diatonic", "degree": 3 }, "startBeat": 8, "lengthBeats": 8 },
+    { "selection": { "type": "secondaryDominant", "degree": 0 }, "startBeat": 16, "lengthBeats": 8 },
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 24, "lengthBeats": 8 },
+    { "selection": { "type": "diatonic", "degree": 3 }, "startBeat": 32, "lengthBeats": 8 },
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 40, "lengthBeats": 8 },
+    { "selection": { "type": "secondaryDominant", "degree": 0 }, "startBeat": 48, "lengthBeats": 4 },
+    { "selection": { "type": "borrowed", "index": 2 }, "startBeat": 52, "lengthBeats": 4 },
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 56, "lengthBeats": 4 },
+    { "selection": { "type": "borrowed", "index": 3 }, "startBeat": 60, "lengthBeats": 2 },
+    { "selection": { "type": "secondaryDominant", "degree": 0 }, "startBeat": 62, "lengthBeats": 2 }
+  ]
+}

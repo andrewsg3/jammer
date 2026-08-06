@@ -3,12 +3,20 @@ import { ChordGrid, TOTAL_BEATS } from './components/ChordGrid';
 import { ChordPalette } from './components/ChordPalette';
 import { StylePicker } from './components/StylePicker';
 import { TransportControls } from './components/TransportControls';
+import { MixerControls } from './components/MixerControls';
 import { MidiUpload } from './components/MidiUpload';
 import { ProgressionPresetPicker } from './components/ProgressionPresetPicker';
+import { SongPresetControls } from './components/SongPresetControls';
 import type { Chord, ChordPlacement, ChordSelection, ScaleName } from './data/progressions';
 import { drumStyles, bassStyles, keysStyles, type DrumStyle } from './data/instrumentStyles';
 import { parseMidiDrumPattern } from './data/midiDrumImport';
 import { progressionPresets, type ProgressionPreset } from './data/progressionPresets';
+import {
+  bundledSongPresets,
+  downloadSongPreset,
+  parseSongPresetFile,
+  type SongPreset,
+} from './data/songPresets';
 import {
   play,
   stop,
@@ -16,6 +24,10 @@ import {
   setTempo as setTransportTempo,
   setMetronomeEnabled,
   getCurrentBeat,
+  setChordsVolume,
+  setBassVolume,
+  setDrumsVolume,
+  setMetronomeVolume,
 } from './audio/engine';
 
 const STARTER_PLACEMENTS: ChordPlacement[] = [
@@ -37,9 +49,19 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [customDrumStyle, setCustomDrumStyle] = useState<DrumStyle | null>(null);
   const [midiError, setMidiError] = useState<string | null>(null);
+  const [songPresetError, setSongPresetError] = useState<string | null>(null);
   const [loopStart, setLoopStart] = useState(0);
   const [loopEnd, setLoopEnd] = useState(16);
   const [playheadBeat, setPlayheadBeat] = useState<number | null>(null);
+  const [chordsVolume, setChordsVolumeState] = useState(100);
+  const [bassVolume, setBassVolumeState] = useState(100);
+  const [drumsVolume, setDrumsVolumeState] = useState(100);
+  const [metronomeVolume, setMetronomeVolumeState] = useState(100);
+
+  useEffect(() => setChordsVolume(chordsVolume), [chordsVolume]);
+  useEffect(() => setBassVolume(bassVolume), [bassVolume]);
+  useEffect(() => setDrumsVolume(drumsVolume), [drumsVolume]);
+  useEffect(() => setMetronomeVolume(metronomeVolume), [metronomeVolume]);
 
   useEffect(() => {
     if (isPlaying) setTransportTempo(tempo);
@@ -109,6 +131,71 @@ function App() {
     );
   };
 
+  const handleLoadSongPreset = (preset: SongPreset) => {
+    setMusicalKey(preset.key);
+    setScale(preset.scale);
+    setTempo(preset.tempo);
+    setMetronomeOn(preset.metronome);
+    setLoopStart(preset.loopStart);
+    setLoopEnd(preset.loopEnd);
+    setPlacements(
+      preset.placements.map((p) => ({
+        id: crypto.randomUUID(),
+        selection: p.selection,
+        startBeat: p.startBeat,
+        lengthBeats: p.lengthBeats,
+      })),
+    );
+
+    if (preset.customDrumPattern) {
+      const style: DrumStyle = { name: preset.drumStyle, pattern: preset.customDrumPattern };
+      setCustomDrumStyle(style);
+      setDrumStyle(style);
+    } else {
+      setCustomDrumStyle(null);
+      setDrumStyle(drumStyles.find((s) => s.name === preset.drumStyle) ?? drumStyles[0]);
+    }
+    setBassStyle(bassStyles.find((s) => s.name === preset.bassStyle) ?? bassStyles[0]);
+    setKeysStyle(keysStyles.find((s) => s.name === preset.keysStyle) ?? keysStyles[0]);
+    setSongPresetError(null);
+  };
+
+  const handleSaveSongPreset = () => {
+    const name = window.prompt('Name this song preset:', 'My Song');
+    if (!name) return; // cancelled
+
+    const preset: SongPreset = {
+      version: 1,
+      name,
+      key: musicalKey,
+      scale,
+      tempo,
+      metronome: metronomeOn,
+      loopStart,
+      loopEnd,
+      drumStyle: drumStyle.name,
+      bassStyle: bassStyle.name,
+      keysStyle: keysStyle.name,
+      customDrumPattern:
+        customDrumStyle && drumStyle.name === customDrumStyle.name ? customDrumStyle.pattern : null,
+      placements: placements.map(({ selection, startBeat, lengthBeats }) => ({
+        selection,
+        startBeat,
+        lengthBeats,
+      })),
+    };
+    downloadSongPreset(preset);
+  };
+
+  const handleImportSongPresetFile = async (file: File) => {
+    try {
+      const preset = await parseSongPresetFile(file);
+      handleLoadSongPreset(preset);
+    } catch (e) {
+      setSongPresetError((e as Error).message);
+    }
+  };
+
   const handleMidiUpload = async (file: File) => {
     try {
       const pattern = await parseMidiDrumPattern(file);
@@ -150,6 +237,13 @@ function App() {
         <div className="layout-sidebar">
           <h1>trackback</h1>
           <ProgressionPresetPicker presets={progressionPresets} onSelect={handleLoadPreset} />
+          <SongPresetControls
+            presets={bundledSongPresets}
+            onLoad={handleLoadSongPreset}
+            onSave={handleSaveSongPreset}
+            onImportFile={handleImportSongPresetFile}
+            error={songPresetError}
+          />
           <ChordPalette musicalKey={musicalKey} scale={scale} onAudition={handleAudition} />
           <div className="style-pickers">
             <StylePicker
@@ -162,6 +256,16 @@ function App() {
             <StylePicker label="Harmony" options={keysStyles} selected={keysStyle} onSelect={setKeysStyle} />
           </div>
           <MidiUpload onFile={handleMidiUpload} error={midiError} />
+          <MixerControls
+            chordsVolume={chordsVolume}
+            onChordsVolumeChange={setChordsVolumeState}
+            bassVolume={bassVolume}
+            onBassVolumeChange={setBassVolumeState}
+            drumsVolume={drumsVolume}
+            onDrumsVolumeChange={setDrumsVolumeState}
+            metronomeVolume={metronomeVolume}
+            onMetronomeVolumeChange={setMetronomeVolumeState}
+          />
           <TransportControls
             musicalKey={musicalKey}
             onKeyChange={setMusicalKey}

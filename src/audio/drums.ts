@@ -1,6 +1,9 @@
 import * as Tone from 'tone';
 import type { DrumPattern } from '../data/instrumentStyles';
 
+// Shared output so one volume control covers all three drum voices.
+const output = new Tone.Volume(0).toDestination();
+
 let kick: Tone.MembraneSynth | null = null;
 let snare: Tone.NoiseSynth | null = null;
 let hihat: Tone.MetalSynth | null = null;
@@ -8,13 +11,13 @@ let loop: Tone.Loop | null = null;
 
 function ensureSynths() {
   if (!kick) {
-    kick = new Tone.MembraneSynth().toDestination();
+    kick = new Tone.MembraneSynth().connect(output);
   }
   if (!snare) {
     snare = new Tone.NoiseSynth({
       noise: { type: 'white' },
       envelope: { attack: 0.001, decay: 0.15, sustain: 0 },
-    }).toDestination();
+    }).connect(output);
   }
   if (!hihat) {
     hihat = new Tone.MetalSynth({
@@ -23,8 +26,12 @@ function ensureSynths() {
       modulationIndex: 32,
       resonance: 4000,
       octaves: 1.5,
-    }).toDestination();
+    }).connect(output);
   }
+}
+
+export function setVolume(db: number): void {
+  output.volume.value = db;
 }
 
 export function scheduleDrums(pattern: DrumPattern): void {

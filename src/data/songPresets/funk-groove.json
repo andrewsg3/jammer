@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "Funk Groove",
+  "key": "C",
+  "scale": "major",
+  "tempo": 108,
+  "metronome": false,
+  "loopStart": 0,
+  "loopEnd": 16,
+  "drumStyle": "Funk",
+  "bassStyle": "Syncopated",
+  "keysStyle": "Comped 7ths",
+  "placements": [
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 0, "lengthBeats": 4 },
+    { "selection": { "type": "diatonic", "degree": 3 }, "startBeat": 4, "lengthBeats": 4 },
+    { "selection": { "type": "diatonic", "degree": 4 }, "startBeat": 8, "lengthBeats": 4 },
+    { "selection": { "type": "diatonic", "degree": 3 }, "startBeat": 12, "lengthBeats": 4 }
+  ]
+}

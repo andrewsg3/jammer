@@ -1,4 +1,21 @@
-export type ChordQuality = 'maj' | 'min' | 'dom7' | 'maj7' | 'min7' | 'dim';
+export type ChordQuality =
+  | 'maj'
+  | 'min'
+  | 'dom7'
+  | 'maj7'
+  | 'min7'
+  | 'dim'
+  | 'dim7'
+  | 'm7b5'
+  | 'aug'
+  | 'sus2'
+  | 'sus4'
+  | '6'
+  | 'm6'
+  | 'add9'
+  | 'dom9'
+  | 'maj9'
+  | 'm9';
 
 export type Chord = {
   root: string;
@@ -25,6 +42,8 @@ const SEMITONE_TO_NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 
 // named with flats even though the pitch is identical to the sharp spelling.
 const SEMITONE_TO_NOTE_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
+// Intervals beyond 11 semitones (9ths etc.) are deliberately left un-mod'd — chordTones()
+// resolves them to the correct higher octave rather than collapsing them into the triad.
 const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   maj: [0, 4, 7],
   min: [0, 3, 7],
@@ -32,6 +51,17 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   maj7: [0, 4, 7, 11],
   min7: [0, 3, 7, 10],
   dim: [0, 3, 6],
+  dim7: [0, 3, 6, 9],
+  m7b5: [0, 3, 6, 10],
+  aug: [0, 4, 8],
+  sus2: [0, 2, 7],
+  sus4: [0, 5, 7],
+  '6': [0, 4, 7, 9],
+  m6: [0, 3, 7, 9],
+  add9: [0, 4, 7, 14],
+  dom9: [0, 4, 7, 10, 14],
+  maj9: [0, 4, 7, 11, 14],
+  m9: [0, 3, 7, 10, 14],
 };
 
 const QUALITY_SUFFIX: Record<ChordQuality, string> = {
@@ -41,6 +71,44 @@ const QUALITY_SUFFIX: Record<ChordQuality, string> = {
   maj7: 'maj7',
   min7: 'm7',
   dim: 'dim',
+  dim7: 'dim7',
+  m7b5: 'm7b5',
+  aug: 'aug',
+  sus2: 'sus2',
+  sus4: 'sus4',
+  '6': '6',
+  m6: 'm6',
+  add9: 'add9',
+  dom9: '9',
+  maj9: 'maj9',
+  m9: 'm9',
+};
+
+export const QUALITY_GROUPS: { label: string; qualities: ChordQuality[] }[] = [
+  { label: 'Triads', qualities: ['maj', 'min', 'dim', 'aug', 'sus2', 'sus4'] },
+  { label: 'Sixths', qualities: ['6', 'm6'] },
+  { label: 'Sevenths', qualities: ['dom7', 'maj7', 'min7', 'dim7', 'm7b5'] },
+  { label: 'Extensions', qualities: ['add9', 'dom9', 'maj9', 'm9'] },
+];
+
+export const QUALITY_LABELS: Record<ChordQuality, string> = {
+  maj: 'Major',
+  min: 'Minor',
+  dom7: 'Dominant 7',
+  maj7: 'Major 7',
+  min7: 'Minor 7',
+  dim: 'Diminished',
+  dim7: 'Diminished 7',
+  m7b5: 'Half-Diminished (m7♭5)',
+  aug: 'Augmented',
+  sus2: 'Sus2',
+  sus4: 'Sus4',
+  '6': 'Major 6',
+  m6: 'Minor 6',
+  add9: 'Add 9',
+  dom9: 'Dominant 9',
+  maj9: 'Major 9',
+  m9: 'Minor 9',
 };
 
 const SCALE_INTERVALS: Record<ScaleName, number[]> = {
@@ -100,7 +168,10 @@ export function romanNumeral(scale: ScaleName, degree: ScaleDegree): string {
 export type ChordSelection =
   | { type: 'diatonic'; degree: ScaleDegree }
   | { type: 'borrowed'; index: number }
-  | { type: 'secondaryDominant'; degree: ScaleDegree };
+  | { type: 'secondaryDominant'; degree: ScaleDegree }
+  // Any of the 12 chromatic roots (0-11 semitones above the tonic) at any quality —
+  // the escape hatch from the curated diatonic/borrowed lists.
+  | { type: 'chromatic'; offset: number; quality: ChordQuality };
 
 export type ChordPlacement = {
   id: string;
@@ -118,19 +189,22 @@ export function serializeSelection(selection: ChordSelection): string {
       return `borrowed:${selection.index}`;
     case 'secondaryDominant':
       return `secondaryDominant:${selection.degree}`;
+    case 'chromatic':
+      return `chromatic:${selection.offset}:${selection.quality}`;
   }
 }
 
 export function deserializeSelection(value: string): ChordSelection {
-  const [type, numStr] = value.split(':');
-  const num = Number(numStr);
+  const [type, ...rest] = value.split(':');
   switch (type) {
     case 'diatonic':
-      return { type: 'diatonic', degree: num as ScaleDegree };
+      return { type: 'diatonic', degree: Number(rest[0]) as ScaleDegree };
     case 'borrowed':
-      return { type: 'borrowed', index: num };
+      return { type: 'borrowed', index: Number(rest[0]) };
     case 'secondaryDominant':
-      return { type: 'secondaryDominant', degree: num as ScaleDegree };
+      return { type: 'secondaryDominant', degree: Number(rest[0]) as ScaleDegree };
+    case 'chromatic':
+      return { type: 'chromatic', offset: Number(rest[0]), quality: rest[1] as ChordQuality };
     default:
       throw new Error(`Unknown chord selection: "${value}"`);
   }
@@ -151,12 +225,19 @@ const BORROWED_CHORDS: Record<ScaleName, BorrowedChordDef[]> = {
   minor: [
     { offset: 0, quality: 'maj', label: 'I' },
     { offset: 5, quality: 'maj', label: 'IV' },
+    { offset: 1, quality: 'maj', label: 'bII' },
+    { offset: 8, quality: 'dom7', label: 'VI7' },
   ],
 };
 
-// Secondary dominants target these diatonic degrees — skips I (V/I duplicates the
-// diatonic V) and vii° (an uncommon target).
-const SECONDARY_DOMINANT_DEGREES: ScaleDegree[] = [1, 2, 3, 4, 5];
+// Secondary dominants target these diatonic degrees — skips vii° (an uncommon target).
+// Major also skips I: V/I would just duplicate the diatonic V chord there. Minor keeps
+// i, since V/i (E7 in A minor) is the harmonic-minor dominant — a different, essential
+// chord from the diatonic v (Em), not a duplicate.
+const SECONDARY_DOMINANT_DEGREES: Record<ScaleName, ScaleDegree[]> = {
+  major: [1, 2, 3, 4, 5],
+  minor: [0, 1, 2, 3, 4, 5],
+};
 
 function shiftRoot(key: string, offset: number): string {
   const shifted = (rootSemitone(key) + offset) % 12;
@@ -188,7 +269,7 @@ export function borrowedOptions(key: string, scale: ScaleName): ChordOption[] {
 }
 
 export function secondaryDominantOptions(key: string, scale: ScaleName): ChordOption[] {
-  return SECONDARY_DOMINANT_DEGREES.map((degree) => {
+  return SECONDARY_DOMINANT_DEGREES[scale].map((degree) => {
     const target = diatonicChord(key, scale, degree);
     return {
       selection: { type: 'secondaryDominant', degree },
@@ -196,6 +277,23 @@ export function secondaryDominantOptions(key: string, scale: ScaleName): ChordOp
       label: `V7/${romanNumeral(scale, degree)}`,
     };
   });
+}
+
+// Interval-name labels for the 12 chromatic roots, relative to the tonic — flat spelling,
+// matching the convention already used for borrowed chords.
+const CHROMATIC_DEGREE_LABELS = ['1', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'];
+
+export function chromaticChord(key: string, offset: number, quality: ChordQuality): Chord {
+  return { root: shiftRootFlat(key, offset), quality };
+}
+
+/** All 12 chromatic roots at a single given quality — the chord-builder's root row. */
+export function chromaticOptions(key: string, quality: ChordQuality): ChordOption[] {
+  return CHROMATIC_DEGREE_LABELS.map((label, offset) => ({
+    selection: { type: 'chromatic', offset, quality },
+    chord: chromaticChord(key, offset, quality),
+    label,
+  }));
 }
 
 export function resolveSelection(key: string, scale: ScaleName, selection: ChordSelection): Chord {
@@ -210,5 +308,7 @@ export function resolveSelection(key: string, scale: ScaleName, selection: Chord
       const target = diatonicChord(key, scale, selection.degree);
       return { root: shiftRoot(target.root, 7), quality: 'dom7' };
     }
+    case 'chromatic':
+      return chromaticChord(key, selection.offset, selection.quality);
   }
 }

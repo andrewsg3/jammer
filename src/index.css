@@ -100,6 +100,25 @@ select {
   width: 100%;
 }
 
+.song-preset-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.song-preset-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.song-preset-actions button {
+  flex: 1;
+}
+
+.song-preset-actions input[type='file'] {
+  display: none;
+}
+
 .midi-upload label {
   font-size: 13px;
   opacity: 0.75;
@@ -112,6 +131,27 @@ select {
   margin-top: 4px;
   font-size: 12px;
   width: 100%;
+}
+
+.mixer-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.volume-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.volume-slider label {
+  flex: 0 0 80px;
+  margin: 0;
+}
+
+.volume-slider input[type='range'] {
+  flex: 1;
 }
 
 .metronome-toggle label {
@@ -153,13 +193,27 @@ button:hover {
   gap: 12px;
 }
 
+.palette-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+
 .palette-section-title {
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   opacity: 0.6;
-  margin: 0 0 6px;
+  margin: 0;
+}
+
+.quality-select {
+  font-size: 12px;
+  padding: 2px 4px;
+  width: auto;
 }
 
 .chord-palette-row {
@@ -223,6 +277,7 @@ button:hover {
 
 .loop-ruler {
   position: relative;
+  width: 100%;
   height: 14px;
 }
 
@@ -327,6 +382,12 @@ button:hover {
 
 .chord-block-active {
   background: #ff0;
+}
+
+.chord-block-selected {
+  outline: 2px solid #2a6df4;
+  outline-offset: 1px;
+  z-index: 1;
 }
 
 .resize-handle {
