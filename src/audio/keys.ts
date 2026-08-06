@@ -16,8 +16,15 @@ const output = new Tone.Volume(0).toDestination();
 
 let synth: Tone.PolySynth<Tone.FMSynth> | Tone.PolySynth<Tone.Synth> | null = null;
 let currentInstrument = 'Electric Piano';
-let part: Tone.Part<{ time: string; notes: string[]; lengthBeats: number; rhythm: KeysRule['rhythm'] }> | null =
-  null;
+type KeysEvent = {
+  time: string;
+  notes: string[];
+  powerFive: string[];
+  powerSix: string[];
+  lengthBeats: number;
+  rhythm: KeysRule['rhythm'];
+};
+let part: Tone.Part<KeysEvent> | null = null;
 
 function buildSynth() {
   if (currentInstrument === 'Guitar') {
@@ -81,19 +88,23 @@ export function scheduleKeys(
   ensureSynth();
   const factor = timeFeelFactor(timeFeel);
 
-  const events = placements.map((placement) => ({
-    time: `0:${placement.startBeat}:0`,
-    notes: voicingNotes(resolveSelection(key, scale, placement.selection), rule.voicing),
-    lengthBeats: placement.lengthBeats,
-    rhythm: rule.rhythm,
-  }));
+  const events = placements.map((placement) => {
+    const chord = resolveSelection(key, scale, placement.selection);
+    const root = chordTones(chord, KEYS_OCTAVE)[0];
+    const rootMidi = Tone.Frequency(root).toMidi();
+    return {
+      time: `0:${placement.startBeat}:0`,
+      notes: voicingNotes(chord, rule.voicing),
+      // Only used by blues-shuffle(-swing) — root+5th and root+6th, computed
+      // straight from the root rather than the chord's own tones (see KeysRule).
+      powerFive: [root, Tone.Frequency(rootMidi + 7, 'midi').toNote()],
+      powerSix: [root, Tone.Frequency(rootMidi + 9, 'midi').toNote()],
+      lengthBeats: placement.lengthBeats,
+      rhythm: rule.rhythm,
+    };
+  });
 
-  part = new Tone.Part<{
-    time: string;
-    notes: string[];
-    lengthBeats: number;
-    rhythm: KeysRule['rhythm'];
-  }>((time, event) => {
+  part = new Tone.Part<KeysEvent>((time, event) => {
     if (event.rhythm === 'sustained') {
       // A held chord doesn't have a strike rate for time-feel to change.
       synth!.triggerAttackRelease(event.notes, `0:${event.lengthBeats}:0`, time, 0.5);
@@ -124,6 +135,22 @@ export function scheduleKeys(
       for (let s = 0; s < virtualTotalSixteenths; s += stepSixteenths) {
         const note = pattern[(s / stepSixteenths) % pattern.length];
         synth!.triggerAttackRelease(note, '8n', time + Tone.Time(offsetTime(s / 4 / factor)).toSeconds(), 0.5);
+      }
+    } else if (event.rhythm === 'blues-shuffle' || event.rhythm === 'blues-shuffle-swing') {
+      // Classic boogie/blues rhythm-guitar figure: a power chord on the "and" of 1,
+      // then the same shape with the 5th raised to a 6th on the "and" of 2 — repeated
+      // every 2 beats for the placement's full length. Swing delays the offbeat from
+      // the exact midpoint (0.5) to 2/3 of the way through the beat, the same
+      // long-short ratio as an 8th-note triplet.
+      const offbeat = event.rhythm === 'blues-shuffle-swing' ? 2 / 3 : 0.5;
+      const virtualLength = Math.max(2, Math.round(event.lengthBeats * factor));
+      const pushShuffleHit = (beatOffset: number, notes: string[]) => {
+        if (beatOffset >= virtualLength) return;
+        synth!.triggerAttackRelease(notes, '8n', time + Tone.Time(offsetTime(beatOffset / factor)).toSeconds(), 0.7);
+      };
+      for (let cellStart = 0; cellStart < virtualLength; cellStart += 2) {
+        pushShuffleHit(cellStart + offbeat, event.powerFive);
+        pushShuffleHit(cellStart + 1 + offbeat, event.powerSix);
       }
     } else {
       const virtualLength = Math.max(2, Math.round(event.lengthBeats * factor));

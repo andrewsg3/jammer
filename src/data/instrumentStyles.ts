@@ -62,7 +62,10 @@ export type BassPattern = {
 
 export type KeysRule = {
   voicing: 'triad' | 'power-chord' | 'seventh';
-  rhythm: 'sustained' | 'comped' | 'la-pompe' | 'arpeggio-up' | 'arpeggio-updown';
+  // blues-shuffle(-swing) ignore `voicing` entirely — they compute a fixed root+5th
+  // / root+6th figure of their own (see scheduleKeys), not a subset of the chord's
+  // own tones, since the 6th is a deliberate blues idiom, not part of the harmony.
+  rhythm: 'sustained' | 'comped' | 'la-pompe' | 'arpeggio-up' | 'arpeggio-updown' | 'blues-shuffle' | 'blues-shuffle-swing';
 };
 
 // hidden: true means resolvable by name (for a song preset to reference) but not
@@ -108,6 +111,8 @@ export const keysStyles: KeysStyle[] = [
   { name: 'Arpeggiated (Triads)', rule: { voicing: 'triad', rhythm: 'arpeggio-up' } },
   { name: 'Arpeggiated (7ths)', rule: { voicing: 'seventh', rhythm: 'arpeggio-up' } },
   { name: 'Broken Chord (Up-Down)', rule: { voicing: 'seventh', rhythm: 'arpeggio-updown' } },
+  { name: 'Blues Shuffle', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle' } },
+  { name: 'Blues Shuffle (Swing)', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle-swing' } },
 ];
 
 // Instrument/timbre variants — an axis independent of the rhythmic style above.
