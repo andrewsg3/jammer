@@ -707,7 +707,7 @@ button:hover {
 .chord-grid {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
   padding: 16px;
   overflow-x: auto;
 }
@@ -793,7 +793,7 @@ button:hover {
 .chord-grid-row {
   display: grid;
   position: relative;
-  height: 64px;
+  height: 46px;
   border-top: 2px solid #333;
   border-bottom: 2px solid #333;
 }

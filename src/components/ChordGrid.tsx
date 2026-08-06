@@ -12,7 +12,7 @@ const BEATS_PER_ROW = BARS_PER_ROW * BEATS_PER_BAR; // 16
 export const TOTAL_BEATS = GRID_BARS * BEATS_PER_BAR; // 192
 const ROWS = GRID_BARS / BARS_PER_ROW; // 12
 
-const ROW_HEIGHT = 94; // px — ruler (14) + cell row (64) + row gap (16), for Y-position math
+const ROW_HEIGHT = 68; // px — ruler (14) + cell row (46) + row gap (8), for Y-position math
 const MIN_LENGTH_BEATS = 1; // 1/4 bar
 const MIN_LOOP_LENGTH_BEATS = 1;
 
