@@ -2,14 +2,24 @@ import * as Tone from 'tone';
 import { STEPS_PER_BAR } from '../data/instrumentStyles';
 import type { DrumPattern, TimeFeel } from '../data/instrumentStyles';
 
-// Shared output so one volume control (the Drums fader) trims every voice together.
-// Kick/snare/hihat additionally each have their own node feeding into it, for the
-// individual mix exposed via the channel strip's expand popout — the newer voices
-// below don't have that per-voice UI yet, so they connect straight to output.
+// Shared output so one volume control (the Drums fader) trims every voice together;
+// each lane additionally has its own node feeding into it, for the individual mix
+// exposed via the channel strip's expand popout. Toms share one fader across all
+// three pitches, since they also share one synth instance below (same instrument,
+// just triggered at different pitches) — there's no separate signal to route
+// per-pitch without giving each tom its own synth, which the pitch difference alone
+// doesn't warrant.
 const output = new Tone.Volume(0).toDestination();
 const kickVolume = new Tone.Volume(0).connect(output);
 const snareVolume = new Tone.Volume(0).connect(output);
+const rimVolume = new Tone.Volume(0).connect(output);
 const hihatVolume = new Tone.Volume(0).connect(output);
+const hihatOpenVolume = new Tone.Volume(0).connect(output);
+const hihatFootVolume = new Tone.Volume(0).connect(output);
+const rideVolume = new Tone.Volume(0).connect(output);
+const rideBellVolume = new Tone.Volume(0).connect(output);
+const crashVolume = new Tone.Volume(0).connect(output);
+const tomsVolume = new Tone.Volume(0).connect(output);
 
 let kick: Tone.MembraneSynth | null = null;
 let snare: Tone.NoiseSynth | null = null;
@@ -73,7 +83,7 @@ function ensureSynths() {
     rim = new Tone.NoiseSynth({
       noise: { type: 'white' },
       envelope: { attack: 0.001, decay: 0.03, sustain: 0 },
-    }).connect(output);
+    }).connect(rimVolume);
   }
   if (!hihatOpen) {
     // Same character as the closed hihat above, just left to ring — its own synth
@@ -85,14 +95,14 @@ function ensureSynths() {
           modulationIndex: 64,
           resonance: 8000,
           octaves: 1,
-        }).connect(output)
+        }).connect(hihatOpenVolume)
       : new Tone.MetalSynth({
           envelope: { attack: 0.001, decay: 0.35, release: 0.25 },
           harmonicity: 5.1,
           modulationIndex: 32,
           resonance: 4000,
           octaves: 1.5,
-        }).connect(output);
+        }).connect(hihatOpenVolume);
   }
   if (!hihatFoot) {
     // The pedal "chick" — duller and quieter than a struck hit, no ring at all.
@@ -102,7 +112,7 @@ function ensureSynths() {
       modulationIndex: 8,
       resonance: 2000,
       octaves: 1,
-    }).connect(output);
+    }).connect(hihatFootVolume);
   }
   if (!ride) {
     // Washier and longer than the hihat — lower harmonicity, much longer envelope.
@@ -112,7 +122,7 @@ function ensureSynths() {
       modulationIndex: 16,
       resonance: 3000,
       octaves: 2.5,
-    }).connect(output);
+    }).connect(rideVolume);
   }
   if (!rideBell) {
     // Higher harmonicity for a more pitched, "pingy" tone — distinct from the wash.
@@ -122,7 +132,7 @@ function ensureSynths() {
       modulationIndex: 20,
       resonance: 6000,
       octaves: 1,
-    }).connect(output);
+    }).connect(rideBellVolume);
   }
   if (!crash) {
     crash = new Tone.MetalSynth({
@@ -131,7 +141,7 @@ function ensureSynths() {
       modulationIndex: 32,
       resonance: 5000,
       octaves: 2,
-    }).connect(output);
+    }).connect(crashVolume);
   }
   if (!toms) {
     // One pitched membrane voice shared by all three tom lanes (high/mid/low trigger
@@ -141,12 +151,12 @@ function ensureSynths() {
           pitchDecay: 0.03,
           octaves: 3,
           envelope: { attack: 0.001, decay: 0.3, sustain: 0.01, release: 0.3 },
-        }).connect(output)
+        }).connect(tomsVolume)
       : new Tone.MembraneSynth({
           pitchDecay: 0.05,
           octaves: 2,
           envelope: { attack: 0.001, decay: 0.25, sustain: 0.01, release: 0.2 },
-        }).connect(output);
+        }).connect(tomsVolume);
   }
 }
 
@@ -168,6 +178,34 @@ export function setSnareVolume(db: number): void {
 
 export function setHihatVolume(db: number): void {
   hihatVolume.volume.value = db;
+}
+
+export function setRimVolume(db: number): void {
+  rimVolume.volume.value = db;
+}
+
+export function setHihatOpenVolume(db: number): void {
+  hihatOpenVolume.volume.value = db;
+}
+
+export function setHihatFootVolume(db: number): void {
+  hihatFootVolume.volume.value = db;
+}
+
+export function setRideVolume(db: number): void {
+  rideVolume.volume.value = db;
+}
+
+export function setRideBellVolume(db: number): void {
+  rideBellVolume.volume.value = db;
+}
+
+export function setCrashVolume(db: number): void {
+  crashVolume.volume.value = db;
+}
+
+export function setTomsVolume(db: number): void {
+  tomsVolume.volume.value = db;
 }
 
 export function setInstrument(name: string): void {

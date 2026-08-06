@@ -317,7 +317,9 @@ select {
   left: calc(100% + 10px);
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  max-width: 312px; /* 5 mini-faders (56px + 8px gap) per row */
   padding: 10px;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -848,10 +850,31 @@ button:hover {
   background: #ff0;
 }
 
+@keyframes chord-selected-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px #2a6df4,
+      0 0 6px 2px rgba(42, 109, 244, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px #2a6df4,
+      0 0 15px 6px rgba(42, 109, 244, 0.85);
+  }
+}
+
 .chord-block-selected {
-  outline: 2px solid #2a6df4;
-  outline-offset: 1px;
+  outline: none;
+  animation: chord-selected-pulse 1.4s ease-in-out infinite;
   z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chord-block-selected {
+    animation: none;
+    box-shadow: 0 0 0 2px #2a6df4;
+  }
 }
 
 /* A chord that spans multiple rows renders as one segment per row — dashed edges

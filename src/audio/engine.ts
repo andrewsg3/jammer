@@ -8,7 +8,14 @@ import {
   setInstrument as setDrumsInstrumentImpl,
   setKickVolume as setKickOutputVolume,
   setSnareVolume as setSnareOutputVolume,
+  setRimVolume as setRimOutputVolume,
   setHihatVolume as setHihatOutputVolume,
+  setHihatOpenVolume as setHihatOpenOutputVolume,
+  setHihatFootVolume as setHihatFootOutputVolume,
+  setRideVolume as setRideOutputVolume,
+  setRideBellVolume as setRideBellOutputVolume,
+  setCrashVolume as setCrashOutputVolume,
+  setTomsVolume as setTomsOutputVolume,
   setMuted as setDrumsOutputMuted,
 } from './drums';
 import {
@@ -100,6 +107,34 @@ export function setSnareVolume(percent: number): void {
 
 export function setHihatVolume(percent: number): void {
   setHihatOutputVolume(percentToDb(percent));
+}
+
+export function setRimVolume(percent: number): void {
+  setRimOutputVolume(percentToDb(percent));
+}
+
+export function setHihatOpenVolume(percent: number): void {
+  setHihatOpenOutputVolume(percentToDb(percent));
+}
+
+export function setHihatFootVolume(percent: number): void {
+  setHihatFootOutputVolume(percentToDb(percent));
+}
+
+export function setRideVolume(percent: number): void {
+  setRideOutputVolume(percentToDb(percent));
+}
+
+export function setRideBellVolume(percent: number): void {
+  setRideBellOutputVolume(percentToDb(percent));
+}
+
+export function setCrashVolume(percent: number): void {
+  setCrashOutputVolume(percentToDb(percent));
+}
+
+export function setTomsVolume(percent: number): void {
+  setTomsOutputVolume(percentToDb(percent));
 }
 
 export function setMetronomeVolume(percent: number): void {

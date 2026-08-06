@@ -44,7 +44,14 @@ import {
   setMasterVolume,
   setKickVolume,
   setSnareVolume,
+  setRimVolume,
   setHihatVolume,
+  setHihatOpenVolume,
+  setHihatFootVolume,
+  setRideVolume,
+  setRideBellVolume,
+  setCrashVolume,
+  setTomsVolume,
   setChordsInstrument,
   setBassInstrument,
   setDrumsInstrument,
@@ -137,7 +144,14 @@ function App() {
   const [drumsExpanded, setDrumsExpanded] = useState(false);
   const [kickVolume, setKickVolumeState] = useState(100);
   const [snareVolume, setSnareVolumeState] = useState(100);
+  const [rimVolume, setRimVolumeState] = useState(100);
   const [hihatVolume, setHihatVolumeState] = useState(100);
+  const [hihatOpenVolume, setHihatOpenVolumeState] = useState(100);
+  const [hihatFootVolume, setHihatFootVolumeState] = useState(100);
+  const [rideVolume, setRideVolumeState] = useState(100);
+  const [rideBellVolume, setRideBellVolumeState] = useState(100);
+  const [crashVolume, setCrashVolumeState] = useState(100);
+  const [tomsVolume, setTomsVolumeState] = useState(100);
   const [chordsInstrument, setChordsInstrumentState] = useState<Instrument>(
     keysInstruments.find((i) => i.name === DEFAULT_SONG_PRESET?.chordsInstrument) ?? keysInstruments[0],
   );
@@ -196,7 +210,14 @@ function App() {
   useEffect(() => setMasterVolume(masterVolume), [masterVolume]);
   useEffect(() => setKickVolume(kickVolume), [kickVolume]);
   useEffect(() => setSnareVolume(snareVolume), [snareVolume]);
+  useEffect(() => setRimVolume(rimVolume), [rimVolume]);
   useEffect(() => setHihatVolume(hihatVolume), [hihatVolume]);
+  useEffect(() => setHihatOpenVolume(hihatOpenVolume), [hihatOpenVolume]);
+  useEffect(() => setHihatFootVolume(hihatFootVolume), [hihatFootVolume]);
+  useEffect(() => setRideVolume(rideVolume), [rideVolume]);
+  useEffect(() => setRideBellVolume(rideBellVolume), [rideBellVolume]);
+  useEffect(() => setCrashVolume(crashVolume), [crashVolume]);
+  useEffect(() => setTomsVolume(tomsVolume), [tomsVolume]);
   useEffect(() => setChordsMuted(chordsMuted), [chordsMuted]);
   useEffect(() => setBassMuted(bassMuted), [bassMuted]);
   useEffect(() => setDrumsMuted(drumsMuted), [drumsMuted]);
@@ -499,7 +520,29 @@ function App() {
                 <>
                   <MiniFader id="volume-kick" label="Kick" value={kickVolume} onChange={setKickVolumeState} />
                   <MiniFader id="volume-snare" label="Snare" value={snareVolume} onChange={setSnareVolumeState} />
+                  <MiniFader id="volume-rim" label="Rim" value={rimVolume} onChange={setRimVolumeState} />
                   <MiniFader id="volume-hihat" label="Hihat" value={hihatVolume} onChange={setHihatVolumeState} />
+                  <MiniFader
+                    id="volume-hihat-open"
+                    label="HH Open"
+                    value={hihatOpenVolume}
+                    onChange={setHihatOpenVolumeState}
+                  />
+                  <MiniFader
+                    id="volume-hihat-foot"
+                    label="HH Foot"
+                    value={hihatFootVolume}
+                    onChange={setHihatFootVolumeState}
+                  />
+                  <MiniFader id="volume-ride" label="Ride" value={rideVolume} onChange={setRideVolumeState} />
+                  <MiniFader
+                    id="volume-ride-bell"
+                    label="Ride Bell"
+                    value={rideBellVolume}
+                    onChange={setRideBellVolumeState}
+                  />
+                  <MiniFader id="volume-crash" label="Crash" value={crashVolume} onChange={setCrashVolumeState} />
+                  <MiniFader id="volume-toms" label="Toms" value={tomsVolume} onChange={setTomsVolumeState} />
                 </>
               }
             />
