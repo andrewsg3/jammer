@@ -79,6 +79,10 @@ export function TopBar({
               value={musicalKey}
               onChange={(e) => onKeyChange(e.target.value)}
             >
+              {/* Some presets use a flat spelling (e.g. "Bb") not in the canonical
+                  sharp-only KEYS list — inject it so the select shows it correctly
+                  instead of silently falling back to whichever option is first. */}
+              {!KEYS.includes(musicalKey) && <option value={musicalKey}>{musicalKey}</option>}
               {KEYS.map((k) => (
                 <option key={k} value={k}>
                   {k}

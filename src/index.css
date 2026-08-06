@@ -331,6 +331,12 @@ select {
   --track-accent: #9f5fe0;
 }
 
+.channel-strip-master {
+  margin-left: 14px;
+  border-left: 2px solid var(--border);
+  justify-content: center;
+}
+
 .vertical-fader {
   position: relative;
   width: 28px;

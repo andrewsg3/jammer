@@ -85,6 +85,12 @@ export function setMetronomeVolume(percent: number): void {
   setMetronomeOutputVolume(percentToDb(percent));
 }
 
+// Every track already connects straight to Tone.Destination (no shared bus needed) —
+// so "master volume" is just that destination's own volume.
+export function setMasterVolume(percent: number): void {
+  Tone.Destination.volume.value = percentToDb(percent);
+}
+
 export function setChordsInstrument(name: string): void {
   setKeysInstrumentImpl(name);
 }

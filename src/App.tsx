@@ -4,6 +4,7 @@ import { ChordPalette } from './components/ChordPalette';
 import { TopBar } from './components/TopBar';
 import { ChannelStrip } from './components/ChannelStrip';
 import { VolumeSlider } from './components/VolumeSlider';
+import { VerticalFader } from './components/VerticalFader';
 import { MidiUpload } from './components/MidiUpload';
 import { SongPresetFileControls } from './components/SongPresetFileControls';
 import type { Chord, ChordPlacement, ChordSelection, ScaleName } from './data/progressions';
@@ -38,6 +39,7 @@ import {
   setBassVolume,
   setDrumsVolume,
   setMetronomeVolume,
+  setMasterVolume,
   setChordsInstrument,
   setBassInstrument,
   setDrumsInstrument,
@@ -88,6 +90,7 @@ function App() {
   const [bassVolume, setBassVolumeState] = useState(100);
   const [drumsVolume, setDrumsVolumeState] = useState(100);
   const [metronomeVolume, setMetronomeVolumeState] = useState(100);
+  const [masterVolume, setMasterVolumeState] = useState(100);
   const [chordsInstrument, setChordsInstrumentState] = useState<Instrument>(
     keysInstruments.find((i) => i.name === DEFAULT_SONG_PRESET?.chordsInstrument) ?? keysInstruments[0],
   );
@@ -137,6 +140,7 @@ function App() {
   useEffect(() => setBassVolume(bassVolume), [bassVolume]);
   useEffect(() => setDrumsVolume(drumsVolume), [drumsVolume]);
   useEffect(() => setMetronomeVolume(metronomeVolume), [metronomeVolume]);
+  useEffect(() => setMasterVolume(masterVolume), [masterVolume]);
 
   useEffect(() => {
     if (isPlaying) setTransportTempo(tempo);
@@ -443,6 +447,10 @@ function App() {
               volume={chordsVolume}
               onVolumeChange={setChordsVolumeState}
             />
+            <div className="channel-strip channel-strip-master">
+              <VerticalFader id="volume-master" value={masterVolume} onChange={setMasterVolumeState} />
+              <span className="channel-strip-label">Master</span>
+            </div>
             </div>
           </div>
         </div>
