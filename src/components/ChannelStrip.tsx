@@ -26,6 +26,19 @@ type Props<TStyle extends NamedOption, TInstrument extends NamedOption> = {
   expandedContent?: React.ReactNode;
 };
 
+// Same box shape as a real StylePicker (label + select), just invisible — reserves
+// its height without being focusable or announced to screen readers.
+function PickerPlaceholder() {
+  return (
+    <div className="style-picker style-picker-placeholder" aria-hidden="true">
+      <label>&nbsp;</label>
+      <select disabled tabIndex={-1}>
+        <option>&nbsp;</option>
+      </select>
+    </div>
+  );
+}
+
 export function ChannelStrip<TStyle extends NamedOption, TInstrument extends NamedOption>({
   label,
   accent,
@@ -65,16 +78,22 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
           {expanded ? '◂' : '▸'}
         </button>
       )}
-      {styleOptions && selectedStyle && onStyleChange && (
+      {styleOptions && selectedStyle && onStyleChange ? (
         <StylePicker label="Style" options={styleOptions} selected={selectedStyle} onSelect={onStyleChange} />
+      ) : (
+        // A strip with no style picker (Metronome) still needs the vertical space
+        // reserved — otherwise its fader sits higher than the other strips' faders.
+        <PickerPlaceholder />
       )}
-      {instrumentOptions && selectedInstrument && onInstrumentChange && (
+      {instrumentOptions && selectedInstrument && onInstrumentChange ? (
         <StylePicker
           label="Sound"
           options={instrumentOptions}
           selected={selectedInstrument}
           onSelect={onInstrumentChange}
         />
+      ) : (
+        <PickerPlaceholder />
       )}
       <VerticalFader id={`volume-${accent}`} value={volume} onChange={onVolumeChange} />
       <button
