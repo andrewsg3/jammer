@@ -3,10 +3,26 @@
 export const STEPS_PER_BEAT = 12;
 export const STEPS_PER_BAR = STEPS_PER_BEAT * 4;
 
+// One lane per physical sound source (GrooveScribe's model) — accent/ghost/normal
+// dynamics within a lane are just velocity, not a separate note here.
+export type DrumVoice =
+  | 'kick'
+  | 'snare'
+  | 'rim'
+  | 'hihat' // closed
+  | 'hihatOpen'
+  | 'hihatFoot'
+  | 'ride'
+  | 'rideBell'
+  | 'crash'
+  | 'tomHigh'
+  | 'tomMid'
+  | 'tomLow';
+
 export type DrumStep = {
   // position within the bar on the STEPS_PER_BAR grid: 0-47 for a 4/4 bar
   time: number;
-  note: 'kick' | 'snare' | 'hihat';
+  note: DrumVoice;
   velocity: number;
 };
 

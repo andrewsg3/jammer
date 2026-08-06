@@ -4,30 +4,32 @@ import type { DrumPattern, DrumStep } from './instrumentStyles';
 
 const PERCUSSION_CHANNEL = 9;
 
-// General MIDI percussion note numbers, bucketed into our 3 drum voices.
+// General MIDI percussion note numbers, mapped one lane per physical sound source —
+// GM already distinguishes closed/open/pedal hi-hat, ride vs. ride bell, and each
+// tom pitch, so this is mostly just *not* collapsing them the way a smaller voice
+// set would have to.
 const GM_TO_DRUM_NOTE: Record<number, DrumStep['note']> = {
   35: 'kick',
   36: 'kick',
   38: 'snare',
   40: 'snare',
-  37: 'snare', // side stick — closest fallback
-  // toms fall back to 'snare', the closest available voice, rather than being dropped
-  41: 'snare',
-  43: 'snare',
-  45: 'snare',
-  47: 'snare',
-  48: 'snare',
-  50: 'snare',
-  42: 'hihat',
-  44: 'hihat',
-  46: 'hihat',
-  49: 'hihat',
-  51: 'hihat',
-  52: 'hihat',
-  53: 'hihat',
-  55: 'hihat',
-  57: 'hihat',
-  59: 'hihat',
+  37: 'rim', // side stick
+  41: 'tomLow',
+  43: 'tomLow',
+  45: 'tomMid',
+  47: 'tomMid',
+  48: 'tomHigh',
+  50: 'tomHigh',
+  42: 'hihat', // closed
+  44: 'hihatFoot', // pedal — the "chick," not a struck hit
+  46: 'hihatOpen',
+  51: 'ride',
+  59: 'ride',
+  53: 'rideBell',
+  49: 'crash',
+  57: 'crash',
+  52: 'crash', // chinese cymbal — closest fallback
+  55: 'crash', // splash — closest fallback
 };
 
 /** Parses raw MIDI bytes into a drum pattern, plus the file's track name if it has one. */
@@ -68,11 +70,11 @@ export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; 
   const bars = Math.max(1, Math.ceil((maxStep + 1) / STEPS_PER_BAR));
   const totalSteps = bars * STEPS_PER_BAR;
 
-  // Different GM notes can map to the same voice — e.g. closed hi-hat (42) and
-  // pedal hi-hat (44) both become our one 'hihat'. If two of those land on the same
-  // step (common in GrooveScribe exports), de-dupe rather than firing that voice's
-  // monophonic synth twice at the identical instant, which throws inside Tone's
-  // envelope scheduling. Keep the louder of the two.
+  // A few GM notes still share one lane here (crash/chinese/splash all -> 'crash';
+  // both tom notes at a given pitch -> one tomX bucket). If two of those land on the
+  // same step (common in GrooveScribe exports), de-dupe rather than firing that
+  // voice's monophonic synth twice at the identical instant, which throws inside
+  // Tone's envelope scheduling. Keep the louder of the two.
   const deduped = new Map<string, DrumStep>();
   for (const { step, note, velocity } of rawSteps) {
     const time = step % totalSteps;
