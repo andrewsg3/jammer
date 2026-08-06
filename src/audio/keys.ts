@@ -30,14 +30,32 @@ type KeysEvent = {
 let part: Tone.Part<KeysEvent> | null = null;
 
 function buildSynth() {
-  if (currentInstrument === 'Guitar') {
+  if (currentInstrument === 'Electric Cello') {
     // A plain oscillator with a fast decay/low sustain approximates a picked/strummed
     // guitar chord well enough without physical modeling — real samples are out of
     // scope (see CLAUDE.md).
-    return new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
-      envelope: { attack: 0.005, decay: 0.5, sustain: 0.15, release: 0.8 },
-    }).connect(chorus);
+    return new Tone.PolySynth(Tone.FMSynth, {
+      "harmonicity": 3.01,
+      "modulationIndex": 14,
+      "oscillator": {
+          "type": "triangle"
+      },
+      "envelope": {
+          "attack": 0.2,
+          "decay": 0.3,
+          "sustain": 0.1,
+          "release": 1.2
+      },
+      "modulation" : {
+          "type": "square"
+      },
+      "modulationEnvelope" : {
+          "attack": 0.01,
+          "decay": 0.5,
+          "sustain": 0.2,
+          "release": 0.1
+      }
+  }).connect(chorus);
   }
   if (currentInstrument === 'Kalimba') {
     return new Tone.PolySynth(Tone.FMSynth, {
@@ -61,6 +79,22 @@ function buildSynth() {
           "sustain": 0,
           "release": 0.2
     }
+    }).connect(chorus);
+  }
+  if (currentInstrument === 'Steel Pan') {
+    return new Tone.PolySynth(Tone.Synth, {
+        "oscillator": {
+            "type": "fatcustom",
+            "partials" : [0.2, 1, 0, 0.5, 0.1],
+            "spread" : 40,
+            "count" : 3
+        },
+        "envelope": {
+            "attack": 0.001,
+            "decay": 1.6,
+            "sustain": 0,
+            "release": 1.6
+        }
     }).connect(chorus);
   }
   // FM synthesis gets closer to an electric-piano character than a plain oscillator.

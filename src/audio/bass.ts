@@ -31,19 +31,41 @@ const BASS_OCTAVE = 2;
 const output = new Tone.Volume(0).toDestination();
 
 let synth: Tone.MonoSynth | Tone.PluckSynth | null = null;
-let currentInstrument = 'Electric';
+let currentInstrument = 'Upright';
 type BassEvent = { time: string; note: string; duration: string; velocity: number };
 let part: Tone.Part<BassEvent> | null = null;
 
 function buildSynth() {
-  if (currentInstrument === 'Upright') {
+  if (currentInstrument === 'Electric') {
     // Karplus-Strong string synthesis — genuinely plucked/woody, a good fit for
     // upright pizzicato without needing sampled strings.
-    return new Tone.PluckSynth({
-      attackNoise: 1,
-      dampening: 3000,
-      resonance: 0.92,
-    }).connect(output);
+    return new Tone.MonoSynth({
+      "oscillator": {
+          "type": "fmsquare5",
+      "modulationType" : "triangle",
+          "modulationIndex" : 2,
+          "harmonicity" : 0.501
+      },
+      "filter": {
+          "Q": 1,
+          "type": "lowpass",
+          "rolloff": -24
+      },
+      "envelope": {
+          "attack": 0.01,
+          "decay": 0.1,
+          "sustain": 0.4,
+          "release": 2
+      },
+      "filterEnvelope": {
+          "attack": 0.01,
+          "decay": 0.1,
+          "sustain": 0.8,
+          "release": 1.5,
+          "baseFrequency": 50,
+          "octaves": 4.4
+      }
+  }).connect(output);
   }
   // Sawtooth through a lowpass filter that closes down after the pluck —
   // brighter attack settling into a warmer sustain, like a plucked bass string.

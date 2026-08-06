@@ -122,8 +122,9 @@ export type Instrument = { name: string };
 
 export const keysInstruments: Instrument[] = [
   { name: 'Electric Piano' },
-  { name: 'Guitar' },
+  { name: 'Electric Cello' },
   { name: 'Kalimba' },
+  { name: 'Steel Pan' },
 ];
-export const bassInstruments: Instrument[] = [{ name: 'Electric' }, { name: 'Upright' }];
+export const bassInstruments: Instrument[] = [{ name: 'Upright' }, { name: 'Electric' }];
 export const drumsInstruments: Instrument[] = [{ name: 'Acoustic' }, { name: 'Electronic' }];
