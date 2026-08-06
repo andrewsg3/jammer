@@ -360,6 +360,7 @@ function App() {
       <main className="app">
         <div className="layout">
           <div className="layout-sidebar">
+            <h2 className="panel-title">Chord Palette</h2>
             <ChordPalette musicalKey={musicalKey} scale={scale} onAudition={handleAudition} />
 
             <details className="more-section">
@@ -403,7 +404,9 @@ function App() {
               tempo={tempo}
             />
           </div>
-          <div className="channel-strip-rail">
+          <div className="channel-strip-column">
+            <h2 className="panel-title">Instruments</h2>
+            <div className="channel-strip-rail">
             <ChannelStrip
               label="Drums"
               accent="drums"
@@ -440,6 +443,7 @@ function App() {
               volume={chordsVolume}
               onVolumeChange={setChordsVolumeState}
             />
+            </div>
           </div>
         </div>
       </main>
