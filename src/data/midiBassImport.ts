@@ -2,9 +2,12 @@ import { parseMidi } from 'midi-file';
 import type { BassPattern, BassPatternStep } from './instrumentStyles';
 
 const STEPS_PER_BAR = 16;
-// MIDI note 36 = C2, matching bass.ts's BASS_OCTAVE — author the pattern as if
-// the chord were C, and it transposes to whatever chord is actually sounding.
-const REFERENCE_ROOT_MIDI = 36;
+// MIDI note 36 = C2, matching bass.ts's BASS_OCTAVE. Every step is stored relative to
+// this. Short patterns get re-anchored to whatever chord is sounding (author as if the
+// chord were C); patterns exactly as long as the whole progression are assumed to be a
+// finished bassline already composed against real chords, and get played back anchored
+// to this fixed reference instead — see the mode split in bass.ts's scheduleBass.
+export const REFERENCE_ROOT_MIDI = 36;
 
 export function parseMidiBassBytes(buffer: ArrayBuffer): { name: string | null; pattern: BassPattern } {
   const midi = parseMidi(new Uint8Array(buffer));

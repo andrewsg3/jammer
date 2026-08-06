@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 import { chordTones, resolveSelection, type ChordPlacement, type Chord, type ScaleName } from '../data/progressions';
 import type { BassRule, BassPattern } from '../data/instrumentStyles';
+import { REFERENCE_ROOT_MIDI } from '../data/midiBassImport';
 
 const BASS_OCTAVE = 2;
 
@@ -110,18 +111,14 @@ function patternEvents(chord: Chord, pattern: BassPattern, placement: ChordPlace
 }
 
 /**
- * Plays the pattern through once as a single continuous phrase spanning every
- * placement, instead of restarting at each chord — only used when the pattern's
- * own length exactly matches the total progression length (see scheduleBass),
- * which is the signal that it was authored as one whole-progression bassline
- * rather than a short lick meant to restate on every chord.
+ * Plays the pattern through once, verbatim, spanning every placement — no
+ * transposition at all. Only used when the pattern's own length exactly matches
+ * the total progression length (see scheduleBass): that's the signal it's a
+ * finished bassline someone already composed against the real chords (not an
+ * abstract relative lick), so re-deriving pitches from "whichever chord is
+ * sounding" would just repitch a take that was already correct.
  */
-function continuousPatternEvents(
-  placements: ChordPlacement[],
-  key: string,
-  scale: ScaleName,
-  pattern: BassPattern,
-): BassEvent[] {
+function wholeProgressionEvents(placements: ChordPlacement[], pattern: BassPattern): BassEvent[] {
   const patternLengthSteps = pattern.bars * 16;
   const spanStart = Math.min(...placements.map((p) => p.startBeat));
   const spanEnd = Math.max(...placements.map((p) => p.startBeat + p.lengthBeats));
@@ -130,17 +127,15 @@ function continuousPatternEvents(
   const events: BassEvent[] = [];
   for (let s = 0; s < totalSteps; s++) {
     const beat = spanStart + Math.floor(s / 4);
-    const placement = placements.find((p) => beat >= p.startBeat && beat < p.startBeat + p.lengthBeats);
-    if (!placement) continue; // a gap between placements — nothing sounding here
+    const covered = placements.some((p) => beat >= p.startBeat && beat < p.startBeat + p.lengthBeats);
+    if (!covered) continue; // a gap between placements — nothing sounding here
 
     const localStep = s % patternLengthSteps;
     for (const hit of pattern.steps) {
       if (hit.time !== localStep) continue;
-      const chord = resolveSelection(key, scale, placement.selection);
-      const rootMidi = Tone.Frequency(chordTones(chord, BASS_OCTAVE)[0]).toMidi();
       events.push({
         time: `0:${beat}:${s % 4}`,
-        note: Tone.Frequency(rootMidi + hit.intervalFromRoot, 'midi').toNote(),
+        note: Tone.Frequency(REFERENCE_ROOT_MIDI + hit.intervalFromRoot, 'midi').toNote(),
         duration: '8n',
         velocity: hit.velocity,
       });
@@ -162,7 +157,7 @@ export function scheduleBass(
   if (pattern) {
     const totalBeats = placements.reduce((sum, p) => sum + p.lengthBeats, 0);
     if (pattern.bars * 4 === totalBeats) {
-      events.push(...continuousPatternEvents(placements, key, scale, pattern));
+      events.push(...wholeProgressionEvents(placements, pattern));
     } else {
       for (const placement of placements) {
         const chord = resolveSelection(key, scale, placement.selection);
