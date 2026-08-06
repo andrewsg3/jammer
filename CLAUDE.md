@@ -97,3 +97,29 @@ npm run dev
 - If the app feels robotic on loop repeats, the cheap win is light humanization: jitter velocity
   ±10%, occasionally vary a hi-hat pattern every 4 bars. Not needed for v0 but noted here so
   future-me doesn't forget it's an easy, high-impact next step.
+
+## Planned: sample-based drum playback
+The drum engine (`audio/drums.ts`) now has one lane per physical sound source — kick,
+snare, rim, hihat (closed/open/foot), ride, ride bell, crash, and three tom pitches
+(see `DrumVoice` in `data/instrumentStyles.ts`) — each currently a placeholder synth.
+Real samples are the next step for these specifically (bass/keys are pitched,
+multi-sample instruments — a separate, bigger undertaking; drums are one-shots, the
+cheap win). Plan, once sample files exist:
+
+- **Location/naming:** `src/data/drumSamples/`, one short one-shot per lane, filenames
+  matching `DrumVoice` exactly (`kick.wav`, `hihat-open.wav`, `ride-bell.wav`, etc.).
+  No pitch-mapping needed — unlike bass/keys, each lane is a single unpitched sound.
+- **Format:** short WAV, not MP3 — these are all sub-second transients, and MP3
+  compression artifacts are most audible on exactly that kind of sharp attack.
+- **Tone primitive:** `Tone.Player`, not `Tone.Sampler` — Sampler is for pitched,
+  multi-note instruments (the bass/keys case later); one-shot unpitched hits want a
+  plain Player per lane, connected the same way the current synths connect to each
+  lane's `Tone.Volume` node. Velocity becomes a per-trigger volume offset rather than
+  a native velocity-sensitive envelope — fine for v1; per-lane velocity-layered
+  samples (soft/hard variants) would be the natural upgrade later.
+- **Loading:** `Tone.Player` loads its buffer asynchronously, unlike the synths it
+  replaces (which are ready the instant they're constructed) — preload every drum
+  sample eagerly at module load (mirroring how the bundled `.mid` patterns are
+  already loaded via `import.meta.glob`), and accept that a Play click in the first
+  instant before load completes might land silently. `Tone.loaded()` is the escape
+  hatch for a real "ready" gate if that gap ever actually matters in practice.
