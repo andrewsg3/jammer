@@ -43,79 +43,86 @@ export function TopBar({
 }: Props) {
   return (
     <header className="top-bar">
-      <h1 className="app-title">trackback</h1>
+      <div className="top-bar-inner">
+        <h1 className="app-title">trackback</h1>
 
-      <TopBarField label="Song">
-        <select
-          id="song-preset-quick"
-          aria-label="Song preset"
-          defaultValue=""
-          onChange={(e) => {
-            const preset = songPresets.find((p) => p.name === e.target.value);
-            if (preset) onLoadSongPreset(preset);
-            e.target.value = '';
-          }}
-        >
-          <option value="" disabled>
-            Preset…
-          </option>
-          {songPresets.map((preset) => (
-            <option key={preset.name} value={preset.name}>
-              {preset.name}
+        <TopBarField label="Song">
+          <select
+            id="song-preset-quick"
+            aria-label="Song preset"
+            defaultValue=""
+            onChange={(e) => {
+              const preset = songPresets.find((p) => p.name === e.target.value);
+              if (preset) onLoadSongPreset(preset);
+              e.target.value = '';
+            }}
+          >
+            <option value="" disabled>
+              Preset…
             </option>
-          ))}
-        </select>
-      </TopBarField>
-
-      <TopBarField label="Key">
-        <div className="top-bar-key-group">
-          <select id="top-bar-key" aria-label="Key" value={musicalKey} onChange={(e) => onKeyChange(e.target.value)}>
-            {KEYS.map((k) => (
-              <option key={k} value={k}>
-                {k}
+            {songPresets.map((preset) => (
+              <option key={preset.name} value={preset.name}>
+                {preset.name}
               </option>
             ))}
           </select>
-          <select
-            id="top-bar-scale"
-            aria-label="Scale"
-            value={scale}
-            onChange={(e) => onScaleChange(e.target.value as ScaleName)}
-          >
-            <option value="major">Major</option>
-            <option value="minor">Minor</option>
-          </select>
-        </div>
-      </TopBarField>
+        </TopBarField>
 
-      <TopBarField label="Tempo">
-        <div className="top-bar-tempo-group">
+        <TopBarField label="Key">
+          <div className="top-bar-key-group">
+            <select
+              id="top-bar-key"
+              aria-label="Key"
+              value={musicalKey}
+              onChange={(e) => onKeyChange(e.target.value)}
+            >
+              {KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+            <select
+              id="top-bar-scale"
+              aria-label="Scale"
+              value={scale}
+              onChange={(e) => onScaleChange(e.target.value as ScaleName)}
+            >
+              <option value="major">Major</option>
+              <option value="minor">Minor</option>
+            </select>
+          </div>
+        </TopBarField>
+
+        <TopBarField label="Tempo">
+          <div className="top-bar-tempo-group">
+            <input
+              id="top-bar-tempo"
+              aria-label="Tempo"
+              type="number"
+              min={40}
+              max={220}
+              value={tempo}
+              onChange={(e) => onTempoChange(Number(e.target.value))}
+            />
+            <span>bpm</span>
+          </div>
+        </TopBarField>
+
+        <label className="top-bar-metronome" title="Metronome">
           <input
-            id="top-bar-tempo"
-            aria-label="Tempo"
-            type="number"
-            min={40}
-            max={220}
-            value={tempo}
-            onChange={(e) => onTempoChange(Number(e.target.value))}
+            type="checkbox"
+            checked={metronomeOn}
+            onChange={(e) => onMetronomeChange(e.target.checked)}
           />
-          <span>bpm</span>
-        </div>
-      </TopBarField>
+          <span aria-hidden="true">🔔</span>
+          <span className="sr-only">Metronome</span>
+        </label>
 
-      <label className="top-bar-metronome" title="Metronome">
-        <input
-          type="checkbox"
-          checked={metronomeOn}
-          onChange={(e) => onMetronomeChange(e.target.checked)}
-        />
-        <span aria-hidden="true">🔔</span>
-        <span className="sr-only">Metronome</span>
-      </label>
-
-      <button type="button" className="play-button-prominent" onClick={onTogglePlay}>
-        {isPlaying ? '■ Stop' : '▶ Play'}
-      </button>
+        <button type="button" className="play-button-prominent" onClick={onTogglePlay}>
+          {isPlaying ? '■ Stop' : '▶ Play'}
+        </button>
+      </div>
     </header>
   );
 }
