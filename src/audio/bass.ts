@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import { chordTones, resolveSelection, type ChordPlacement, type Chord, type ScaleName } from '../data/progressions';
-import type { BassRule } from '../data/instrumentStyles';
+import type { BassRule, BassPattern } from '../data/instrumentStyles';
 
 const BASS_OCTAVE = 2;
 
@@ -8,7 +8,8 @@ const output = new Tone.Volume(0).toDestination();
 
 let synth: Tone.MonoSynth | Tone.PluckSynth | null = null;
 let currentInstrument = 'Electric';
-let part: Tone.Part<{ time: string; note: string }> | null = null;
+type BassEvent = { time: string; note: string; duration: string; velocity: number };
+let part: Tone.Part<BassEvent> | null = null;
 
 function buildSynth() {
   if (currentInstrument === 'Upright') {
@@ -84,25 +85,54 @@ function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null 
   }
 }
 
+/** Transposes a pattern's steps to a chord, tiling the pattern across the placement's length. */
+function patternEvents(chord: Chord, pattern: BassPattern, placement: ChordPlacement): BassEvent[] {
+  const rootMidi = Tone.Frequency(chordTones(chord, BASS_OCTAVE)[0]).toMidi();
+  const patternLengthSteps = pattern.bars * 16;
+  const totalSteps = placement.lengthBeats * 4;
+
+  const events: BassEvent[] = [];
+  for (let s = 0; s < totalSteps; s++) {
+    const localStep = s % patternLengthSteps;
+    for (const hit of pattern.steps) {
+      if (hit.time !== localStep) continue;
+      const beat = placement.startBeat + Math.floor(s / 4);
+      const sixteenths = s % 4;
+      events.push({
+        time: `0:${beat}:${sixteenths}`,
+        note: Tone.Frequency(rootMidi + hit.intervalFromRoot, 'midi').toNote(),
+        duration: '8n',
+        velocity: hit.velocity,
+      });
+    }
+  }
+  return events;
+}
+
 export function scheduleBass(
   placements: ChordPlacement[],
   key: string,
   scale: ScaleName,
-  rule: BassRule,
+  rule: BassRule | null,
+  pattern?: BassPattern | null,
 ): void {
   ensureSynth();
 
-  const events: { time: string; note: string }[] = [];
+  const events: BassEvent[] = [];
   for (const placement of placements) {
     const chord = resolveSelection(key, scale, placement.selection);
-    for (let beat = 0; beat < placement.lengthBeats; beat++) {
-      const note = noteForBeat(chord, rule, beat);
-      if (note) events.push({ time: `0:${placement.startBeat + beat}:0`, note });
+    if (pattern) {
+      events.push(...patternEvents(chord, pattern, placement));
+    } else if (rule) {
+      for (let beat = 0; beat < placement.lengthBeats; beat++) {
+        const note = noteForBeat(chord, rule, beat);
+        if (note) events.push({ time: `0:${placement.startBeat + beat}:0`, note, duration: '4n', velocity: 0.8 });
+      }
     }
   }
 
-  part = new Tone.Part<{ time: string; note: string }>((time, event) => {
-    synth!.triggerAttackRelease(event.note, '4n', time, 0.8);
+  part = new Tone.Part<BassEvent>((time, event) => {
+    synth!.triggerAttackRelease(event.note, event.duration, time, event.velocity);
   }, events).start(0);
 }
 

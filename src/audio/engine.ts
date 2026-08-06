@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import { chordTones, type Chord, type ChordPlacement, type ScaleName } from '../data/progressions';
-import type { DrumPattern, BassRule, KeysRule } from '../data/instrumentStyles';
+import type { DrumPattern, BassRule, BassPattern, KeysRule } from '../data/instrumentStyles';
 import {
   scheduleDrums,
   disposeDrums,
@@ -44,6 +44,7 @@ export type PlaybackParams = {
   loopEndBeat: number;
   drums: DrumPattern | null;
   bass: BassRule | null;
+  bassPattern: BassPattern | null;
   keys: KeysRule | null;
   tempo: number;
   metronome: boolean;
@@ -106,7 +107,9 @@ export async function play(params: PlaybackParams): Promise<void> {
   Tone.Transport.loopEnd = `0:${params.loopEndBeat}:0`;
 
   if (params.drums) scheduleDrums(params.drums);
-  if (params.bass) scheduleBass(params.placements, params.key, params.scale, params.bass);
+  if (params.bass || params.bassPattern) {
+    scheduleBass(params.placements, params.key, params.scale, params.bass, params.bassPattern);
+  }
   if (params.keys) scheduleKeys(params.placements, params.key, params.scale, params.keys);
   if (params.metronome) scheduleMetronome();
 

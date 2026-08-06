@@ -10,7 +10,7 @@
   "loopEnd": 32,
   "drumStyle": "Jazz Swing",
   "bassStyle": "Walking",
-  "keysStyle": "Comped 7ths",
+  "keysStyle": "Sustained 7ths",
   "placements": [
     { "selection": { "type": "chromatic", "offset": 5, "quality": "min7" }, "startBeat": 0, "lengthBeats": 4 },
     { "selection": { "type": "chromatic", "offset": 10, "quality": "dom7" }, "startBeat": 4, "lengthBeats": 4 },

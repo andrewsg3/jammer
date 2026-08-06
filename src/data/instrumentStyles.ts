@@ -14,13 +14,29 @@ export type BassRule = {
   style: 'root-fifth' | 'walking' | 'syncopated' | 'octaves' | 'pedal' | 'walk-updown';
 };
 
+export type BassPatternStep = {
+  // sixteenth-note position within the pattern, 0-15 per bar (matches DrumStep)
+  time: number;
+  // semitones from the chord's root, authored against a reference root of C —
+  // negative or >11 is fine (dips below the root, climbs past an octave, etc.)
+  intervalFromRoot: number;
+  velocity: number;
+};
+
+export type BassPattern = {
+  steps: BassPatternStep[];
+  bars: number;
+};
+
 export type KeysRule = {
   voicing: 'triad' | 'power-chord' | 'seventh';
   rhythm: 'sustained' | 'comped' | 'la-pompe' | 'arpeggio-up' | 'arpeggio-updown';
 };
 
 export type DrumStyle = { name: string; pattern: DrumPattern | null };
-export type BassStyle = { name: string; rule: BassRule | null };
+// A bass style is either algorithmic (rule, generated per-chord at render time) or a
+// fixed imported pattern (transposed to each chord's root at render time) — never both.
+export type BassStyle = { name: string; rule: BassRule | null; pattern?: BassPattern | null };
 export type KeysStyle = { name: string; rule: KeysRule | null };
 
 // The rest of the drum library is loaded at runtime from the .mid files in
@@ -28,7 +44,9 @@ export type KeysStyle = { name: string; rule: KeysRule | null };
 // a MIDI file (there's no such thing as a silent drum pattern file).
 export const baseDrumStyles: DrumStyle[] = [{ name: 'None', pattern: null }];
 
-export const bassStyles: BassStyle[] = [
+// Likewise, imported bass patterns are loaded at runtime from ./bassPatterns/ —
+// see bassLibrary.ts. These are the algorithmic (rule-based) options.
+export const baseBassStyles: BassStyle[] = [
   { name: 'None', rule: null },
   { name: 'Root-Fifth', rule: { style: 'root-fifth' } },
   { name: 'Walking', rule: { style: 'walking' } },

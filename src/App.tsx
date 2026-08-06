@@ -9,15 +9,17 @@ import { SongPresetControls } from './components/SongPresetControls';
 import type { Chord, ChordPlacement, ChordSelection, ScaleName } from './data/progressions';
 import {
   baseDrumStyles,
-  bassStyles,
+  baseBassStyles,
   keysStyles,
   keysInstruments,
   bassInstruments,
   drumsInstruments,
   type DrumStyle,
+  type BassStyle,
   type Instrument,
 } from './data/instrumentStyles';
 import { loadBundledDrumStyles } from './data/drumLibrary';
+import { loadBundledBassStyles } from './data/bassLibrary';
 import { parseMidiDrumPattern } from './data/midiDrumImport';
 import {
   bundledSongPresets,
@@ -65,9 +67,10 @@ function App() {
   const [tempo, setTempo] = useState(DEFAULT_SONG_PRESET?.tempo ?? 124);
   const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
   const [drumStyle, setDrumStyle] = useState<DrumStyle>(baseDrumStyles[0]);
+  const [bassStyles, setBassStyles] = useState<BassStyle[]>(baseBassStyles);
   const [bassStyle, setBassStyle] = useState(
-    bassStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.bassStyle) ??
-      bassStyles.find((s) => s.name === 'Walking')!,
+    baseBassStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.bassStyle) ??
+      baseBassStyles.find((s) => s.name === 'Walking')!,
   );
   const [keysStyle, setKeysStyle] = useState(
     keysStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.keysStyle) ??
@@ -113,6 +116,17 @@ function App() {
           ? (all.find((s) => s.name === DEFAULT_SONG_PRESET?.drumStyle) ?? current)
           : current,
       );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadBundledBassStyles().then((loaded) => {
+      if (cancelled) return;
+      setBassStyles([...baseBassStyles, ...loaded]);
     });
     return () => {
       cancelled = true;
@@ -285,6 +299,7 @@ function App() {
       tempo,
       drums: drumStyle.pattern,
       bass: bassStyle.rule,
+      bassPattern: bassStyle.pattern ?? null,
       keys: keysStyle.rule,
       metronome: metronomeOn,
     });
