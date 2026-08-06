@@ -120,6 +120,10 @@ export const keysStyles: KeysStyle[] = [
 // "Electric Piano" changes the sound that pattern is played with.
 export type Instrument = { name: string };
 
-export const keysInstruments: Instrument[] = [{ name: 'Electric Piano' }, { name: 'Guitar' }];
+export const keysInstruments: Instrument[] = [
+  { name: 'Electric Piano' },
+  { name: 'Guitar' },
+  { name: 'Kalimba' },
+];
 export const bassInstruments: Instrument[] = [{ name: 'Electric' }, { name: 'Upright' }];
 export const drumsInstruments: Instrument[] = [{ name: 'Acoustic' }, { name: 'Electronic' }];
