@@ -446,18 +446,18 @@ select {
 }
 
 /* A mixing-desk fader cap: wide and short (not a round knob) — since the whole
-   input is drawn horizontally then rotated -90deg, "width" here (the travel axis)
-   becomes the cap's visual height, and "height" becomes its visual width. The
+   input is drawn horizontally then rotated -90deg, "height" here (the travel axis)
+   becomes the cap's visual width, and "width" becomes its visual height. The
    center stripe mimics the grip groove down the middle of a real fader cap. */
 .vertical-fader-input::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  width: 10px;
-  height: 24px;
-  margin-top: -10px;
+  width: 24px;
+  height: 10px;
+  margin-top: -3px;
   border-radius: 3px;
   background: linear-gradient(
-    to bottom,
+    to right,
     var(--track-accent, var(--accent)) 0%,
     var(--track-accent, var(--accent)) 42%,
     rgba(0, 0, 0, 0.35) 42%,
@@ -475,12 +475,12 @@ select {
 }
 
 .vertical-fader-input::-moz-range-thumb {
-  width: 10px;
-  height: 24px;
+  width: 24px;
+  height: 10px;
   border: none;
   border-radius: 3px;
   background: linear-gradient(
-    to bottom,
+    to right,
     var(--track-accent, var(--accent)) 0%,
     var(--track-accent, var(--accent)) 42%,
     rgba(0, 0, 0, 0.35) 42%,
