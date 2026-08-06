@@ -94,6 +94,26 @@ export function scheduleKeys(
           accent ? 0.75 : 0.45,
         );
       }
+    } else if (event.rhythm === 'arpeggio-up' || event.rhythm === 'arpeggio-updown') {
+      // 'up' just cycles the voicing tones; 'updown' bounces back down before
+      // repeating (root-3rd-5th-7th-5th-3rd-...), a classic broken-chord roll.
+      const pattern =
+        event.rhythm === 'arpeggio-updown'
+          ? [...event.notes, ...event.notes.slice(1, -1).reverse()]
+          : event.notes;
+      const stepSixteenths = 2; // 8th-note steps
+      const totalSixteenths = event.lengthBeats * 4;
+      for (let s = 0; s < totalSixteenths; s += stepSixteenths) {
+        const note = pattern[(s / stepSixteenths) % pattern.length];
+        const beats = Math.floor(s / 4);
+        const sixteenths = s % 4;
+        synth!.triggerAttackRelease(
+          note,
+          '8n',
+          time + Tone.Time(`0:${beats}:${sixteenths}`).toSeconds(),
+          0.5,
+        );
+      }
     } else {
       for (let beat = 0; beat < event.lengthBeats; beat += 2) {
         synth!.triggerAttackRelease(event.notes, '4n', time + Tone.Time(`0:${beat}:0`).toSeconds(), 0.6);

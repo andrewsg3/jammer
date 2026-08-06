@@ -1,6 +1,7 @@
 {
   "version": 1,
-  "name": "Minor Swing (Django Reinhardt)",
+  "name": "Minor Swing",
+  "author": "Django Reinhardt",
   "key": "A",
   "scale": "minor",
   "tempo": 190,

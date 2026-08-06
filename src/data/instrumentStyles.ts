@@ -16,7 +16,7 @@ export type BassRule = {
 
 export type KeysRule = {
   voicing: 'triad' | 'power-chord' | 'seventh';
-  rhythm: 'sustained' | 'comped' | 'la-pompe';
+  rhythm: 'sustained' | 'comped' | 'la-pompe' | 'arpeggio-up' | 'arpeggio-updown';
 };
 
 export type DrumStyle = { name: string; pattern: DrumPattern | null };
@@ -47,6 +47,9 @@ export const keysStyles: KeysStyle[] = [
   { name: 'Sustained Triads', rule: { voicing: 'triad', rhythm: 'sustained' } },
   { name: 'Comped 7ths', rule: { voicing: 'seventh', rhythm: 'comped' } },
   { name: 'La Pompe', rule: { voicing: 'seventh', rhythm: 'la-pompe' } },
+  { name: 'Arpeggiated (Triads)', rule: { voicing: 'triad', rhythm: 'arpeggio-up' } },
+  { name: 'Arpeggiated (7ths)', rule: { voicing: 'seventh', rhythm: 'arpeggio-up' } },
+  { name: 'Broken Chord (Up-Down)', rule: { voicing: 'seventh', rhythm: 'arpeggio-updown' } },
 ];
 
 // Instrument/timbre variants — an axis independent of the rhythmic style above.

@@ -12,6 +12,7 @@ export type SongPresetPlacement = {
 export type SongPreset = {
   version: 1;
   name: string;
+  author?: string;
   key: string;
   scale: ScaleName;
   tempo: number;

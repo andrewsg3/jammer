@@ -258,16 +258,93 @@ button:hover {
 }
 
 /* Deliberately not theme-aware — manuscript-paper white, like a printed lead sheet. */
-.chord-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.chord-grid-page {
   background: #fdfdfb;
   color: #1a1a1a;
   border: 1px solid #ccc;
   border-radius: 4px;
-  overflow-x: auto;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.sheet-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid #ccc;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.sheet-header-title-block {
+  min-width: 0;
+}
+
+.sheet-title,
+.sheet-author {
+  font-family: inherit;
+  color: #1a1a1a;
+  background: transparent;
+  border: none;
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+.sheet-title:hover,
+.sheet-author:hover,
+.sheet-title:focus,
+.sheet-author:focus {
+  background: rgba(0, 0, 0, 0.05);
+  outline: none;
+}
+
+.sheet-title {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  max-width: 100%;
+}
+
+.sheet-author-line {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 14px;
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.sheet-author {
+  font-size: inherit;
+  font-style: inherit;
+}
+
+.sheet-marks {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.sheet-time-signature {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.chord-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow-x: auto;
 }
 
 .chord-grid-row-group {

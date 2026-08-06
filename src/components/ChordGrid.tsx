@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { chordName, deserializeSelection, resolveSelection } from '../data/progressions';
 import type { ChordPlacement, ChordSelection, ScaleName } from '../data/progressions';
+import { SheetMusicHeader } from './SheetMusicHeader';
 
 // 12 rows of 4 bars — a full lead-sheet page (A4-ish proportions), not just a loop snippet.
 export const GRID_BARS = 48;
@@ -29,6 +30,11 @@ type Props = {
   onRemove: (placement: ChordPlacement) => void;
   onClear: () => void;
   onLoopChange: (loopStart: number, loopEnd: number) => void;
+  title: string;
+  onTitleChange: (title: string) => void;
+  author: string;
+  onAuthorChange: (author: string) => void;
+  tempo: number;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -89,6 +95,11 @@ export function ChordGrid({
   onRemove,
   onClear,
   onLoopChange,
+  title,
+  onTitleChange,
+  author,
+  onAuthorChange,
+  tempo,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -245,14 +256,22 @@ export function ChordGrid({
       {placements.length === 0 && (
         <p className="chord-grid-hint">Drag a chord from the palette to place it here.</p>
       )}
-      <div
-        ref={wrapperRef}
-        className="chord-grid"
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        onClickCapture={handleWrapperClickCapture}
-      >
-        {Array.from({ length: ROWS }, (_, row) => {
+      <div className="chord-grid-page">
+        <SheetMusicHeader
+          title={title}
+          onTitleChange={onTitleChange}
+          author={author}
+          onAuthorChange={onAuthorChange}
+          tempo={tempo}
+        />
+        <div
+          ref={wrapperRef}
+          className="chord-grid"
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onClickCapture={handleWrapperClickCapture}
+        >
+          {Array.from({ length: ROWS }, (_, row) => {
           const rowStart = row * BEATS_PER_ROW;
           const rowEnd = rowStart + BEATS_PER_ROW;
           const rowPlacements = placements.filter((p) => rowOf(p.startBeat) === row);
@@ -339,6 +358,7 @@ export function ChordGrid({
             </div>
           );
         })}
+        </div>
       </div>
       <button type="button" className="clear-button" onClick={onClear}>
         Clear

@@ -51,6 +51,8 @@ const STARTER_PLACEMENTS: ChordPlacement[] = [
 ];
 
 function App() {
+  const [songTitle, setSongTitle] = useState('Untitled');
+  const [songAuthor, setSongAuthor] = useState('');
   const [musicalKey, setMusicalKey] = useState('C');
   const [scale, setScale] = useState<ScaleName>('major');
   const [placements, setPlacements] = useState<ChordPlacement[]>(STARTER_PLACEMENTS);
@@ -168,6 +170,8 @@ function App() {
   };
 
   const handleLoadSongPreset = (preset: SongPreset) => {
+    setSongTitle(preset.name);
+    setSongAuthor(preset.author ?? '');
     setMusicalKey(preset.key);
     setScale(preset.scale);
     setTempo(preset.tempo);
@@ -204,12 +208,10 @@ function App() {
   };
 
   const handleSaveSongPreset = () => {
-    const name = window.prompt('Name this song preset:', 'My Song');
-    if (!name) return; // cancelled
-
     const preset: SongPreset = {
       version: 1,
-      name,
+      name: songTitle,
+      author: songAuthor || undefined,
       key: musicalKey,
       scale,
       tempo,
@@ -360,6 +362,11 @@ function App() {
             onRemove={handleRemove}
             onClear={handleClear}
             onLoopChange={handleLoopChange}
+            title={songTitle}
+            onTitleChange={setSongTitle}
+            author={songAuthor}
+            onAuthorChange={setSongAuthor}
+            tempo={tempo}
           />
         </div>
       </div>
