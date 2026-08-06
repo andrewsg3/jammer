@@ -171,8 +171,8 @@ function App() {
   }, [tempo, isPlaying]);
 
   useEffect(() => {
-    // Leave playheadBeat where it is while stopped — it stays visible, and either
-    // sits wherever playback last stopped or wherever the user scrubbed it to.
+    // While playing, the playhead tracks the transport; the stop handlers themselves
+    // reset it back to 0, so there's nothing to do here once playback ends.
     if (!isPlaying) return;
     let frameId: number;
     const tick = () => {
@@ -319,6 +319,7 @@ function App() {
     if (isPlaying) {
       stop();
       setIsPlaying(false);
+      setPlayheadBeat(0);
       return;
     }
     if (placements.length === 0) return;
