@@ -7,13 +7,30 @@
   "tempo": 118,
   "metronome": false,
   "loopStart": 0,
-  "loopEnd": 16,
+  "loopEnd": 64,
   "drumStyle": "Caravan_shuffle",
   "bassStyle": "Walking",
   "keysStyle": "Sustained 7ths",
   "placements": [
     { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 0, "lengthBeats": 4 },
-    { "selection": { "type": "borrowed", "index": 1 }, "startBeat": 4, "lengthBeats": 2 },
-    { "selection": { "type": "borrowed", "index": 2 }, "startBeat": 6, "lengthBeats": 2 }
+    { "selection": { "type": "borrowed", "index": 3 }, "startBeat": 4, "lengthBeats": 2 },
+    { "selection": { "type": "secondaryDominant", "degree": 0 }, "startBeat": 6, "lengthBeats": 2 },
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 8, "lengthBeats": 4 },
+    { "selection": { "type": "borrowed", "index": 3 }, "startBeat": 12, "lengthBeats": 2 },
+    { "selection": { "type": "secondaryDominant", "degree": 0 }, "startBeat": 14, "lengthBeats": 2 },
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 16, "lengthBeats": 4 },
+    { "selection": { "type": "borrowed", "index": 3 }, "startBeat": 20, "lengthBeats": 2 },
+    { "selection": { "type": "secondaryDominant", "degree": 0 }, "startBeat": 22, "lengthBeats": 2 },
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 24, "lengthBeats": 4 },
+    { "selection": { "type": "borrowed", "index": 3 }, "startBeat": 28, "lengthBeats": 2 },
+    { "selection": { "type": "secondaryDominant", "degree": 0 }, "startBeat": 30, "lengthBeats": 2 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "m6" }, "startBeat": 32, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "startBeat": 36, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dom7sharp9" }, "startBeat": 40, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "m7b5" }, "startBeat": 44, "lengthBeats": 4},
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "m6" }, "startBeat": 48, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "startBeat": 52, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dom7sharp9" }, "startBeat": 56, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "m7b5" }, "startBeat": 60, "lengthBeats": 4}
   ]
 }
