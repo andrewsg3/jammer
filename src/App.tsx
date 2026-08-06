@@ -395,6 +395,7 @@ function App() {
               onRemove={handleRemove}
               onClear={handleClear}
               onLoopChange={handleLoopChange}
+              onAuditionChord={handleAudition}
               title={songTitle}
               onTitleChange={setSongTitle}
               author={songAuthor}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { chordName, deserializeSelection, resolveSelection } from '../data/progressions';
-import type { ChordPlacement, ChordSelection, ScaleName } from '../data/progressions';
+import type { Chord, ChordPlacement, ChordSelection, ScaleName } from '../data/progressions';
 import { SheetMusicHeader } from './SheetMusicHeader';
 
 // 12 rows of 4 bars — a full lead-sheet page (A4-ish proportions), not just a loop snippet.
@@ -30,6 +30,7 @@ type Props = {
   onRemove: (placement: ChordPlacement) => void;
   onClear: () => void;
   onLoopChange: (loopStart: number, loopEnd: number) => void;
+  onAuditionChord: (chord: Chord) => void;
   title: string;
   onTitleChange: (title: string) => void;
   author: string;
@@ -95,6 +96,7 @@ export function ChordGrid({
   onRemove,
   onClear,
   onLoopChange,
+  onAuditionChord,
   title,
   onTitleChange,
   author,
@@ -337,7 +339,10 @@ export function ChordGrid({
                       <div
                         className="chord-block-body"
                         onMouseDown={handleMoveStart(placement)}
-                        onClick={() => setSelectedId(placement.id)}
+                        onClick={() => {
+                          setSelectedId(placement.id);
+                          onAuditionChord(chord);
+                        }}
                       >
                         <span className="chord-block-name">{chordName(chord)}</span>
                       </div>
