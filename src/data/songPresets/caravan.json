@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "Caravan",
+  "author": "Victor Deschamps & Adrien Bordes",
+  "key": "C",
+  "scale": "minor",
+  "tempo": 118,
+  "metronome": false,
+  "loopStart": 0,
+  "loopEnd": 16,
+  "drumStyle": "Caravan_shuffle",
+  "bassStyle": "Walking",
+  "keysStyle": "Sustained 7ths",
+  "placements": [
+    { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 0, "lengthBeats": 4 },
+    { "selection": { "type": "secondaryDominant", "degree": 1 }, "startBeat": 4, "lengthBeats": 2 },
+    { "selection": { "type": "secondaryDominant", "degree": 4 }, "startBeat": 6, "lengthBeats": 2 }
+  ]
+}
