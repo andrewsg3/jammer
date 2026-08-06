@@ -77,7 +77,11 @@ body {
 }
 
 .app-title {
-  font-size: 18px;
+  /* Bembo if it's actually installed (a licensed/non-web-safe typeface — there's no
+     web-font pipeline in this client-only app to embed it) — Georgia otherwise as a
+     visually similar old-style serif fallback. */
+  font-family: Bembo, Georgia, 'Times New Roman', serif;
+  font-size: 28px;
   font-weight: 700;
   margin: 0 4px 6px 0;
   white-space: nowrap;
@@ -319,7 +323,9 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  max-width: 312px; /* 5 mini-faders (56px + 8px gap) per row */
+  width: 312px; /* 5 mini-faders (56px + 8px gap) per row — an absolutely positioned
+                   flex container needs an explicit width, not just max-width, or it
+                   shrink-to-fits down to one column instead of actually wrapping */
   padding: 10px;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -673,11 +679,18 @@ button:hover {
   font-style: inherit;
 }
 
+.sheet-header-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .sheet-marks {
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-shrink: 0;
   font-size: 14px;
   white-space: nowrap;
 }
@@ -898,7 +911,6 @@ button:hover {
 }
 
 .clear-button {
-  align-self: flex-start;
   padding: 2px 8px;
   font-size: 13px;
   background: transparent;

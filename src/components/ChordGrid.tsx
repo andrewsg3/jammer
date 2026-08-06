@@ -404,6 +404,7 @@ export function ChordGrid({
           author={author}
           onAuthorChange={onAuthorChange}
           tempo={tempo}
+          onClear={onClear}
         />
         <div
           ref={wrapperRef}
@@ -528,9 +529,6 @@ export function ChordGrid({
         })}
         </div>
       </div>
-      <button type="button" className="clear-button" onClick={onClear}>
-        Clear
-      </button>
     </div>
   );
 }

@@ -117,11 +117,15 @@ function ensureSynths() {
   if (!ride) {
     // Washier and longer than the hihat — lower harmonicity, much longer envelope.
     ride = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 1.2, release: 0.8 },
-      harmonicity: 3.1,
-      modulationIndex: 16,
-      resonance: 3000,
-      octaves: 2.5,
+      envelope: {
+        attack: 0.002,
+        decay: 1.8,
+        release: 1.2,
+      },
+      harmonicity: 2.2,
+      modulationIndex: 6,
+      resonance: 1800,
+      octaves: 1.5,
     }).connect(rideVolume);
   }
   if (!rideBell) {

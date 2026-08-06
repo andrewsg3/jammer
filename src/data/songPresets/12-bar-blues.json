@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "12 Bar Blues",
+  "key": "Bb",
+  "scale": "major",
+  "tempo": 140,
+  "metronome": false,
+  "loopStart": 0,
+  "drumStyle": "Purdie Shuffle",
+  "bassStyle": "Walk Up & Down",
+  "keysStyle": "Blues Shuffle (Swing)",
+  "placements": [
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 4 }
+  ]
+}

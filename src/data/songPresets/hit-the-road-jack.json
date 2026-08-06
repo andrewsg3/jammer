@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "Hit the Road Jack",
+  "author": "Percy Mayfield",
+  "key": "A",
+  "scale": "minor",
+  "tempo": 140,
+  "metronome": false,
+  "loopStart": 0,
+  "drumStyle": "Jazz Swing",
+  "bassStyle": "Walk Up & Down",
+  "keysStyle": "Sustained 7ths",
+  "placements": [
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 2 },
+    { "selection": { "type": "chromatic", "offset": 10, "quality": "dom7" }, "lengthBeats": 2 },
+    { "selection": { "type": "chromatic", "offset": 8, "quality": "dom7" }, "lengthBeats": 2 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 2 }
+  ]
+}

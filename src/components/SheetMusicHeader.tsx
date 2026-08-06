@@ -4,6 +4,7 @@ type Props = {
   author: string;
   onAuthorChange: (author: string) => void;
   tempo: number;
+  onClear: () => void;
 };
 
 // Auto-widening text input — sizes to its content like a title on an actual
@@ -33,7 +34,7 @@ function AutoWidthInput({
   );
 }
 
-export function SheetMusicHeader({ title, onTitleChange, author, onAuthorChange, tempo }: Props) {
+export function SheetMusicHeader({ title, onTitleChange, author, onAuthorChange, tempo, onClear }: Props) {
   return (
     <div className="sheet-header">
       <div className="sheet-header-title-block">
@@ -55,12 +56,17 @@ export function SheetMusicHeader({ title, onTitleChange, author, onAuthorChange,
           />
         </div>
       </div>
-      <div className="sheet-marks">
-        <span className="sheet-tempo">♩ = {tempo}</span>
-        <span className="sheet-time-signature" aria-label="Time signature 4/4">
-          <span>4</span>
-          <span>4</span>
-        </span>
+      <div className="sheet-header-side">
+        <button type="button" className="clear-button" onClick={onClear}>
+          Clear
+        </button>
+        <div className="sheet-marks">
+          <span className="sheet-tempo">♩ = {tempo}</span>
+          <span className="sheet-time-signature" aria-label="Time signature 4/4">
+            <span>4</span>
+            <span>4</span>
+          </span>
+        </div>
       </div>
     </div>
   );
