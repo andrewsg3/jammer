@@ -1,5 +1,11 @@
+import { useRef } from 'react';
 import type { ScaleName } from '../data/progressions';
 import type { SongPreset } from '../data/songPresets';
+
+const MIN_TEMPO = 40;
+const MAX_TEMPO = 220;
+const TAP_RESET_GAP_MS = 2000;
+const TAP_HISTORY_SIZE = 8;
 
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -43,6 +49,25 @@ export function TopBar({
   isPlaying,
   onTogglePlay,
 }: Props) {
+  const tapTimesRef = useRef<number[]>([]);
+
+  const handleTapTempo = () => {
+    const now = performance.now();
+    const times = tapTimesRef.current;
+    const last = times[times.length - 1];
+    if (last !== undefined && now - last > TAP_RESET_GAP_MS) {
+      times.length = 0; // gap too long — this tap starts a fresh sequence
+    }
+    times.push(now);
+    if (times.length > TAP_HISTORY_SIZE) times.shift();
+    if (times.length < 2) return; // need at least one interval to estimate a tempo
+
+    const intervals = times.slice(1).map((t, i) => t - times[i]);
+    const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    const bpm = Math.round(60000 / avgMs);
+    onTempoChange(Math.max(MIN_TEMPO, Math.min(MAX_TEMPO, bpm)));
+  };
+
   return (
     <header className="top-bar">
       <div className="top-bar-inner">
@@ -107,12 +132,20 @@ export function TopBar({
               id="top-bar-tempo"
               aria-label="Tempo"
               type="number"
-              min={40}
-              max={220}
+              min={MIN_TEMPO}
+              max={MAX_TEMPO}
               value={tempo}
               onChange={(e) => onTempoChange(Number(e.target.value))}
             />
             <span>bpm</span>
+            <button
+              type="button"
+              className="tap-tempo-button"
+              onClick={handleTapTempo}
+              title="Tap to set tempo"
+            >
+              Tap
+            </button>
           </div>
         </TopBarField>
 

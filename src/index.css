@@ -135,6 +135,11 @@ body {
   opacity: 0.6;
 }
 
+.tap-tempo-button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
 .top-bar-metronome {
   display: flex;
   align-items: center;
