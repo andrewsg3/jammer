@@ -30,8 +30,30 @@ export type Chord = {
 
 export type Progression = Chord[];
 
-export type ScaleName = 'major' | 'minor'; // 'minor' = natural minor
+// 'minor' = natural minor (aeolian) — kept as its historical name rather than
+// renaming to 'aeolian', so existing song preset JSON files stay valid.
+export type ScaleName = 'major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'locrian';
 export type ScaleDegree = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export const SCALE_NAMES: ScaleName[] = [
+  'major',
+  'minor',
+  'dorian',
+  'phrygian',
+  'lydian',
+  'mixolydian',
+  'locrian',
+];
+
+export const SCALE_LABELS: Record<ScaleName, string> = {
+  major: 'Major',
+  minor: 'Minor',
+  dorian: 'Dorian',
+  phrygian: 'Phrygian',
+  lydian: 'Lydian',
+  mixolydian: 'Mixolydian',
+  locrian: 'Locrian',
+};
 
 const NOTE_TO_SEMITONE: Record<string, number> = {
   C: 0, 'C#': 1, Db: 1,
@@ -139,19 +161,38 @@ export const QUALITY_LABELS: Record<ChordQuality, string> = {
   maj13: 'Major 13',
 };
 
+// Each mode is the major scale rotated to start on a different degree — e.g. dorian
+// is "the white keys starting on D." Intervals below are that rotation worked out
+// from the tonic, and DEGREE_QUALITIES/ROMAN_NUMERALS follow from stacking thirds
+// within each mode's own scale (not compared against major/minor).
 const SCALE_INTERVALS: Record<ScaleName, number[]> = {
   major: [0, 2, 4, 5, 7, 9, 11],
-  minor: [0, 2, 3, 5, 7, 8, 10], // natural minor
+  minor: [0, 2, 3, 5, 7, 8, 10], // natural minor (aeolian)
+  dorian: [0, 2, 3, 5, 7, 9, 10],
+  phrygian: [0, 1, 3, 5, 7, 8, 10],
+  lydian: [0, 2, 4, 6, 7, 9, 11],
+  mixolydian: [0, 2, 4, 5, 7, 9, 10],
+  locrian: [0, 1, 3, 5, 6, 8, 10],
 };
 
 const DEGREE_QUALITIES: Record<ScaleName, ChordQuality[]> = {
   major: ['maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'],
   minor: ['min', 'dim', 'maj', 'min', 'min', 'maj', 'maj'],
+  dorian: ['min', 'min', 'maj', 'maj', 'min', 'dim', 'maj'],
+  phrygian: ['min', 'maj', 'maj', 'min', 'dim', 'maj', 'min'],
+  lydian: ['maj', 'maj', 'min', 'dim', 'maj', 'min', 'min'],
+  mixolydian: ['maj', 'min', 'dim', 'maj', 'min', 'min', 'maj'],
+  locrian: ['dim', 'maj', 'min', 'min', 'maj', 'maj', 'min'],
 };
 
 const ROMAN_NUMERALS: Record<ScaleName, string[]> = {
   major: ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'],
   minor: ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'],
+  dorian: ['i', 'ii', 'III', 'IV', 'v', 'vi°', 'VII'],
+  phrygian: ['i', 'II', 'III', 'iv', 'v°', 'VI', 'vii'],
+  lydian: ['I', 'II', 'iii', 'iv°', 'V', 'vi', 'vii'],
+  mixolydian: ['I', 'ii', 'iii°', 'IV', 'v', 'vi', 'VII'],
+  locrian: ['i°', 'II', 'iii', 'iv', 'V', 'VI', 'vii'],
 };
 
 export function rootSemitone(root: string): number {
@@ -243,7 +284,10 @@ export type ChordOption = { selection: ChordSelection; chord: Chord; label: stri
 type BorrowedChordDef = { offset: number; quality: ChordQuality; label: string };
 
 // Modal interchange from the parallel mode — a curated set, not every possible borrow.
-const BORROWED_CHORDS: Record<ScaleName, BorrowedChordDef[]> = {
+// Only defined for major/minor for now; the other modes get diatonic + chromatic only
+// (there's no similarly obvious "right" curated list for e.g. phrygian or locrian —
+// see borrowedOptions/resolveSelection below for how the gap is handled).
+const BORROWED_CHORDS: Partial<Record<ScaleName, BorrowedChordDef[]>> = {
   major: [
     { offset: 5, quality: 'min', label: 'iv' },
     { offset: 3, quality: 'maj', label: 'bIII' },
@@ -261,8 +305,9 @@ const BORROWED_CHORDS: Record<ScaleName, BorrowedChordDef[]> = {
 // Secondary dominants target these diatonic degrees — skips vii° (an uncommon target).
 // Major also skips I: V/I would just duplicate the diatonic V chord there. Minor keeps
 // i, since V/i (E7 in A minor) is the harmonic-minor dominant — a different, essential
-// chord from the diatonic v (Em), not a duplicate.
-const SECONDARY_DOMINANT_DEGREES: Record<ScaleName, ScaleDegree[]> = {
+// chord from the diatonic v (Em), not a duplicate. Only defined for major/minor for
+// now — see the BORROWED_CHORDS comment above; same reasoning applies here.
+const SECONDARY_DOMINANT_DEGREES: Partial<Record<ScaleName, ScaleDegree[]>> = {
   major: [1, 2, 3, 4, 5],
   minor: [0, 1, 2, 3, 4, 5],
 };
@@ -289,7 +334,7 @@ export function diatonicOptions(key: string, scale: ScaleName): ChordOption[] {
 }
 
 export function borrowedOptions(key: string, scale: ScaleName): ChordOption[] {
-  return BORROWED_CHORDS[scale].map((def, index) => ({
+  return (BORROWED_CHORDS[scale] ?? []).map((def, index) => ({
     selection: { type: 'borrowed', index },
     chord: { root: shiftRootFlat(key, def.offset), quality: def.quality },
     label: def.label,
@@ -297,7 +342,7 @@ export function borrowedOptions(key: string, scale: ScaleName): ChordOption[] {
 }
 
 export function secondaryDominantOptions(key: string, scale: ScaleName): ChordOption[] {
-  return SECONDARY_DOMINANT_DEGREES[scale].map((degree) => {
+  return (SECONDARY_DOMINANT_DEGREES[scale] ?? []).map((degree) => {
     const target = diatonicChord(key, scale, degree);
     return {
       selection: { type: 'secondaryDominant', degree },
@@ -329,8 +374,11 @@ export function resolveSelection(key: string, scale: ScaleName, selection: Chord
     case 'diatonic':
       return diatonicChord(key, scale, selection.degree);
     case 'borrowed': {
-      const def = BORROWED_CHORDS[scale][selection.index];
-      return { root: shiftRootFlat(key, def.offset), quality: def.quality };
+      // Falls back to the tonic triad if this scale has no borrowed-chord list (or a
+      // song preset saved under a different scale references an out-of-range index) —
+      // same "don't crash, degrade gracefully" pattern as an unmatched style name.
+      const def = BORROWED_CHORDS[scale]?.[selection.index];
+      return def ? { root: shiftRootFlat(key, def.offset), quality: def.quality } : diatonicChord(key, scale, 0);
     }
     case 'secondaryDominant': {
       const target = diatonicChord(key, scale, selection.degree);

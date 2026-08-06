@@ -42,7 +42,7 @@ preset you added isn't showing up.
 | `name`                        | string               | Shown in the Song dropdown and the sheet-music title.                                       |
 | `author`                      | string (optional)    | Shown under the title in the sheet-music header.                                            |
 | `key`                         | string               | A root note: `C`, `C#`/`Db`, `D`, ... `B`. Either spelling works — use whichever is musically conventional for the key (e.g. `Bb`, not `A#`). |
-| `scale`                       | `"major"` \| `"minor"` | `"minor"` means natural minor.                                                              |
+| `scale`                       | `"major"` \| `"minor"` \| `"dorian"` \| `"phrygian"` \| `"lydian"` \| `"mixolydian"` \| `"locrian"` | `"minor"` means natural minor (aeolian). |
 | `tempo`                       | number               | BPM.                                                                                         |
 | `metronome`                   | boolean              | Whether the Metronome track starts unmuted.                                                 |
 | `loopStart` / `loopEnd`       | number               | Loop range in quarter-note beats. `loopEnd` is exclusive.                                   |
@@ -78,17 +78,21 @@ correctly if you change the key later.
 { "type": "diatonic", "degree": 0 }
 ```
 
-`degree` is `0`-`6`, mapping to the 7 diatonic chords of the key:
+`degree` is `0`-`6`, mapping to the 7 diatonic chords of the key. Each mode is the
+major scale rotated to start on a different degree, so the triad qualities below
+come from stacking thirds within that mode's own scale — e.g. dorian's `degree: 0`
+is a minor triad because dorian's own 3rd and 5th are a minor third and perfect
+fifth above its tonic, not because it's "compared" to major or minor.
 
-| degree | major        | minor        |
-| ------ | ------------ | ------------ |
-| 0      | I (maj)      | i (min)      |
-| 1      | ii (min)     | ii° (dim)    |
-| 2      | iii (min)    | III (maj)    |
-| 3      | IV (maj)     | iv (min)     |
-| 4      | V (maj)      | v (min)      |
-| 5      | vi (min)     | VI (maj)     |
-| 6      | vii° (dim)   | VII (maj)    |
+| degree | major | minor | dorian | phrygian | lydian | mixolydian | locrian |
+| ------ | ----- | ----- | ------ | -------- | ------ | ---------- | ------- |
+| 0      | I     | i     | i      | i        | I      | I          | i°      |
+| 1      | ii    | ii°   | ii     | II       | II     | ii         | II      |
+| 2      | iii   | III   | III    | III      | iii    | iii°       | iii     |
+| 3      | IV    | iv    | IV     | iv       | iv°    | IV         | iv      |
+| 4      | V     | v     | v      | v°       | V      | v          | V       |
+| 5      | vi    | VI    | vi°    | VI       | vi     | vi         | VI      |
+| 6      | vii°  | VII   | VII    | vii      | vii    | VII        | vii     |
 
 ### `secondaryDominant` — V7 of a diatonic degree
 
@@ -101,7 +105,8 @@ that degree's diatonic root (e.g. in C major, `degree: 4` = V7/V = D7). Availabl
 degrees: **major** `1`-`5` (not `0`/`6` — V/I would just duplicate the diatonic V,
 and vii° is an uncommon target); **minor** `0`-`5` (minor keeps `0`, since V/i is the
 harmonic-minor dominant — e.g. E7 in A minor — a genuinely different chord from the
-diatonic v, not a duplicate).
+diatonic v, not a duplicate). **Not curated for dorian/phrygian/lydian/mixolydian/
+locrian** — see the note at the end of this section.
 
 ### `borrowed` — a fixed modal-interchange chord
 
@@ -118,6 +123,14 @@ ones), indexed `0`-`3`:
 | 1     | bIII  | IV    |
 | 2     | bVI   | bII   |
 | 3     | bVII  | VI7   |
+
+**`borrowed` and `secondaryDominant` are major/minor-only.** The other five modes
+don't have an equally obvious "correct" curated list for either (modal interchange
+and secondary dominants are ambiguous concepts once your key is already a mode
+rather than major/minor), so for now those modes only offer `diatonic` and
+`chromatic` — the chord palette simply hides those two sections when the loaded
+scale doesn't have a list for them. `chromatic` still reaches every possible chord
+regardless of scale, so nothing is actually unreachable, just less pre-labeled.
 
 ### `chromatic` — any root, any quality
 

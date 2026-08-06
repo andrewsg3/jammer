@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { SCALE_NAMES, SCALE_LABELS } from '../data/progressions';
 import type { ScaleName } from '../data/progressions';
 import type { SongPreset } from '../data/songPresets';
 
@@ -116,8 +117,11 @@ export function TopBar({
               value={scale}
               onChange={(e) => onScaleChange(e.target.value as ScaleName)}
             >
-              <option value="major">Major</option>
-              <option value="minor">Minor</option>
+              {SCALE_NAMES.map((s) => (
+                <option key={s} value={s}>
+                  {SCALE_LABELS[s]}
+                </option>
+              ))}
             </select>
           </div>
         </TopBarField>

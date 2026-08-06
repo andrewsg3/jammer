@@ -28,6 +28,11 @@ function PaletteRow({
   onAudition: Props['onAudition'];
   headerExtra?: React.ReactNode;
 }) {
+  // Borrowed/secondary-dominant chords aren't curated for every mode (see
+  // BORROWED_CHORDS in progressions.ts) — skip the section entirely rather than
+  // showing an empty row with nothing to drag.
+  if (options.length === 0) return null;
+
   return (
     <div className="palette-section">
       <div className="palette-section-header">

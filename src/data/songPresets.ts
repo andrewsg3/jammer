@@ -1,3 +1,4 @@
+import { SCALE_NAMES } from './progressions';
 import type { ChordSelection, ScaleName } from './progressions';
 import type { DrumPattern } from './instrumentStyles';
 
@@ -77,7 +78,7 @@ export function isSongPreset(value: unknown): value is SongPreset {
     v.version === 1 &&
     typeof v.name === 'string' &&
     typeof v.key === 'string' &&
-    (v.scale === 'major' || v.scale === 'minor') &&
+    SCALE_NAMES.includes(v.scale as ScaleName) &&
     typeof v.tempo === 'number' &&
     typeof v.metronome === 'boolean' &&
     typeof v.loopStart === 'number' &&
