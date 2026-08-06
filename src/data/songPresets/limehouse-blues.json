@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "name": "Limehouse Blues",
+  "author": "Django Reinhardt",
+  "key": "G",
+  "scale": "major",
+  "tempo": 270,
+  "metronome": false,
+  "loopStart": 0,
+  "loopEnd": 128,
+  "drumStyle": "None",
+  "bassStyle": "Walking",
+  "keysStyle": "La Pompe",
+  "placements": [
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "dom7" }, "lengthBeats": 16 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dom7" }, "lengthBeats": 16 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "maj" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 4, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 9, "quality": "min" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "dom7" }, "lengthBeats": 16 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dom7" }, "lengthBeats": 16 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 9, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "min" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "m7b5" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "maj" }, "lengthBeats": 8 }
+  ]
+}

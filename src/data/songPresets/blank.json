@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "Blank",
+  "key": "C",
+  "scale": "major",
+  "tempo": 126,
+  "metronome": false,
+  "loopStart": 0,
+  "loopEnd": 16,
+  "drumStyle": "",
+  "bassStyle": "",
+  "keysStyle": "",
+  "placements": [
+
+  ]
+}

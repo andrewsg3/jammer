@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "Melbourne",
+  "author": "Andrew Scott-George",
+  "key": "C",
+  "scale": "minor",
+  "tempo": 124,
+  "metronome": false,
+  "loopStart": 0,
+  "loopEnd": 64,
+  "drumStyle": "Hip Hop",
+  "bassStyle": "Root-Fifth",
+  "keysStyle": "Arpeggiated 7ths",
+  "placements": [
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dom7sharp9" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 8, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7sharp5" }, "lengthBeats": 4}
+  ]
+}
