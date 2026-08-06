@@ -71,7 +71,7 @@ export function TopBar({
   return (
     <header className="top-bar">
       <div className="top-bar-inner">
-        <h1 className="app-title">trackback</h1>
+        <h1 className="app-title font-(family-name:consolas)">backbeat</h1>
 
         <TopBarField label="Song">
           <select

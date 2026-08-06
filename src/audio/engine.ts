@@ -6,6 +6,9 @@ import {
   disposeDrums,
   setVolume as setDrumsOutputVolume,
   setInstrument as setDrumsInstrumentImpl,
+  setKickVolume as setKickOutputVolume,
+  setSnareVolume as setSnareOutputVolume,
+  setHihatVolume as setHihatOutputVolume,
 } from './drums';
 import {
   scheduleBass,
@@ -79,6 +82,18 @@ export function setBassVolume(percent: number): void {
 
 export function setDrumsVolume(percent: number): void {
   setDrumsOutputVolume(percentToDb(percent));
+}
+
+export function setKickVolume(percent: number): void {
+  setKickOutputVolume(percentToDb(percent));
+}
+
+export function setSnareVolume(percent: number): void {
+  setSnareOutputVolume(percentToDb(percent));
+}
+
+export function setHihatVolume(percent: number): void {
+  setHihatOutputVolume(percentToDb(percent));
 }
 
 export function setMetronomeVolume(percent: number): void {

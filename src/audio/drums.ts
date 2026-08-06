@@ -1,8 +1,12 @@
 import * as Tone from 'tone';
 import type { DrumPattern } from '../data/instrumentStyles';
 
-// Shared output so one volume control covers all three drum voices.
+// Shared output so one volume control (the Drums fader) trims all three voices
+// together; each voice also has its own node feeding into it for individual mix.
 const output = new Tone.Volume(0).toDestination();
+const kickVolume = new Tone.Volume(0).connect(output);
+const snareVolume = new Tone.Volume(0).connect(output);
+const hihatVolume = new Tone.Volume(0).connect(output);
 
 let kick: Tone.MembraneSynth | null = null;
 let snare: Tone.NoiseSynth | null = null;
@@ -19,19 +23,19 @@ function ensureSynths() {
           pitchDecay: 0.05,
           octaves: 4,
           envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 0.4 },
-        }).connect(output)
-      : new Tone.MembraneSynth().connect(output);
+        }).connect(kickVolume)
+      : new Tone.MembraneSynth().connect(kickVolume);
   }
   if (!snare) {
     snare = electronic
       ? new Tone.NoiseSynth({
           noise: { type: 'pink' },
           envelope: { attack: 0.001, decay: 0.2, sustain: 0 },
-        }).connect(output)
+        }).connect(snareVolume)
       : new Tone.NoiseSynth({
           noise: { type: 'white' },
           envelope: { attack: 0.001, decay: 0.15, sustain: 0 },
-        }).connect(output);
+        }).connect(snareVolume);
   }
   if (!hihat) {
     hihat = electronic
@@ -42,19 +46,31 @@ function ensureSynths() {
           modulationIndex: 64,
           resonance: 8000,
           octaves: 1,
-        }).connect(output)
+        }).connect(hihatVolume)
       : new Tone.MetalSynth({
           envelope: { attack: 0.001, decay: 0.08, release: 0.01 },
           harmonicity: 5.1,
           modulationIndex: 32,
           resonance: 4000,
           octaves: 1.5,
-        }).connect(output);
+        }).connect(hihatVolume);
   }
 }
 
 export function setVolume(db: number): void {
   output.volume.value = db;
+}
+
+export function setKickVolume(db: number): void {
+  kickVolume.volume.value = db;
+}
+
+export function setSnareVolume(db: number): void {
+  snareVolume.volume.value = db;
+}
+
+export function setHihatVolume(db: number): void {
+  hihatVolume.volume.value = db;
 }
 
 export function setInstrument(name: string): void {

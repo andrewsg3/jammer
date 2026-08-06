@@ -5,6 +5,7 @@ import { TopBar } from './components/TopBar';
 import { ChannelStrip } from './components/ChannelStrip';
 import { VolumeSlider } from './components/VolumeSlider';
 import { VerticalFader } from './components/VerticalFader';
+import { MiniFader } from './components/MiniFader';
 import { MidiUpload } from './components/MidiUpload';
 import { SongPresetFileControls } from './components/SongPresetFileControls';
 import type { Chord, ChordPlacement, ChordSelection, ScaleName } from './data/progressions';
@@ -40,6 +41,9 @@ import {
   setDrumsVolume,
   setMetronomeVolume,
   setMasterVolume,
+  setKickVolume,
+  setSnareVolume,
+  setHihatVolume,
   setChordsInstrument,
   setBassInstrument,
   setDrumsInstrument,
@@ -91,6 +95,10 @@ function App() {
   const [drumsVolume, setDrumsVolumeState] = useState(100);
   const [metronomeVolume, setMetronomeVolumeState] = useState(100);
   const [masterVolume, setMasterVolumeState] = useState(100);
+  const [drumsExpanded, setDrumsExpanded] = useState(false);
+  const [kickVolume, setKickVolumeState] = useState(100);
+  const [snareVolume, setSnareVolumeState] = useState(100);
+  const [hihatVolume, setHihatVolumeState] = useState(100);
   const [chordsInstrument, setChordsInstrumentState] = useState<Instrument>(
     keysInstruments.find((i) => i.name === DEFAULT_SONG_PRESET?.chordsInstrument) ?? keysInstruments[0],
   );
@@ -141,6 +149,9 @@ function App() {
   useEffect(() => setDrumsVolume(drumsVolume), [drumsVolume]);
   useEffect(() => setMetronomeVolume(metronomeVolume), [metronomeVolume]);
   useEffect(() => setMasterVolume(masterVolume), [masterVolume]);
+  useEffect(() => setKickVolume(kickVolume), [kickVolume]);
+  useEffect(() => setSnareVolume(snareVolume), [snareVolume]);
+  useEffect(() => setHihatVolume(hihatVolume), [hihatVolume]);
 
   useEffect(() => {
     if (isPlaying) setTransportTempo(tempo);
@@ -427,7 +438,16 @@ function App() {
               onInstrumentChange={setDrumsInstrumentState}
               volume={drumsVolume}
               onVolumeChange={setDrumsVolumeState}
+              expanded={drumsExpanded}
+              onToggleExpanded={() => setDrumsExpanded((v) => !v)}
             />
+            {drumsExpanded && (
+              <>
+                <MiniFader id="volume-kick" label="Kick" value={kickVolume} onChange={setKickVolumeState} />
+                <MiniFader id="volume-snare" label="Snare" value={snareVolume} onChange={setSnareVolumeState} />
+                <MiniFader id="volume-hihat" label="Hihat" value={hihatVolume} onChange={setHihatVolumeState} />
+              </>
+            )}
             <ChannelStrip
               label="Bass"
               accent="bass"
