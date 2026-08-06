@@ -5,7 +5,6 @@ import { StylePicker } from './components/StylePicker';
 import { TransportControls } from './components/TransportControls';
 import { MixerControls } from './components/MixerControls';
 import { MidiUpload } from './components/MidiUpload';
-import { ProgressionPresetPicker } from './components/ProgressionPresetPicker';
 import { SongPresetControls } from './components/SongPresetControls';
 import type { Chord, ChordPlacement, ChordSelection, ScaleName } from './data/progressions';
 import {
@@ -20,7 +19,6 @@ import {
 } from './data/instrumentStyles';
 import { loadBundledDrumStyles } from './data/drumLibrary';
 import { parseMidiDrumPattern } from './data/midiDrumImport';
-import { progressionPresets, type ProgressionPreset } from './data/progressionPresets';
 import {
   bundledSongPresets,
   downloadSongPreset,
@@ -43,6 +41,8 @@ import {
   setDrumsInstrument,
 } from './audio/engine';
 
+// Fallback only — used if bundledSongPresets is somehow empty (e.g. all preset
+// files failed validation), so the app never opens to a totally blank grid.
 const STARTER_PLACEMENTS: ChordPlacement[] = [
   { id: 'starter-0', selection: { type: 'diatonic', degree: 0 }, startBeat: 0, lengthBeats: 4 },
   { id: 'starter-1', selection: { type: 'secondaryDominant', degree: 5 }, startBeat: 4, lengthBeats: 4 },
@@ -50,32 +50,50 @@ const STARTER_PLACEMENTS: ChordPlacement[] = [
   { id: 'starter-3', selection: { type: 'diatonic', degree: 1 }, startBeat: 12, lengthBeats: 4 },
 ];
 
+const DEFAULT_SONG_PRESET = bundledSongPresets.find((p) => p.name === 'Autumn Leaves') ?? null;
+
 function App() {
-  const [songTitle, setSongTitle] = useState('Untitled');
-  const [songAuthor, setSongAuthor] = useState('');
-  const [musicalKey, setMusicalKey] = useState('C');
-  const [scale, setScale] = useState<ScaleName>('major');
-  const [placements, setPlacements] = useState<ChordPlacement[]>(STARTER_PLACEMENTS);
-  const [tempo, setTempo] = useState(124);
+  const [songTitle, setSongTitle] = useState(DEFAULT_SONG_PRESET?.name ?? 'Untitled');
+  const [songAuthor, setSongAuthor] = useState(DEFAULT_SONG_PRESET?.author ?? '');
+  const [musicalKey, setMusicalKey] = useState(DEFAULT_SONG_PRESET?.key ?? 'C');
+  const [scale, setScale] = useState<ScaleName>(DEFAULT_SONG_PRESET?.scale ?? 'major');
+  const [placements, setPlacements] = useState<ChordPlacement[]>(
+    DEFAULT_SONG_PRESET
+      ? DEFAULT_SONG_PRESET.placements.map((p) => ({ id: crypto.randomUUID(), ...p }))
+      : STARTER_PLACEMENTS,
+  );
+  const [tempo, setTempo] = useState(DEFAULT_SONG_PRESET?.tempo ?? 124);
   const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
   const [drumStyle, setDrumStyle] = useState<DrumStyle>(baseDrumStyles[0]);
-  const [bassStyle, setBassStyle] = useState(bassStyles.find((s) => s.name === 'Walking')!);
-  const [keysStyle, setKeysStyle] = useState(keysStyles.find((s) => s.name === 'Sustained 7ths')!);
-  const [metronomeOn, setMetronomeOn] = useState(false);
+  const [bassStyle, setBassStyle] = useState(
+    bassStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.bassStyle) ??
+      bassStyles.find((s) => s.name === 'Walking')!,
+  );
+  const [keysStyle, setKeysStyle] = useState(
+    keysStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.keysStyle) ??
+      keysStyles.find((s) => s.name === 'Sustained 7ths')!,
+  );
+  const [metronomeOn, setMetronomeOn] = useState(DEFAULT_SONG_PRESET?.metronome ?? false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [customDrumStyle, setCustomDrumStyle] = useState<DrumStyle | null>(null);
   const [midiError, setMidiError] = useState<string | null>(null);
   const [songPresetError, setSongPresetError] = useState<string | null>(null);
-  const [loopStart, setLoopStart] = useState(0);
-  const [loopEnd, setLoopEnd] = useState(16);
+  const [loopStart, setLoopStart] = useState(DEFAULT_SONG_PRESET?.loopStart ?? 0);
+  const [loopEnd, setLoopEnd] = useState(DEFAULT_SONG_PRESET?.loopEnd ?? 16);
   const [playheadBeat, setPlayheadBeat] = useState<number | null>(null);
   const [chordsVolume, setChordsVolumeState] = useState(100);
   const [bassVolume, setBassVolumeState] = useState(100);
   const [drumsVolume, setDrumsVolumeState] = useState(100);
   const [metronomeVolume, setMetronomeVolumeState] = useState(100);
-  const [chordsInstrument, setChordsInstrumentState] = useState<Instrument>(keysInstruments[0]);
-  const [bassInstrument, setBassInstrumentState] = useState<Instrument>(bassInstruments[0]);
-  const [drumsInstrument, setDrumsInstrumentState] = useState<Instrument>(drumsInstruments[0]);
+  const [chordsInstrument, setChordsInstrumentState] = useState<Instrument>(
+    keysInstruments.find((i) => i.name === DEFAULT_SONG_PRESET?.chordsInstrument) ?? keysInstruments[0],
+  );
+  const [bassInstrument, setBassInstrumentState] = useState<Instrument>(
+    bassInstruments.find((i) => i.name === DEFAULT_SONG_PRESET?.bassInstrument) ?? bassInstruments[0],
+  );
+  const [drumsInstrument, setDrumsInstrumentState] = useState<Instrument>(
+    drumsInstruments.find((i) => i.name === DEFAULT_SONG_PRESET?.drumsInstrument) ?? drumsInstruments[0],
+  );
 
   useEffect(() => setChordsInstrument(chordsInstrument.name), [chordsInstrument]);
   useEffect(() => setBassInstrument(bassInstrument.name), [bassInstrument]);
@@ -87,9 +105,14 @@ function App() {
       if (cancelled) return;
       const all = [...baseDrumStyles, ...loaded];
       setDrumStyles(all);
-      // Upgrade the initial "None" placeholder to the real default once it's ready —
-      // but leave it alone if the user already picked something during the brief load.
-      setDrumStyle((current) => (current.name === 'None' ? (all.find((s) => s.name === 'Funk') ?? current) : current));
+      // Upgrade the initial "None" placeholder to the default song's drum style once
+      // it's ready — but leave it alone if the user already picked something during
+      // the brief load.
+      setDrumStyle((current) =>
+        current.name === 'None'
+          ? (all.find((s) => s.name === DEFAULT_SONG_PRESET?.drumStyle) ?? current)
+          : current,
+      );
     });
     return () => {
       cancelled = true;
@@ -156,17 +179,6 @@ function App() {
   const handleLoopChange = (start: number, end: number) => {
     setLoopStart(start);
     setLoopEnd(end);
-  };
-
-  const handleLoadPreset = (preset: ProgressionPreset) => {
-    setPlacements(
-      preset.selections.map((selection, i) => ({
-        id: crypto.randomUUID(),
-        selection,
-        startBeat: i * 4,
-        lengthBeats: 4,
-      })),
-    );
   };
 
   const handleLoadSongPreset = (preset: SongPreset) => {
@@ -284,7 +296,6 @@ function App() {
       <div className="layout">
         <div className="layout-sidebar">
           <h1>trackback</h1>
-          <ProgressionPresetPicker presets={progressionPresets} onSelect={handleLoadPreset} />
           <SongPresetControls
             presets={bundledSongPresets}
             onLoad={handleLoadSongPreset}

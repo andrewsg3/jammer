@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "Autumn Leaves",
+  "author": "Joseph Kosma",
+  "key": "G",
+  "scale": "minor",
+  "tempo": 132,
+  "metronome": false,
+  "loopStart": 0,
+  "loopEnd": 32,
+  "drumStyle": "Jazz Swing",
+  "bassStyle": "Walking",
+  "keysStyle": "Comped 7ths",
+  "placements": [
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "min7" }, "startBeat": 0, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 10, "quality": "dom7" }, "startBeat": 4, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "startBeat": 8, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "startBeat": 12, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "m7b5" }, "startBeat": 16, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7sharp9" }, "startBeat": 20, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "m6" }, "startBeat": 24, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "m6" }, "startBeat": 28, "lengthBeats": 4 }
+  ]
+}
