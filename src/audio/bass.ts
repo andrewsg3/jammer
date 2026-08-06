@@ -109,6 +109,46 @@ function patternEvents(chord: Chord, pattern: BassPattern, placement: ChordPlace
   return events;
 }
 
+/**
+ * Plays the pattern through once as a single continuous phrase spanning every
+ * placement, instead of restarting at each chord — only used when the pattern's
+ * own length exactly matches the total progression length (see scheduleBass),
+ * which is the signal that it was authored as one whole-progression bassline
+ * rather than a short lick meant to restate on every chord.
+ */
+function continuousPatternEvents(
+  placements: ChordPlacement[],
+  key: string,
+  scale: ScaleName,
+  pattern: BassPattern,
+): BassEvent[] {
+  const patternLengthSteps = pattern.bars * 16;
+  const spanStart = Math.min(...placements.map((p) => p.startBeat));
+  const spanEnd = Math.max(...placements.map((p) => p.startBeat + p.lengthBeats));
+  const totalSteps = (spanEnd - spanStart) * 4;
+
+  const events: BassEvent[] = [];
+  for (let s = 0; s < totalSteps; s++) {
+    const beat = spanStart + Math.floor(s / 4);
+    const placement = placements.find((p) => beat >= p.startBeat && beat < p.startBeat + p.lengthBeats);
+    if (!placement) continue; // a gap between placements — nothing sounding here
+
+    const localStep = s % patternLengthSteps;
+    for (const hit of pattern.steps) {
+      if (hit.time !== localStep) continue;
+      const chord = resolveSelection(key, scale, placement.selection);
+      const rootMidi = Tone.Frequency(chordTones(chord, BASS_OCTAVE)[0]).toMidi();
+      events.push({
+        time: `0:${beat}:${s % 4}`,
+        note: Tone.Frequency(rootMidi + hit.intervalFromRoot, 'midi').toNote(),
+        duration: '8n',
+        velocity: hit.velocity,
+      });
+    }
+  }
+  return events;
+}
+
 export function scheduleBass(
   placements: ChordPlacement[],
   key: string,
@@ -119,11 +159,19 @@ export function scheduleBass(
   ensureSynth();
 
   const events: BassEvent[] = [];
-  for (const placement of placements) {
-    const chord = resolveSelection(key, scale, placement.selection);
-    if (pattern) {
-      events.push(...patternEvents(chord, pattern, placement));
-    } else if (rule) {
+  if (pattern) {
+    const totalBeats = placements.reduce((sum, p) => sum + p.lengthBeats, 0);
+    if (pattern.bars * 4 === totalBeats) {
+      events.push(...continuousPatternEvents(placements, key, scale, pattern));
+    } else {
+      for (const placement of placements) {
+        const chord = resolveSelection(key, scale, placement.selection);
+        events.push(...patternEvents(chord, pattern, placement));
+      }
+    }
+  } else if (rule) {
+    for (const placement of placements) {
+      const chord = resolveSelection(key, scale, placement.selection);
       for (let beat = 0; beat < placement.lengthBeats; beat++) {
         const note = noteForBeat(chord, rule, beat);
         if (note) events.push({ time: `0:${placement.startBeat + beat}:0`, note, duration: '4n', velocity: 0.8 });
