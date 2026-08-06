@@ -112,7 +112,7 @@ body {
 }
 
 .top-bar-tempo-group input[type='number'] {
-  width: 56px;
+  width: 72px;
 }
 
 .top-bar-tempo-group span {
@@ -123,10 +123,10 @@ body {
 .top-bar-metronome {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   cursor: pointer;
-  font-size: 18px;
-  padding-bottom: 7px;
+  font-size: 14px;
+  padding-bottom: 9px;
 }
 
 .top-bar-metronome input {

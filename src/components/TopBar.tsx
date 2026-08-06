@@ -112,14 +112,13 @@ export function TopBar({
           </div>
         </TopBarField>
 
-        <label className="top-bar-metronome" title="Metronome">
+        <label className="top-bar-metronome">
           <input
             type="checkbox"
             checked={metronomeOn}
             onChange={(e) => onMetronomeChange(e.target.checked)}
           />
-          <span aria-hidden="true">🔔</span>
-          <span className="sr-only">Metronome</span>
+          Metronome
         </label>
 
         <button type="button" className="play-button-prominent" onClick={onTogglePlay}>
