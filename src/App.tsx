@@ -18,7 +18,7 @@ import {
   type DrumStyle,
   type BassStyle,
   type Instrument,
-  type DrumTimeFeel,
+  type TimeFeel,
 } from './data/instrumentStyles';
 import { loadBundledDrumStyles } from './data/drumLibrary';
 import { loadBundledBassStyles } from './data/bassLibrary';
@@ -63,7 +63,7 @@ const STARTER_PLACEMENTS: ChordPlacement[] = [
   { id: 'starter-3', selection: { type: 'diatonic', degree: 1 }, startBeat: 12, lengthBeats: 4 },
 ];
 
-type TimeFeelOption = { name: string; value: DrumTimeFeel };
+type TimeFeelOption = { name: string; value: TimeFeel };
 const TIME_FEEL_OPTIONS: TimeFeelOption[] = [
   { name: 'Normal', value: 'normal' },
   { name: 'Half-Time', value: 'half' },
@@ -112,10 +112,12 @@ function App() {
     baseBassStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.bassStyle) ??
       baseBassStyles.find((s) => s.name === 'Walking')!,
   );
+  const [bassTimeFeel, setBassTimeFeel] = useState<TimeFeelOption>(TIME_FEEL_OPTIONS[0]);
   const [keysStyle, setKeysStyle] = useState(
     keysStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.keysStyle) ??
       keysStyles.find((s) => s.name === 'Sustained 7ths')!,
   );
+  const [keysTimeFeel, setKeysTimeFeel] = useState<TimeFeelOption>(TIME_FEEL_OPTIONS[0]);
   const [metronomeMuted, setMetronomeMutedState] = useState(!(DEFAULT_SONG_PRESET?.metronome ?? false));
   const [chordsMuted, setChordsMutedState] = useState(false);
   const [bassMuted, setBassMutedState] = useState(false);
@@ -369,7 +371,9 @@ function App() {
       drumsTimeFeel: drumsTimeFeel.value,
       bass: bassStyle.rule,
       bassPattern: bassStyle.pattern ?? null,
+      bassTimeFeel: bassTimeFeel.value,
       keys: keysStyle.rule,
+      keysTimeFeel: keysTimeFeel.value,
     });
     setIsPlaying(true);
   }, [
@@ -384,7 +388,9 @@ function App() {
     drumStyle,
     drumsTimeFeel,
     bassStyle,
+    bassTimeFeel,
     keysStyle,
+    keysTimeFeel,
   ]);
 
   useEffect(() => {
@@ -506,6 +512,9 @@ function App() {
               instrumentOptions={bassInstruments}
               selectedInstrument={bassInstrument}
               onInstrumentChange={setBassInstrumentState}
+              feelOptions={TIME_FEEL_OPTIONS}
+              selectedFeel={bassTimeFeel}
+              onFeelChange={setBassTimeFeel}
               volume={bassVolume}
               onVolumeChange={setBassVolumeState}
               muted={bassMuted}
@@ -520,6 +529,9 @@ function App() {
               instrumentOptions={keysInstruments}
               selectedInstrument={chordsInstrument}
               onInstrumentChange={setChordsInstrumentState}
+              feelOptions={TIME_FEEL_OPTIONS}
+              selectedFeel={keysTimeFeel}
+              onFeelChange={setKeysTimeFeel}
               volume={chordsVolume}
               onVolumeChange={setChordsVolumeState}
               muted={chordsMuted}

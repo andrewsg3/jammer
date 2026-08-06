@@ -1,7 +1,7 @@
 import * as Tone from 'tone';
 import { chordTones, resolveSelection, type ChordPlacement, type Chord, type ScaleName } from '../data/progressions';
-import { STEPS_PER_BEAT } from '../data/instrumentStyles';
-import type { BassRule, BassPattern } from '../data/instrumentStyles';
+import { STEPS_PER_BEAT, timeFeelFactor } from '../data/instrumentStyles';
+import type { BassRule, BassPattern, TimeFeel } from '../data/instrumentStyles';
 import { REFERENCE_ROOT_MIDI } from '../data/midiBassImport';
 
 // Tone.js's Bars:Beats:Sixteenths time strings accept a fractional sixteenths
@@ -10,6 +10,20 @@ import { REFERENCE_ROOT_MIDI } from '../data/midiBassImport';
 // its true triplet position (1.33, 2.67) instead of snapping to a straight 16th.
 function stepToSixteenths(stepInBeat: number): number {
   return (stepInBeat * 4) / STEPS_PER_BEAT;
+}
+
+// This app never uses the "bars" component of a Bars:Beats:Sixteenths string — every
+// event time is `0:<beat>:<sixteenths>`, with the full absolute beat count stuffed
+// into the "beats" slot. That makes these two trivial, and is what withTimeFeel below
+// relies on to shift/rescale already-built event times without re-deriving them.
+function parseBeat(time: string): number {
+  const [, beats, sixteenths] = time.split(':').map(Number);
+  return beats + (sixteenths || 0) / 4;
+}
+
+function beatToTime(beat: number): string {
+  const wholeBeat = Math.floor(beat);
+  return `0:${wholeBeat}:${(beat - wholeBeat) * 4}`;
 }
 
 const BASS_OCTAVE = 2;
@@ -201,24 +215,54 @@ function wholeProgressionEvents(placements: ChordPlacement[], pattern: BassPatte
   return events;
 }
 
+/**
+ * Applies half/double time by generating against a *virtual* placement — same start,
+ * length scaled by `factor` — then rescaling each resulting event's absolute beat
+ * back down into the real placement's actual (unchanged) span. Generating against a
+ * scaled-but-still-integer-beat virtual placement (rather than feeding fractional
+ * beats straight into a generator) keeps every existing rule's `beat % 4` bar-relative
+ * logic working correctly — they never need to know time-feel exists at all.
+ */
+function withTimeFeel(
+  placement: ChordPlacement,
+  factor: number,
+  generate: (virtualPlacement: ChordPlacement) => BassEvent[],
+): BassEvent[] {
+  if (factor === 1) return generate(placement);
+  const virtualPlacement: ChordPlacement = {
+    ...placement,
+    startBeat: 0,
+    lengthBeats: Math.max(1, Math.round(placement.lengthBeats * factor)),
+  };
+  return generate(virtualPlacement).map((event) => ({
+    ...event,
+    time: beatToTime(placement.startBeat + parseBeat(event.time) / factor),
+  }));
+}
+
 export function scheduleBass(
   placements: ChordPlacement[],
   key: string,
   scale: ScaleName,
   rule: BassRule | null,
-  pattern?: BassPattern | null,
+  pattern: BassPattern | null,
+  timeFeel: TimeFeel = 'normal',
 ): void {
   ensureSynth();
+  const factor = timeFeelFactor(timeFeel);
 
   const events: BassEvent[] = [];
   if (pattern) {
     const totalBeats = placements.reduce((sum, p) => sum + p.lengthBeats, 0);
     if (pattern.bars * 4 === totalBeats) {
+      // A finished, already-composed bassline played back verbatim — time-feel
+      // doesn't apply, same reason transposition doesn't either (see the doc comment
+      // on wholeProgressionEvents).
       events.push(...wholeProgressionEvents(placements, pattern));
     } else {
       for (const placement of placements) {
         const chord = resolveSelection(key, scale, placement.selection);
-        events.push(...patternEvents(chord, pattern, placement));
+        events.push(...withTimeFeel(placement, factor, (vp) => patternEvents(chord, pattern, vp)));
       }
     }
   } else if (rule) {
@@ -227,13 +271,19 @@ export function scheduleBass(
       if (rule.style === 'tumbao') {
         const next = placements.find((p) => p.startBeat === placement.startBeat + placement.lengthBeats);
         const nextChord = next ? resolveSelection(key, scale, next.selection) : null;
-        events.push(...tumbaoEvents(chord, nextChord, placement));
+        events.push(...withTimeFeel(placement, factor, (vp) => tumbaoEvents(chord, nextChord, vp)));
         continue;
       }
-      for (let beat = 0; beat < placement.lengthBeats; beat++) {
-        const note = noteForBeat(chord, rule, beat);
-        if (note) events.push({ time: `0:${placement.startBeat + beat}:0`, note, duration: '4n', velocity: 0.8 });
-      }
+      events.push(
+        ...withTimeFeel(placement, factor, (vp) => {
+          const beatEvents: BassEvent[] = [];
+          for (let beat = 0; beat < vp.lengthBeats; beat++) {
+            const note = noteForBeat(chord, rule, beat);
+            if (note) beatEvents.push({ time: `0:${vp.startBeat + beat}:0`, note, duration: '4n', velocity: 0.8 });
+          }
+          return beatEvents;
+        }),
+      );
     }
   }
 

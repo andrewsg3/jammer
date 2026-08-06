@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import { chordTones, type Chord, type ChordPlacement, type ScaleName } from '../data/progressions';
-import type { DrumPattern, DrumTimeFeel, BassRule, BassPattern, KeysRule } from '../data/instrumentStyles';
+import type { DrumPattern, TimeFeel, BassRule, BassPattern, KeysRule } from '../data/instrumentStyles';
 import {
   scheduleDrums,
   disposeDrums,
@@ -55,10 +55,12 @@ export type PlaybackParams = {
   loopEndBeat: number;
   startBeat: number;
   drums: DrumPattern | null;
-  drumsTimeFeel: DrumTimeFeel;
+  drumsTimeFeel: TimeFeel;
   bass: BassRule | null;
   bassPattern: BassPattern | null;
+  bassTimeFeel: TimeFeel;
   keys: KeysRule | null;
+  keysTimeFeel: TimeFeel;
   tempo: number;
 };
 
@@ -149,9 +151,16 @@ export async function play(params: PlaybackParams): Promise<void> {
 
   if (params.drums) scheduleDrums(params.drums, params.drumsTimeFeel);
   if (params.bass || params.bassPattern) {
-    scheduleBass(params.placements, params.key, params.scale, params.bass, params.bassPattern);
+    scheduleBass(
+      params.placements,
+      params.key,
+      params.scale,
+      params.bass,
+      params.bassPattern,
+      params.bassTimeFeel,
+    );
   }
-  if (params.keys) scheduleKeys(params.placements, params.key, params.scale, params.keys);
+  if (params.keys) scheduleKeys(params.placements, params.key, params.scale, params.keys, params.keysTimeFeel);
   // Always scheduled — audibility is controlled by its mute state (a track like any
   // other now), not by whether it's running at all.
   scheduleMetronome();

@@ -1,6 +1,14 @@
 import * as Tone from 'tone';
 import { chordTones, resolveSelection, type ChordPlacement, type Chord, type ScaleName } from '../data/progressions';
-import type { KeysRule } from '../data/instrumentStyles';
+import { timeFeelFactor } from '../data/instrumentStyles';
+import type { KeysRule, TimeFeel } from '../data/instrumentStyles';
+
+// A relative beat offset (e.g. 1.5 beats after this placement's start) as a
+// Bars:Beats:Sixteenths string — fractional sixteenths are fine, Tone parses them.
+function offsetTime(beatOffset: number): string {
+  const wholeBeat = Math.floor(beatOffset);
+  return `0:${wholeBeat}:${(beatOffset - wholeBeat) * 4}`;
+}
 
 const KEYS_OCTAVE = 3;
 
@@ -68,8 +76,10 @@ export function scheduleKeys(
   key: string,
   scale: ScaleName,
   rule: KeysRule,
+  timeFeel: TimeFeel = 'normal',
 ): void {
   ensureSynth();
+  const factor = timeFeelFactor(timeFeel);
 
   const events = placements.map((placement) => ({
     time: `0:${placement.startBeat}:0`,
@@ -85,16 +95,20 @@ export function scheduleKeys(
     rhythm: KeysRule['rhythm'];
   }>((time, event) => {
     if (event.rhythm === 'sustained') {
+      // A held chord doesn't have a strike rate for time-feel to change.
       synth!.triggerAttackRelease(event.notes, `0:${event.lengthBeats}:0`, time, 0.5);
     } else if (event.rhythm === 'la-pompe') {
       // Gypsy-jazz rhythm-guitar chunk: a short, percussive stab on every beat,
-      // driven harder on 2 and 4 like the downstroke accent of "la pompe."
-      for (let beat = 0; beat < event.lengthBeats; beat++) {
+      // driven harder on 2 and 4 like the downstroke accent of "la pompe." Iterates
+      // over a virtual (scaled) length so beat%4's accent lines up on clean integers,
+      // then rescales the real offset back into the placement's real-time span.
+      const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
+      for (let beat = 0; beat < virtualLength; beat++) {
         const accent = beat % 4 === 1 || beat % 4 === 3;
         synth!.triggerAttackRelease(
           event.notes,
           '16n',
-          time + Tone.Time(`0:${beat}:0`).toSeconds(),
+          time + Tone.Time(offsetTime(beat / factor)).toSeconds(),
           accent ? 0.75 : 0.45,
         );
       }
@@ -105,22 +119,21 @@ export function scheduleKeys(
         event.rhythm === 'arpeggio-updown'
           ? [...event.notes, ...event.notes.slice(1, -1).reverse()]
           : event.notes;
-      const stepSixteenths = 2; // 8th-note steps
-      const totalSixteenths = event.lengthBeats * 4;
-      for (let s = 0; s < totalSixteenths; s += stepSixteenths) {
+      const stepSixteenths = 2; // 8th-note steps, in virtual (pre-time-feel) space
+      const virtualTotalSixteenths = Math.max(stepSixteenths, Math.round(event.lengthBeats * 4 * factor));
+      for (let s = 0; s < virtualTotalSixteenths; s += stepSixteenths) {
         const note = pattern[(s / stepSixteenths) % pattern.length];
-        const beats = Math.floor(s / 4);
-        const sixteenths = s % 4;
-        synth!.triggerAttackRelease(
-          note,
-          '8n',
-          time + Tone.Time(`0:${beats}:${sixteenths}`).toSeconds(),
-          0.5,
-        );
+        synth!.triggerAttackRelease(note, '8n', time + Tone.Time(offsetTime(s / 4 / factor)).toSeconds(), 0.5);
       }
     } else {
-      for (let beat = 0; beat < event.lengthBeats; beat += 2) {
-        synth!.triggerAttackRelease(event.notes, '4n', time + Tone.Time(`0:${beat}:0`).toSeconds(), 0.6);
+      const virtualLength = Math.max(2, Math.round(event.lengthBeats * factor));
+      for (let beat = 0; beat < virtualLength; beat += 2) {
+        synth!.triggerAttackRelease(
+          event.notes,
+          '4n',
+          time + Tone.Time(offsetTime(beat / factor)).toSeconds(),
+          0.6,
+        );
       }
     }
   }, events).start(0);

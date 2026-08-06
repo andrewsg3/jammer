@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import { STEPS_PER_BAR } from '../data/instrumentStyles';
-import type { DrumPattern, DrumTimeFeel } from '../data/instrumentStyles';
+import type { DrumPattern, TimeFeel } from '../data/instrumentStyles';
 
 // Shared output so one volume control (the Drums fader) trims every voice together.
 // Kick/snare/hihat additionally each have their own node feeding into it, for the
@@ -187,7 +187,7 @@ export function setInstrument(name: string): void {
   toms = null;
 }
 
-export function scheduleDrums(pattern: DrumPattern, timeFeel: DrumTimeFeel = 'normal'): void {
+export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal'): void {
   ensureSynths();
   const totalSteps = pattern.bars * STEPS_PER_BAR;
   let step = 0;
