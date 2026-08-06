@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChordGrid, TOTAL_BEATS } from './components/ChordGrid';
 import { ChordPalette } from './components/ChordPalette';
 import { TopBar } from './components/TopBar';
-import { TrackPanel } from './components/TrackPanel';
+import { ChannelStrip } from './components/ChannelStrip';
 import { VolumeSlider } from './components/VolumeSlider';
 import { MidiUpload } from './components/MidiUpload';
 import { SongPresetFileControls } from './components/SongPresetFileControls';
@@ -328,45 +328,6 @@ function App() {
           <div className="layout-sidebar">
             <ChordPalette musicalKey={musicalKey} scale={scale} onAudition={handleAudition} />
 
-            <div className="track-panels">
-              <TrackPanel
-                label="Drums"
-                accent="drums"
-                styleOptions={customDrumStyle ? [...drumStyles, customDrumStyle] : drumStyles}
-                selectedStyle={drumStyle}
-                onStyleChange={setDrumStyle}
-                instrumentOptions={drumsInstruments}
-                selectedInstrument={drumsInstrument}
-                onInstrumentChange={setDrumsInstrumentState}
-                volume={drumsVolume}
-                onVolumeChange={setDrumsVolumeState}
-              />
-              <TrackPanel
-                label="Bass"
-                accent="bass"
-                styleOptions={bassStyles}
-                selectedStyle={bassStyle}
-                onStyleChange={setBassStyle}
-                instrumentOptions={bassInstruments}
-                selectedInstrument={bassInstrument}
-                onInstrumentChange={setBassInstrumentState}
-                volume={bassVolume}
-                onVolumeChange={setBassVolumeState}
-              />
-              <TrackPanel
-                label="Harmony"
-                accent="harmony"
-                styleOptions={keysStyles}
-                selectedStyle={keysStyle}
-                onStyleChange={setKeysStyle}
-                instrumentOptions={keysInstruments}
-                selectedInstrument={chordsInstrument}
-                onInstrumentChange={setChordsInstrumentState}
-                volume={chordsVolume}
-                onVolumeChange={setChordsVolumeState}
-              />
-            </div>
-
             <details className="more-section">
               <summary>More</summary>
               <div className="more-section-content">
@@ -405,6 +366,44 @@ function App() {
               author={songAuthor}
               onAuthorChange={setSongAuthor}
               tempo={tempo}
+            />
+          </div>
+          <div className="channel-strip-rail">
+            <ChannelStrip
+              label="Drums"
+              accent="drums"
+              styleOptions={customDrumStyle ? [...drumStyles, customDrumStyle] : drumStyles}
+              selectedStyle={drumStyle}
+              onStyleChange={setDrumStyle}
+              instrumentOptions={drumsInstruments}
+              selectedInstrument={drumsInstrument}
+              onInstrumentChange={setDrumsInstrumentState}
+              volume={drumsVolume}
+              onVolumeChange={setDrumsVolumeState}
+            />
+            <ChannelStrip
+              label="Bass"
+              accent="bass"
+              styleOptions={bassStyles}
+              selectedStyle={bassStyle}
+              onStyleChange={setBassStyle}
+              instrumentOptions={bassInstruments}
+              selectedInstrument={bassInstrument}
+              onInstrumentChange={setBassInstrumentState}
+              volume={bassVolume}
+              onVolumeChange={setBassVolumeState}
+            />
+            <ChannelStrip
+              label="Harmony"
+              accent="harmony"
+              styleOptions={keysStyles}
+              selectedStyle={keysStyle}
+              onStyleChange={setKeysStyle}
+              instrumentOptions={keysInstruments}
+              selectedInstrument={chordsInstrument}
+              onInstrumentChange={setChordsInstrumentState}
+              volume={chordsVolume}
+              onVolumeChange={setChordsVolumeState}
             />
           </div>
         </div>

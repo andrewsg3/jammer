@@ -1,5 +1,5 @@
 import { StylePicker } from './StylePicker';
-import { VolumeSlider } from './VolumeSlider';
+import { VerticalFader } from './VerticalFader';
 
 type NamedOption = { name: string };
 
@@ -16,7 +16,7 @@ type Props<TStyle extends NamedOption, TInstrument extends NamedOption> = {
   onVolumeChange: (value: number) => void;
 };
 
-export function TrackPanel<TStyle extends NamedOption, TInstrument extends NamedOption>({
+export function ChannelStrip<TStyle extends NamedOption, TInstrument extends NamedOption>({
   label,
   accent,
   styleOptions,
@@ -29,8 +29,7 @@ export function TrackPanel<TStyle extends NamedOption, TInstrument extends Named
   onVolumeChange,
 }: Props<TStyle, TInstrument>) {
   return (
-    <div className={`track-panel track-panel-${accent}`}>
-      <h3 className="track-panel-title">{label}</h3>
+    <div className={`channel-strip channel-strip-${accent}`}>
       <StylePicker label="Style" options={styleOptions} selected={selectedStyle} onSelect={onStyleChange} />
       <StylePicker
         label="Sound"
@@ -38,7 +37,8 @@ export function TrackPanel<TStyle extends NamedOption, TInstrument extends Named
         selected={selectedInstrument}
         onSelect={onInstrumentChange}
       />
-      <VolumeSlider id={`volume-${accent}`} label="Volume" value={volume} onChange={onVolumeChange} />
+      <VerticalFader id={`volume-${accent}`} value={volume} onChange={onVolumeChange} />
+      <span className="channel-strip-label">{label}</span>
     </div>
   );
 }
