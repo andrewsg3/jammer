@@ -6,6 +6,7 @@ const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 type Props = {
   songPresets: SongPreset[];
   onLoadSongPreset: (preset: SongPreset) => void;
+  currentSongName: string;
   musicalKey: string;
   onKeyChange: (key: string) => void;
   scale: ScaleName;
@@ -30,6 +31,7 @@ function TopBarField({ label, children }: { label: string; children: React.React
 export function TopBar({
   songPresets,
   onLoadSongPreset,
+  currentSongName,
   musicalKey,
   onKeyChange,
   scale,
@@ -50,16 +52,17 @@ export function TopBar({
           <select
             id="song-preset-quick"
             aria-label="Song preset"
-            defaultValue=""
+            value={currentSongName}
             onChange={(e) => {
               const preset = songPresets.find((p) => p.name === e.target.value);
               if (preset) onLoadSongPreset(preset);
-              e.target.value = '';
             }}
           >
-            <option value="" disabled>
-              Preset…
-            </option>
+            {/* Shown when the title's been edited (or a custom preset loaded) and no
+                longer matches a bundled preset name — keeps the select's value valid. */}
+            {!songPresets.some((p) => p.name === currentSongName) && (
+              <option value={currentSongName}>{currentSongName}</option>
+            )}
             {songPresets.map((preset) => (
               <option key={preset.name} value={preset.name}>
                 {preset.name}

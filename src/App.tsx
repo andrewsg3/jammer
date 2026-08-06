@@ -311,6 +311,7 @@ function App() {
       <TopBar
         songPresets={bundledSongPresets}
         onLoadSongPreset={handleLoadSongPreset}
+        currentSongName={songTitle}
         musicalKey={musicalKey}
         onKeyChange={setMusicalKey}
         scale={scale}
