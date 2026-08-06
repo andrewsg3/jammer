@@ -1,7 +1,7 @@
 import { parseMidi } from 'midi-file';
+import { STEPS_PER_BEAT, STEPS_PER_BAR } from './instrumentStyles';
 import type { BassPattern, BassPatternStep } from './instrumentStyles';
 
-const STEPS_PER_BAR = 16;
 // MIDI note 36 = C2, matching bass.ts's BASS_OCTAVE. Every step is stored relative to
 // this. Short patterns get re-anchored to whatever chord is sounding (author as if the
 // chord were C); patterns exactly as long as the whole progression are assumed to be a
@@ -14,7 +14,9 @@ export function parseMidiBassBytes(buffer: ArrayBuffer): { name: string | null; 
   const nameEvent = midi.tracks.flat().find((event) => event.type === 'trackName');
   const name = nameEvent && 'text' in nameEvent ? nameEvent.text : null;
   const ppq = midi.header.ticksPerBeat ?? 128;
-  const ticksPer16th = ppq / 4;
+  // STEPS_PER_BEAT ticks per beat — fine enough to quantize both straight 16th
+  // notes and 8th-note triplets (shuffle feel) without rounding one onto the other.
+  const ticksPerStep = ppq / STEPS_PER_BEAT;
 
   const rawSteps: { step: number; intervalFromRoot: number; velocity: number }[] = [];
   let maxStep = 0;
@@ -26,7 +28,7 @@ export function parseMidiBassBytes(buffer: ArrayBuffer): { name: string | null; 
       // Any channel, any pitch — unlike drums there's no percussion-channel
       // filtering or GM note lookup, just "what note, and when."
       if (event.type !== 'noteOn' || event.velocity === 0) continue;
-      const step = Math.round(ticks / ticksPer16th);
+      const step = Math.round(ticks / ticksPerStep);
       maxStep = Math.max(maxStep, step);
       rawSteps.push({
         step,

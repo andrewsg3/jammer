@@ -224,6 +224,10 @@ function App() {
   };
 
   const handleLoadSongPreset = (preset: SongPreset) => {
+    if (isPlaying) {
+      stop();
+      setIsPlaying(false);
+    }
     setSongTitle(preset.name);
     setSongAuthor(preset.author ?? '');
     setMusicalKey(preset.key);

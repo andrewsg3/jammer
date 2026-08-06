@@ -1,7 +1,16 @@
 import * as Tone from 'tone';
 import { chordTones, resolveSelection, type ChordPlacement, type Chord, type ScaleName } from '../data/progressions';
+import { STEPS_PER_BEAT } from '../data/instrumentStyles';
 import type { BassRule, BassPattern } from '../data/instrumentStyles';
 import { REFERENCE_ROOT_MIDI } from '../data/midiBassImport';
+
+// Tone.js's Bars:Beats:Sixteenths time strings accept a fractional sixteenths
+// component, so a STEPS_PER_BEAT (12-per-beat) step converts to sixteenths just by
+// scaling — this is what lets an imported 8th-note-triplet hit (step 4, 8) land at
+// its true triplet position (1.33, 2.67) instead of snapping to a straight 16th.
+function stepToSixteenths(stepInBeat: number): number {
+  return (stepInBeat * 4) / STEPS_PER_BEAT;
+}
 
 const BASS_OCTAVE = 2;
 
@@ -137,16 +146,16 @@ function tumbaoEvents(chord: Chord, nextChord: Chord | null, placement: ChordPla
 /** Transposes a pattern's steps to a chord, tiling the pattern across the placement's length. */
 function patternEvents(chord: Chord, pattern: BassPattern, placement: ChordPlacement): BassEvent[] {
   const rootMidi = Tone.Frequency(chordTones(chord, BASS_OCTAVE)[0]).toMidi();
-  const patternLengthSteps = pattern.bars * 16;
-  const totalSteps = placement.lengthBeats * 4;
+  const patternLengthSteps = pattern.bars * STEPS_PER_BEAT * 4;
+  const totalSteps = placement.lengthBeats * STEPS_PER_BEAT;
 
   const events: BassEvent[] = [];
   for (let s = 0; s < totalSteps; s++) {
     const localStep = s % patternLengthSteps;
     for (const hit of pattern.steps) {
       if (hit.time !== localStep) continue;
-      const beat = placement.startBeat + Math.floor(s / 4);
-      const sixteenths = s % 4;
+      const beat = placement.startBeat + Math.floor(s / STEPS_PER_BEAT);
+      const sixteenths = stepToSixteenths(s % STEPS_PER_BEAT);
       events.push({
         time: `0:${beat}:${sixteenths}`,
         note: Tone.Frequency(rootMidi + hit.intervalFromRoot, 'midi').toNote(),
@@ -167,14 +176,14 @@ function patternEvents(chord: Chord, pattern: BassPattern, placement: ChordPlace
  * sounding" would just repitch a take that was already correct.
  */
 function wholeProgressionEvents(placements: ChordPlacement[], pattern: BassPattern): BassEvent[] {
-  const patternLengthSteps = pattern.bars * 16;
+  const patternLengthSteps = pattern.bars * STEPS_PER_BEAT * 4;
   const spanStart = Math.min(...placements.map((p) => p.startBeat));
   const spanEnd = Math.max(...placements.map((p) => p.startBeat + p.lengthBeats));
-  const totalSteps = (spanEnd - spanStart) * 4;
+  const totalSteps = (spanEnd - spanStart) * STEPS_PER_BEAT;
 
   const events: BassEvent[] = [];
   for (let s = 0; s < totalSteps; s++) {
-    const beat = spanStart + Math.floor(s / 4);
+    const beat = spanStart + Math.floor(s / STEPS_PER_BEAT);
     const covered = placements.some((p) => beat >= p.startBeat && beat < p.startBeat + p.lengthBeats);
     if (!covered) continue; // a gap between placements — nothing sounding here
 
@@ -182,7 +191,7 @@ function wholeProgressionEvents(placements: ChordPlacement[], pattern: BassPatte
     for (const hit of pattern.steps) {
       if (hit.time !== localStep) continue;
       events.push({
-        time: `0:${beat}:${s % 4}`,
+        time: `0:${beat}:${stepToSixteenths(s % STEPS_PER_BEAT)}`,
         note: Tone.Frequency(REFERENCE_ROOT_MIDI + hit.intervalFromRoot, 'midi').toNote(),
         duration: '8n',
         velocity: hit.velocity,

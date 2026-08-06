@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { STEPS_PER_BAR } from '../data/instrumentStyles';
 import type { DrumPattern } from '../data/instrumentStyles';
 
 // Shared output so one volume control (the Drums fader) trims all three voices
@@ -90,9 +91,12 @@ export function setInstrument(name: string): void {
 
 export function scheduleDrums(pattern: DrumPattern): void {
   ensureSynths();
-  const totalSteps = pattern.bars * 16;
+  const totalSteps = pattern.bars * STEPS_PER_BAR;
   let step = 0;
 
+  // '32t' (32nd-note triplet) = 1/12 of a beat — the same grid patterns are
+  // quantized to on import, so both straight 16th-note and 8th-note-triplet
+  // (shuffle) hits play back at their actual timing instead of snapping to 16ths.
   loop = new Tone.Loop((time) => {
     // step must always advance even if a trigger throws (e.g. a malformed pattern
     // re-hits the same voice at the same instant) — otherwise it wedges on this step
@@ -110,7 +114,7 @@ export function scheduleDrums(pattern: DrumPattern): void {
     } finally {
       step = (step + 1) % totalSteps;
     }
-  }, '16n').start(0);
+  }, '32t').start(0);
 }
 
 export function disposeDrums(): void {

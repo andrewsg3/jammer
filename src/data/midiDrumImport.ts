@@ -1,8 +1,8 @@
 import { parseMidi } from 'midi-file';
+import { STEPS_PER_BEAT, STEPS_PER_BAR } from './instrumentStyles';
 import type { DrumPattern, DrumStep } from './instrumentStyles';
 
 const PERCUSSION_CHANNEL = 9;
-const STEPS_PER_BAR = 16;
 
 // General MIDI percussion note numbers, bucketed into our 3 drum voices.
 const GM_TO_DRUM_NOTE: Record<number, DrumStep['note']> = {
@@ -36,7 +36,9 @@ export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; 
   const nameEvent = midi.tracks.flat().find((event) => event.type === 'trackName');
   const name = nameEvent && 'text' in nameEvent ? nameEvent.text : null;
   const ppq = midi.header.ticksPerBeat ?? 128;
-  const ticksPer16th = ppq / 4;
+  // STEPS_PER_BEAT ticks per beat — fine enough to quantize both straight 16th
+  // notes and 8th-note triplets (shuffle feel) without rounding one onto the other.
+  const ticksPerStep = ppq / STEPS_PER_BEAT;
 
   const rawSteps: { step: number; note: DrumStep['note']; velocity: number }[] = [];
   let maxStep = 0;
@@ -53,7 +55,7 @@ export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; 
       }
       const drumNote = GM_TO_DRUM_NOTE[event.noteNumber];
       if (!drumNote) continue;
-      const step = Math.round(ticks / ticksPer16th);
+      const step = Math.round(ticks / ticksPerStep);
       maxStep = Math.max(maxStep, step);
       rawSteps.push({ step, note: drumNote, velocity: event.velocity / 127 });
     }

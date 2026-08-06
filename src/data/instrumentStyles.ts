@@ -1,5 +1,10 @@
+// 12 steps per beat — fine enough to exactly represent both straight 16th notes
+// (every 3rd step) and 8th-note triplets/shuffle feel (every 4th step) on one grid.
+export const STEPS_PER_BEAT = 12;
+export const STEPS_PER_BAR = STEPS_PER_BEAT * 4;
+
 export type DrumStep = {
-  // sixteenth-note position within the bar: 0-15 for a 4/4 bar
+  // position within the bar on the STEPS_PER_BAR grid: 0-47 for a 4/4 bar
   time: number;
   note: 'kick' | 'snare' | 'hihat';
   velocity: number;
@@ -15,7 +20,7 @@ export type BassRule = {
 };
 
 export type BassPatternStep = {
-  // sixteenth-note position within the pattern, 0-15 per bar (matches DrumStep)
+  // position within the pattern on the STEPS_PER_BAR grid, 0-47 per bar (matches DrumStep)
   time: number;
   // semitones from the chord's root, authored against a reference root of C —
   // negative or >11 is fine (dips below the root, climbs past an octave, etc.)
