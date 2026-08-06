@@ -78,7 +78,10 @@ export function scheduleDrums(pattern: DrumPattern): void {
       if (hit.time !== step) continue;
       if (hit.note === 'kick') kick!.triggerAttackRelease('C1', '8n', time, hit.velocity);
       if (hit.note === 'snare') snare!.triggerAttackRelease('8n', time, hit.velocity);
-      if (hit.note === 'hihat') hihat!.triggerAttackRelease('32n', time, hit.velocity);
+      // MetalSynth is pitched (Monophonic) unlike NoiseSynth, so it needs a frequency
+      // first — 200Hz is just a carrier; harmonicity/modulationIndex/resonance do the
+      // actual metallic shaping, so the exact pitch barely matters.
+      if (hit.note === 'hihat') hihat!.triggerAttackRelease(200, '32n', time, hit.velocity);
     }
     step = (step + 1) % totalSteps;
   }, '16n').start(0);
