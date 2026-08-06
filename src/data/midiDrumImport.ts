@@ -66,13 +66,22 @@ export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; 
   const bars = Math.max(1, Math.ceil((maxStep + 1) / STEPS_PER_BAR));
   const totalSteps = bars * STEPS_PER_BAR;
 
-  const steps: DrumStep[] = rawSteps.map(({ step, note, velocity }) => ({
-    time: step % totalSteps,
-    note,
-    velocity,
-  }));
+  // Different GM notes can map to the same voice — e.g. closed hi-hat (42) and
+  // pedal hi-hat (44) both become our one 'hihat'. If two of those land on the same
+  // step (common in GrooveScribe exports), de-dupe rather than firing that voice's
+  // monophonic synth twice at the identical instant, which throws inside Tone's
+  // envelope scheduling. Keep the louder of the two.
+  const deduped = new Map<string, DrumStep>();
+  for (const { step, note, velocity } of rawSteps) {
+    const time = step % totalSteps;
+    const key = `${time}:${note}`;
+    const existing = deduped.get(key);
+    if (!existing || velocity > existing.velocity) {
+      deduped.set(key, { time, note, velocity });
+    }
+  }
 
-  return { name, pattern: { bars, steps } };
+  return { name, pattern: { bars, steps: [...deduped.values()] } };
 }
 
 export async function parseMidiDrumPattern(file: File): Promise<DrumPattern> {

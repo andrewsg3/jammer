@@ -3,7 +3,9 @@ import type { DrumPattern } from './instrumentStyles';
 
 export type SongPresetPlacement = {
   selection: ChordSelection;
-  startBeat: number;
+  // Optional — when omitted, resolved as the running end of the previous placement
+  // (starting at 0). Only needed explicitly to leave a gap between chords.
+  startBeat?: number;
   lengthBeats: number;
 };
 
@@ -47,9 +49,25 @@ function isSongPresetPlacement(value: unknown): value is SongPresetPlacement {
   const v = value as Record<string, unknown>;
   return (
     isChordSelection(v.selection) &&
-    typeof v.startBeat === 'number' &&
+    (v.startBeat === undefined || typeof v.startBeat === 'number') &&
     typeof v.lengthBeats === 'number'
   );
+}
+
+/**
+ * Fills in each placement's startBeat when omitted, as the running end of the
+ * previous placement (starting at 0) — the common case, where chords are simply
+ * back-to-back. An explicit startBeat is only needed to express a gap.
+ */
+export function resolvePlacementStarts(
+  placements: SongPresetPlacement[],
+): { selection: ChordSelection; startBeat: number; lengthBeats: number }[] {
+  let cursor = 0;
+  return placements.map((p) => {
+    const startBeat = p.startBeat ?? cursor;
+    cursor = startBeat + p.lengthBeats;
+    return { selection: p.selection, startBeat, lengthBeats: p.lengthBeats };
+  });
 }
 
 export function isSongPreset(value: unknown): value is SongPreset {

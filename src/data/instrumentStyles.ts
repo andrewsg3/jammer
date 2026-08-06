@@ -11,7 +11,7 @@ export type DrumPattern = {
 };
 
 export type BassRule = {
-  style: 'root-fifth' | 'walking' | 'syncopated' | 'octaves' | 'pedal' | 'walk-updown';
+  style: 'root-fifth' | 'walking' | 'syncopated' | 'octaves' | 'pedal' | 'walk-updown' | 'tumbao';
 };
 
 export type BassPatternStep = {
@@ -61,6 +61,7 @@ export const baseBassStyles: BassStyle[] = [
   { name: 'Octaves', rule: { style: 'octaves' } },
   { name: 'Pedal', rule: { style: 'pedal' } },
   { name: 'Walk Up & Down', rule: { style: 'walk-updown' } },
+  { name: 'Tumbao', rule: { style: 'tumbao' } },
 ];
 
 export const keysStyles: KeysStyle[] = [

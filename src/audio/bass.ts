@@ -87,7 +87,51 @@ function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null 
       const updown = [...up, ...up.slice(1, -1).reverse()];
       return updown[beat % updown.length];
     }
+    case 'tumbao':
+      // Handled by tumbaoEvents (needs sixteenth-note placement and next-chord
+      // lookahead, which this per-beat/single-chord function can't express).
+      return null;
   }
+}
+
+/**
+ * Afro-Cuban tumbao: root on beat 1, a pickup (the 3rd) on the "and" of 2, and the
+ * 5th on beat 4 — except on the bar right before the chord changes, where the 5th is
+ * replaced by an anticipation of the *next* chord's root on the "and" of 4. That
+ * early, syncopated arrival across the barline is tumbao's signature move, so it
+ * needs the next chord as lookahead (unlike every other rule-based style here, which
+ * only ever looks at the current one).
+ */
+function tumbaoEvents(chord: Chord, nextChord: Chord | null, placement: ChordPlacement): BassEvent[] {
+  const tones = chordTones(chord, BASS_OCTAVE);
+  const root = tones[0];
+  const third = tones[1] ?? root;
+  const fifth = tones[2] ?? root;
+  const nextRoot = nextChord ? chordTones(nextChord, BASS_OCTAVE)[0] : root;
+
+  const totalSixteenths = placement.lengthBeats * 4;
+  const events: BassEvent[] = [];
+
+  const push = (offset: number, note: string, duration: string, velocity: number) => {
+    if (offset >= totalSixteenths) return;
+    const beat = placement.startBeat + Math.floor(offset / 4);
+    const sixteenths = offset % 4;
+    events.push({ time: `0:${beat}:${sixteenths}`, note, duration, velocity });
+  };
+
+  for (let barStart = 0; barStart < totalSixteenths; barStart += 16) {
+    const isLastBarOfPlacement = barStart + 16 >= totalSixteenths;
+
+    push(barStart, root, '4n', 0.85); // beat 1: root
+    push(barStart + 6, third, '8n', 0.65); // "and" of 2: pickup
+
+    if (isLastBarOfPlacement && nextChord) {
+      push(barStart + 14, nextRoot, '8n', 0.9); // "and" of 4: anticipate the next chord
+    } else {
+      push(barStart + 12, fifth, '4n', 0.75); // beat 4: fifth
+    }
+  }
+  return events;
 }
 
 /** Transposes a pattern's steps to a chord, tiling the pattern across the placement's length. */
@@ -171,6 +215,12 @@ export function scheduleBass(
   } else if (rule) {
     for (const placement of placements) {
       const chord = resolveSelection(key, scale, placement.selection);
+      if (rule.style === 'tumbao') {
+        const next = placements.find((p) => p.startBeat === placement.startBeat + placement.lengthBeats);
+        const nextChord = next ? resolveSelection(key, scale, next.selection) : null;
+        events.push(...tumbaoEvents(chord, nextChord, placement));
+        continue;
+      }
       for (let beat = 0; beat < placement.lengthBeats; beat++) {
         const note = noteForBeat(chord, rule, beat);
         if (note) events.push({ time: `0:${placement.startBeat + beat}:0`, note, duration: '4n', velocity: 0.8 });

@@ -94,16 +94,22 @@ export function scheduleDrums(pattern: DrumPattern): void {
   let step = 0;
 
   loop = new Tone.Loop((time) => {
-    for (const hit of pattern.steps) {
-      if (hit.time !== step) continue;
-      if (hit.note === 'kick') kick!.triggerAttackRelease('C1', '8n', time, hit.velocity);
-      if (hit.note === 'snare') snare!.triggerAttackRelease('8n', time, hit.velocity);
-      // MetalSynth is pitched (Monophonic) unlike NoiseSynth, so it needs a frequency
-      // first — 200Hz is just a carrier; harmonicity/modulationIndex/resonance do the
-      // actual metallic shaping, so the exact pitch barely matters.
-      if (hit.note === 'hihat') hihat!.triggerAttackRelease(200, '32n', time, hit.velocity);
+    // step must always advance even if a trigger throws (e.g. a malformed pattern
+    // re-hits the same voice at the same instant) — otherwise it wedges on this step
+    // forever, re-triggering whatever's here on every future tick.
+    try {
+      for (const hit of pattern.steps) {
+        if (hit.time !== step) continue;
+        if (hit.note === 'kick') kick!.triggerAttackRelease('C1', '8n', time, hit.velocity);
+        if (hit.note === 'snare') snare!.triggerAttackRelease('8n', time, hit.velocity);
+        // MetalSynth is pitched (Monophonic) unlike NoiseSynth, so it needs a frequency
+        // first — 200Hz is just a carrier; harmonicity/modulationIndex/resonance do the
+        // actual metallic shaping, so the exact pitch barely matters.
+        if (hit.note === 'hihat') hihat!.triggerAttackRelease(200, '32n', time, hit.velocity);
+      }
+    } finally {
+      step = (step + 1) % totalSteps;
     }
-    step = (step + 1) % totalSteps;
   }, '16n').start(0);
 }
 

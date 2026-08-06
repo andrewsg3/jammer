@@ -26,6 +26,7 @@ import {
   bundledSongPresets,
   downloadSongPreset,
   parseSongPresetFile,
+  resolvePlacementStarts,
   type SongPreset,
 } from './data/songPresets';
 import {
@@ -69,7 +70,10 @@ function App() {
   const [scale, setScale] = useState<ScaleName>(DEFAULT_SONG_PRESET?.scale ?? 'major');
   const [placements, setPlacements] = useState<ChordPlacement[]>(
     DEFAULT_SONG_PRESET
-      ? DEFAULT_SONG_PRESET.placements.map((p) => ({ id: crypto.randomUUID(), ...p }))
+      ? resolvePlacementStarts(DEFAULT_SONG_PRESET.placements).map((p) => ({
+          id: crypto.randomUUID(),
+          ...p,
+        }))
       : STARTER_PLACEMENTS,
   );
   const [tempo, setTempo] = useState(DEFAULT_SONG_PRESET?.tempo ?? 124);
@@ -229,11 +233,9 @@ function App() {
     setLoopStart(preset.loopStart);
     setLoopEnd(preset.loopEnd);
     setPlacements(
-      preset.placements.map((p) => ({
+      resolvePlacementStarts(preset.placements).map((p) => ({
         id: crypto.randomUUID(),
-        selection: p.selection,
-        startBeat: p.startBeat,
-        lengthBeats: p.lengthBeats,
+        ...p,
       })),
     );
 
