@@ -22,7 +22,9 @@ type Props = {
   scale: ScaleName;
   loopStart: number;
   loopEnd: number;
-  playheadBeat: number | null;
+  playheadBeat: number;
+  isPlaying: boolean;
+  onPlayheadChange: (beat: number) => void;
   onDropChord: (selection: ChordSelection, startBeat: number, lengthBeats: number) => void;
   onReplaceChord: (placement: ChordPlacement, selection: ChordSelection) => void;
   onResize: (placement: ChordPlacement, newLength: number) => void;
@@ -118,6 +120,8 @@ export function ChordGrid({
   loopStart,
   loopEnd,
   playheadBeat,
+  isPlaying,
+  onPlayheadChange,
   onDropChord,
   onReplaceChord,
   onResize,
@@ -357,9 +361,33 @@ export function ChordGrid({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  // Scrubbing the ruler jumps + drags the playhead in one gesture — only while
+  // stopped, since seeking a running Tone.Transport is a different, riskier operation
+  // than just setting where the *next* playback will start from.
+  const handlePlayheadScrubStart = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (isPlaying) return;
+    const target = e.target as HTMLElement;
+    if (!target.closest('.loop-ruler') || target.closest('.loop-handle')) return;
+    if (!wrapperRef.current) return;
+    const wrapperRect = wrapperRef.current.getBoundingClientRect();
+
+    const setFromEvent = (clientX: number, clientY: number) => {
+      onPlayheadChange(clientPosToGlobalBeat(wrapperRect, clientX, clientY));
+    };
+    setFromEvent(e.clientX, e.clientY);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => setFromEvent(moveEvent.clientX, moveEvent.clientY);
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   const loopStartRow = rowOf(loopStart);
   const loopEndHomeRow = rowOf(Math.max(0, loopEnd - 1));
-  const playheadRow = playheadBeat === null ? null : clamp(rowOf(playheadBeat), 0, ROWS - 1);
+  const playheadRow = clamp(rowOf(playheadBeat), 0, ROWS - 1);
   const allSegments = placements.flatMap(segmentsFor);
 
   return (
@@ -381,6 +409,7 @@ export function ChordGrid({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onClickCapture={handleWrapperClickCapture}
+          onMouseDown={handlePlayheadScrubStart}
         >
           {Array.from({ length: ROWS }, (_, row) => {
           const rowStart = row * BEATS_PER_ROW;
@@ -391,7 +420,13 @@ export function ChordGrid({
 
           return (
             <div key={row} className="chord-grid-row-group">
-              <div className="loop-ruler">
+              <div className={`loop-ruler${isPlaying ? '' : ' loop-ruler-scrubbable'}`}>
+                {playheadRow === row && (
+                  <div
+                    className="playhead-flag"
+                    style={{ left: `${((playheadBeat - rowStart) / BEATS_PER_ROW) * 100}%` }}
+                  />
+                )}
                 {loopStartRow === row && (
                   <div
                     className="loop-handle loop-handle-start"
@@ -431,7 +466,7 @@ export function ChordGrid({
                     style={{ gridColumn: `${BEATS_PER_ROW - dimAfter + 1} / span ${dimAfter}`, gridRow: 1 }}
                   />
                 )}
-                {playheadRow === row && playheadBeat !== null && (
+                {playheadRow === row && (
                   <div
                     className="playhead"
                     style={{ left: `${((playheadBeat - rowStart) / BEATS_PER_ROW) * 100}%` }}

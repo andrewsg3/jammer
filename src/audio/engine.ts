@@ -53,6 +53,7 @@ export type PlaybackParams = {
   placements: ChordPlacement[];
   loopStartBeat: number;
   loopEndBeat: number;
+  startBeat: number;
   drums: DrumPattern | null;
   bass: BassRule | null;
   bassPattern: BassPattern | null;
@@ -154,7 +155,9 @@ export async function play(params: PlaybackParams): Promise<void> {
   // other now), not by whether it's running at all.
   scheduleMetronome();
 
-  Tone.Transport.start();
+  // The offset (2nd arg) is where the transport's internal clock begins — lets
+  // playback start from wherever the playhead was dragged to, not always bar 1.
+  Tone.Transport.start(Tone.now(), `0:${params.startBeat}:0`);
 }
 
 export function stop(): void {

@@ -98,7 +98,7 @@ function App() {
   const [songPresetError, setSongPresetError] = useState<string | null>(null);
   const [loopStart, setLoopStart] = useState(DEFAULT_SONG_PRESET?.loopStart ?? 0);
   const [loopEnd, setLoopEnd] = useState(DEFAULT_SONG_PRESET?.loopEnd ?? 16);
-  const [playheadBeat, setPlayheadBeat] = useState<number | null>(null);
+  const [playheadBeat, setPlayheadBeat] = useState(0);
   const [chordsVolume, setChordsVolumeState] = useState(100);
   const [bassVolume, setBassVolumeState] = useState(100);
   const [drumsVolume, setDrumsVolumeState] = useState(100);
@@ -171,10 +171,9 @@ function App() {
   }, [tempo, isPlaying]);
 
   useEffect(() => {
-    if (!isPlaying) {
-      setPlayheadBeat(null);
-      return;
-    }
+    // Leave playheadBeat where it is while stopped — it stays visible, and either
+    // sits wherever playback last stopped or wherever the user scrubbed it to.
+    if (!isPlaying) return;
     let frameId: number;
     const tick = () => {
       setPlayheadBeat(Math.floor(getCurrentBeat()));
@@ -223,11 +222,14 @@ function App() {
     setLoopEnd(end);
   };
 
+  const handlePlayheadChange = (beat: number) => setPlayheadBeat(beat);
+
   const handleLoadSongPreset = (preset: SongPreset) => {
     if (isPlaying) {
       stop();
       setIsPlaying(false);
     }
+    setPlayheadBeat(0);
     setSongTitle(preset.name);
     setSongAuthor(preset.author ?? '');
     setMusicalKey(preset.key);
@@ -326,6 +328,7 @@ function App() {
       placements,
       loopStartBeat: loopStart,
       loopEndBeat: loopEnd,
+      startBeat: playheadBeat,
       tempo,
       drums: drumStyle.pattern,
       bass: bassStyle.rule,
@@ -340,6 +343,7 @@ function App() {
     scale,
     loopStart,
     loopEnd,
+    playheadBeat,
     tempo,
     drumStyle,
     bassStyle,
@@ -409,6 +413,8 @@ function App() {
               loopStart={loopStart}
               loopEnd={loopEnd}
               playheadBeat={playheadBeat}
+              isPlaying={isPlaying}
+              onPlayheadChange={handlePlayheadChange}
               onDropChord={handleDropChord}
               onReplaceChord={handleReplaceChord}
               onResize={handleResize}

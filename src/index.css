@@ -684,6 +684,22 @@ button:hover {
   height: 14px;
 }
 
+.loop-ruler-scrubbable {
+  cursor: pointer;
+}
+
+.playhead-flag {
+  position: absolute;
+  top: 0;
+  width: 0;
+  height: 0;
+  margin-left: -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid #d64545;
+  pointer-events: none;
+}
+
 /* Musical repeat-barline symbol: two stacked dots, a thin line, a gap, then a
    thick line (left to right) — the standard "end repeat" shape. loop-handle-start
    mirrors the whole thing via scaleX(-1) to read thick, gap, thin, dots — the
