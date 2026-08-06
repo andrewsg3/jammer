@@ -684,7 +684,8 @@ button:hover {
   height: 14px;
 }
 
-.loop-ruler-scrubbable {
+.loop-ruler-scrubbable,
+.chord-grid-row-scrubbable {
   cursor: pointer;
 }
 

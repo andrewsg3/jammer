@@ -361,13 +361,15 @@ export function ChordGrid({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Scrubbing the ruler jumps + drags the playhead in one gesture — only while
-  // stopped, since seeking a running Tone.Transport is a different, riskier operation
-  // than just setting where the *next* playback will start from.
+  // Clicking or dragging anywhere on the grid — the ruler or the empty space around
+  // chords — jumps the playhead there, only while stopped (seeking a running
+  // Tone.Transport is a different, riskier operation than just choosing a start point).
+  // Chord blocks and loop handles opt out since they already have their own mousedown
+  // behavior (move/resize a chord, drag a loop boundary).
   const handlePlayheadScrubStart = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (isPlaying) return;
     const target = e.target as HTMLElement;
-    if (!target.closest('.loop-ruler') || target.closest('.loop-handle')) return;
+    if (target.closest('.chord-block') || target.closest('.loop-handle')) return;
     if (!wrapperRef.current) return;
     const wrapperRect = wrapperRef.current.getBoundingClientRect();
 
@@ -447,7 +449,7 @@ export function ChordGrid({
                 )}
               </div>
               <div
-                className="chord-grid-row"
+                className={`chord-grid-row${isPlaying ? '' : ' chord-grid-row-scrubbable'}`}
                 style={{ gridTemplateColumns: `repeat(${BEATS_PER_ROW}, 1fr)` }}
               >
                 {Array.from({ length: BEATS_PER_ROW }, (_, i) => (
