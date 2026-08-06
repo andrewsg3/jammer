@@ -21,6 +21,9 @@ type Props<TStyle extends NamedOption, TInstrument extends NamedOption, TFeel ex
   onVolumeChange: (value: number) => void;
   muted: boolean;
   onToggleMuted: () => void;
+  // Optional test toggle for a per-track effect — currently Harmony-only (chorus).
+  effectEnabled?: boolean;
+  onToggleEffect?: () => void;
   // Optional per-voice sub-mix disclosure — currently only Drums uses this. Rendered
   // as a floating popout (not a flex sibling) so expanding never reflows the rest of
   // the layout — it overlays on top instead of squeezing the grid or other strips.
@@ -58,6 +61,8 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
   onVolumeChange,
   muted,
   onToggleMuted,
+  effectEnabled,
+  onToggleEffect,
   expanded,
   onToggleExpanded,
   expandedContent,
@@ -117,6 +122,18 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
       >
         M
       </button>
+      {onToggleEffect && (
+        <button
+          type="button"
+          className="channel-strip-fx"
+          onClick={onToggleEffect}
+          aria-pressed={effectEnabled}
+          aria-label={effectEnabled ? 'Disable test effect' : 'Enable test effect'}
+          title={effectEnabled ? 'Disable test effect (chorus)' : 'Enable test effect (chorus)'}
+        >
+          FX
+        </button>
+      )}
       <span className="channel-strip-label">{label}</span>
       {expanded && expandedContent && <div className="channel-strip-popout">{expandedContent}</div>}
     </div>

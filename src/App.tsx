@@ -59,6 +59,7 @@ import {
   setBassMuted,
   setDrumsMuted,
   setMetronomeMuted,
+  setChordsEffectEnabled,
 } from './audio/engine';
 
 // Fallback only — used if bundledSongPresets is somehow empty (e.g. all preset
@@ -127,6 +128,7 @@ function App() {
   const [keysTimeFeel, setKeysTimeFeel] = useState<TimeFeelOption>(TIME_FEEL_OPTIONS[0]);
   const [metronomeMuted, setMetronomeMutedState] = useState(!(DEFAULT_SONG_PRESET?.metronome ?? false));
   const [chordsMuted, setChordsMutedState] = useState(false);
+  const [chordsEffectEnabled, setChordsEffectEnabledState] = useState(false);
   const [bassMuted, setBassMutedState] = useState(false);
   const [drumsMuted, setDrumsMutedState] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -219,6 +221,7 @@ function App() {
   useEffect(() => setCrashVolume(crashVolume), [crashVolume]);
   useEffect(() => setTomsVolume(tomsVolume), [tomsVolume]);
   useEffect(() => setChordsMuted(chordsMuted), [chordsMuted]);
+  useEffect(() => setChordsEffectEnabled(chordsEffectEnabled), [chordsEffectEnabled]);
   useEffect(() => setBassMuted(bassMuted), [bassMuted]);
   useEffect(() => setDrumsMuted(drumsMuted), [drumsMuted]);
   useEffect(() => setMetronomeMuted(metronomeMuted), [metronomeMuted]);
@@ -579,6 +582,8 @@ function App() {
               onVolumeChange={setChordsVolumeState}
               muted={chordsMuted}
               onToggleMuted={() => setChordsMutedState((v) => !v)}
+              effectEnabled={chordsEffectEnabled}
+              onToggleEffect={() => setChordsEffectEnabledState((v) => !v)}
             />
             <ChannelStrip
               label="Metronome"

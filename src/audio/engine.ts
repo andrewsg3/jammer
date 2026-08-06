@@ -31,6 +31,7 @@ import {
   setVolume as setKeysOutputVolume,
   setInstrument as setKeysInstrumentImpl,
   setMuted as setKeysOutputMuted,
+  setEffectEnabled as setKeysEffectEnabledImpl,
 } from './keys';
 import {
   scheduleMetronome,
@@ -143,6 +144,10 @@ export function setMetronomeVolume(percent: number): void {
 
 export function setChordsMuted(muted: boolean): void {
   setKeysOutputMuted(muted);
+}
+
+export function setChordsEffectEnabled(enabled: boolean): void {
+  setKeysEffectEnabledImpl(enabled);
 }
 
 export function setBassMuted(muted: boolean): void {
