@@ -3,17 +3,20 @@ import { VerticalFader } from './VerticalFader';
 
 type NamedOption = { name: string };
 
-type Props<TStyle extends NamedOption, TInstrument extends NamedOption> = {
+type Props<TStyle extends NamedOption, TInstrument extends NamedOption, TFeel extends NamedOption> = {
   label: string;
   accent: 'drums' | 'bass' | 'harmony' | 'metronome';
-  // Style/instrument pickers are optional — Metronome doesn't have either, just a
-  // volume fader and a mute button.
+  // Style/instrument/feel pickers are all optional — Metronome has none of them,
+  // just a volume fader and a mute button; Feel is currently Drums-only.
   styleOptions?: TStyle[];
   selectedStyle?: TStyle;
   onStyleChange?: (style: TStyle) => void;
   instrumentOptions?: TInstrument[];
   selectedInstrument?: TInstrument;
   onInstrumentChange?: (instrument: TInstrument) => void;
+  feelOptions?: TFeel[];
+  selectedFeel?: TFeel;
+  onFeelChange?: (feel: TFeel) => void;
   volume: number;
   onVolumeChange: (value: number) => void;
   muted: boolean;
@@ -39,7 +42,7 @@ function PickerPlaceholder() {
   );
 }
 
-export function ChannelStrip<TStyle extends NamedOption, TInstrument extends NamedOption>({
+export function ChannelStrip<TStyle extends NamedOption, TInstrument extends NamedOption, TFeel extends NamedOption>({
   label,
   accent,
   styleOptions,
@@ -48,6 +51,9 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
   instrumentOptions,
   selectedInstrument,
   onInstrumentChange,
+  feelOptions,
+  selectedFeel,
+  onFeelChange,
   volume,
   onVolumeChange,
   muted,
@@ -55,7 +61,7 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
   expanded,
   onToggleExpanded,
   expandedContent,
-}: Props<TStyle, TInstrument>) {
+}: Props<TStyle, TInstrument, TFeel>) {
   const classes = [
     'channel-strip',
     `channel-strip-${accent}`,
@@ -92,6 +98,11 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
           selected={selectedInstrument}
           onSelect={onInstrumentChange}
         />
+      ) : (
+        <PickerPlaceholder />
+      )}
+      {feelOptions && selectedFeel && onFeelChange ? (
+        <StylePicker label="Feel" options={feelOptions} selected={selectedFeel} onSelect={onFeelChange} />
       ) : (
         <PickerPlaceholder />
       )}

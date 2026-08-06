@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import { STEPS_PER_BAR } from '../data/instrumentStyles';
-import type { DrumPattern } from '../data/instrumentStyles';
+import type { DrumPattern, DrumTimeFeel } from '../data/instrumentStyles';
 
 // Shared output so one volume control (the Drums fader) trims every voice together.
 // Kick/snare/hihat additionally each have their own node feeding into it, for the
@@ -187,7 +187,7 @@ export function setInstrument(name: string): void {
   toms = null;
 }
 
-export function scheduleDrums(pattern: DrumPattern): void {
+export function scheduleDrums(pattern: DrumPattern, timeFeel: DrumTimeFeel = 'normal'): void {
   ensureSynths();
   const totalSteps = pattern.bars * STEPS_PER_BAR;
   let step = 0;
@@ -195,6 +195,11 @@ export function scheduleDrums(pattern: DrumPattern): void {
   // '32t' (32nd-note triplet) = 1/12 of a beat — the same grid patterns are
   // quantized to on import, so both straight 16th-note and 8th-note-triplet
   // (shuffle) hits play back at their actual timing instead of snapping to 16ths.
+  // Half/double time feel just scales that same tick duration — a Tone.js time
+  // *string* (not a computed seconds value) so it stays in sync if tempo changes
+  // mid-playback, same as every other Transport-relative time in this app.
+  const tickInterval = timeFeel === 'double' ? '96n' : timeFeel === 'half' ? '24n' : '32t';
+
   loop = new Tone.Loop((time) => {
     // step must always advance even if a trigger throws (e.g. a malformed pattern
     // re-hits the same voice at the same instant) — otherwise it wedges on this step
@@ -221,7 +226,7 @@ export function scheduleDrums(pattern: DrumPattern): void {
     } finally {
       step = (step + 1) % totalSteps;
     }
-  }, '32t').start(0);
+  }, tickInterval).start(0);
 }
 
 export function disposeDrums(): void {

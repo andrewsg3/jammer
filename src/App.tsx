@@ -18,6 +18,7 @@ import {
   type DrumStyle,
   type BassStyle,
   type Instrument,
+  type DrumTimeFeel,
 } from './data/instrumentStyles';
 import { loadBundledDrumStyles } from './data/drumLibrary';
 import { loadBundledBassStyles } from './data/bassLibrary';
@@ -62,6 +63,13 @@ const STARTER_PLACEMENTS: ChordPlacement[] = [
   { id: 'starter-3', selection: { type: 'diatonic', degree: 1 }, startBeat: 12, lengthBeats: 4 },
 ];
 
+type TimeFeelOption = { name: string; value: DrumTimeFeel };
+const TIME_FEEL_OPTIONS: TimeFeelOption[] = [
+  { name: 'Normal', value: 'normal' },
+  { name: 'Half-Time', value: 'half' },
+  { name: 'Double-Time', value: 'double' },
+];
+
 // The URL's ?song= name wins over the hardcoded fallback, so a refresh (or a shared
 // link) reopens whatever song was actually loaded rather than always Autumn Leaves.
 const urlSongName = new URLSearchParams(window.location.search).get('song');
@@ -98,6 +106,7 @@ function App() {
   const [tempo, setTempo] = useState(DEFAULT_SONG_PRESET?.tempo ?? 124);
   const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
   const [drumStyle, setDrumStyle] = useState<DrumStyle>(baseDrumStyles[0]);
+  const [drumsTimeFeel, setDrumsTimeFeel] = useState<TimeFeelOption>(TIME_FEEL_OPTIONS[0]);
   const [bassStyles, setBassStyles] = useState<BassStyle[]>(baseBassStyles);
   const [bassStyle, setBassStyle] = useState(
     baseBassStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.bassStyle) ??
@@ -357,6 +366,7 @@ function App() {
       startBeat: playheadBeat,
       tempo,
       drums: drumStyle.pattern,
+      drumsTimeFeel: drumsTimeFeel.value,
       bass: bassStyle.rule,
       bassPattern: bassStyle.pattern ?? null,
       keys: keysStyle.rule,
@@ -372,6 +382,7 @@ function App() {
     playheadBeat,
     tempo,
     drumStyle,
+    drumsTimeFeel,
     bassStyle,
     keysStyle,
   ]);
@@ -469,6 +480,9 @@ function App() {
               instrumentOptions={drumsInstruments}
               selectedInstrument={drumsInstrument}
               onInstrumentChange={setDrumsInstrumentState}
+              feelOptions={TIME_FEEL_OPTIONS}
+              selectedFeel={drumsTimeFeel}
+              onFeelChange={setDrumsTimeFeel}
               volume={drumsVolume}
               onVolumeChange={setDrumsVolumeState}
               muted={drumsMuted}

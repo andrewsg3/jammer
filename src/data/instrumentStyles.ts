@@ -31,6 +31,12 @@ export type DrumPattern = {
   bars: number;
 };
 
+// Plays a pattern at half or double speed relative to the song's actual tempo — the
+// groove repeats twice as often (double) or stretches across twice the real time
+// (half). A playback-time choice (see the Drums channel strip's Feel picker), not
+// baked into pattern data, so it applies uniformly to whichever style is selected.
+export type DrumTimeFeel = 'normal' | 'half' | 'double';
+
 export type BassRule = {
   style: 'root-fifth' | 'walking' | 'syncopated' | 'octaves' | 'pedal' | 'walk-updown' | 'tumbao';
 };
