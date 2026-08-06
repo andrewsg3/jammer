@@ -61,7 +61,22 @@ const STARTER_PLACEMENTS: ChordPlacement[] = [
   { id: 'starter-3', selection: { type: 'diatonic', degree: 1 }, startBeat: 12, lengthBeats: 4 },
 ];
 
-const DEFAULT_SONG_PRESET = bundledSongPresets.find((p) => p.name === 'Autumn Leaves') ?? null;
+// The URL's ?song= name wins over the hardcoded fallback, so a refresh (or a shared
+// link) reopens whatever song was actually loaded rather than always Autumn Leaves.
+const urlSongName = new URLSearchParams(window.location.search).get('song');
+const DEFAULT_SONG_PRESET =
+  bundledSongPresets.find((p) => p.name === urlSongName) ??
+  bundledSongPresets.find((p) => p.name === 'Autumn Leaves') ??
+  null;
+
+/** Keeps ?song= in sync with whatever's actually loaded, without adding a back-button
+ * stop per song switch — a plain refresh should reopen the same song, not navigate. */
+function setSongInUrl(name: string | null): void {
+  const url = new URL(window.location.href);
+  if (name) url.searchParams.set('song', name);
+  else url.searchParams.delete('song');
+  window.history.replaceState(null, '', url);
+}
 
 function App() {
   const [songTitle, setSongTitle] = useState(DEFAULT_SONG_PRESET?.name ?? 'Untitled');
@@ -121,6 +136,12 @@ function App() {
   useEffect(() => setChordsInstrument(chordsInstrument.name), [chordsInstrument]);
   useEffect(() => setBassInstrument(bassInstrument.name), [bassInstrument]);
   useEffect(() => setDrumsInstrument(drumsInstrument.name), [drumsInstrument]);
+
+  // Canonicalizes ?song= on first load — clears a stale/unrecognized value, or fills
+  // it in when the app opened with none, so the URL always matches what's loaded.
+  useEffect(() => {
+    setSongInUrl(DEFAULT_SONG_PRESET?.name ?? null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,6 +251,9 @@ function App() {
       setIsPlaying(false);
     }
     setPlayheadBeat(0);
+    // Only bundled presets are addressable by name — an imported one-off file has
+    // nothing for a refresh to look up, so it just falls back to the default song.
+    setSongInUrl(bundledSongPresets.some((p) => p.name === preset.name) ? preset.name : null);
     setSongTitle(preset.name);
     setSongAuthor(preset.author ?? '');
     setMusicalKey(preset.key);
