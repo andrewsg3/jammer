@@ -9,20 +9,28 @@ import {
   setKickVolume as setKickOutputVolume,
   setSnareVolume as setSnareOutputVolume,
   setHihatVolume as setHihatOutputVolume,
+  setMuted as setDrumsOutputMuted,
 } from './drums';
 import {
   scheduleBass,
   disposeBass,
   setVolume as setBassOutputVolume,
   setInstrument as setBassInstrumentImpl,
+  setMuted as setBassOutputMuted,
 } from './bass';
 import {
   scheduleKeys,
   disposeKeys,
   setVolume as setKeysOutputVolume,
   setInstrument as setKeysInstrumentImpl,
+  setMuted as setKeysOutputMuted,
 } from './keys';
-import { scheduleMetronome, disposeMetronome, setVolume as setMetronomeOutputVolume } from './metronome';
+import {
+  scheduleMetronome,
+  disposeMetronome,
+  setVolume as setMetronomeOutputVolume,
+  setMuted as setMetronomeOutputMuted,
+} from './metronome';
 
 const AUDITION_OCTAVE = 4;
 let auditionSynth: Tone.PolySynth<Tone.Synth> | null = null;
@@ -50,7 +58,6 @@ export type PlaybackParams = {
   bassPattern: BassPattern | null;
   keys: KeysRule | null;
   tempo: number;
-  metronome: boolean;
 };
 
 export function setTempo(bpm: number): void {
@@ -60,11 +67,6 @@ export function setTempo(bpm: number): void {
 /** Current transport position in quarter-note beats — wraps within the active loop range. */
 export function getCurrentBeat(): number {
   return Tone.Transport.ticks / Tone.Transport.PPQ;
-}
-
-export function setMetronomeEnabled(enabled: boolean): void {
-  if (enabled) scheduleMetronome();
-  else disposeMetronome();
 }
 
 // Sliders work in 0-100 (%); dB conversion keeps 100 at unity gain and 0 fully silent.
@@ -100,6 +102,22 @@ export function setMetronomeVolume(percent: number): void {
   setMetronomeOutputVolume(percentToDb(percent));
 }
 
+export function setChordsMuted(muted: boolean): void {
+  setKeysOutputMuted(muted);
+}
+
+export function setBassMuted(muted: boolean): void {
+  setBassOutputMuted(muted);
+}
+
+export function setDrumsMuted(muted: boolean): void {
+  setDrumsOutputMuted(muted);
+}
+
+export function setMetronomeMuted(muted: boolean): void {
+  setMetronomeOutputMuted(muted);
+}
+
 // Every track already connects straight to Tone.Destination (no shared bus needed) —
 // so "master volume" is just that destination's own volume.
 export function setMasterVolume(percent: number): void {
@@ -132,7 +150,9 @@ export async function play(params: PlaybackParams): Promise<void> {
     scheduleBass(params.placements, params.key, params.scale, params.bass, params.bassPattern);
   }
   if (params.keys) scheduleKeys(params.placements, params.key, params.scale, params.keys);
-  if (params.metronome) scheduleMetronome();
+  // Always scheduled — audibility is controlled by its mute state (a track like any
+  // other now), not by whether it's running at all.
+  scheduleMetronome();
 
   Tone.Transport.start();
 }

@@ -3,7 +3,6 @@ import { ChordGrid, TOTAL_BEATS } from './components/ChordGrid';
 import { ChordPalette } from './components/ChordPalette';
 import { TopBar } from './components/TopBar';
 import { ChannelStrip } from './components/ChannelStrip';
-import { VolumeSlider } from './components/VolumeSlider';
 import { VerticalFader } from './components/VerticalFader';
 import { MiniFader } from './components/MiniFader';
 import { MidiUpload } from './components/MidiUpload';
@@ -34,7 +33,6 @@ import {
   stop,
   auditionChord,
   setTempo as setTransportTempo,
-  setMetronomeEnabled,
   getCurrentBeat,
   setChordsVolume,
   setBassVolume,
@@ -47,6 +45,10 @@ import {
   setChordsInstrument,
   setBassInstrument,
   setDrumsInstrument,
+  setChordsMuted,
+  setBassMuted,
+  setDrumsMuted,
+  setMetronomeMuted,
 } from './audio/engine';
 
 // Fallback only — used if bundledSongPresets is somehow empty (e.g. all preset
@@ -82,7 +84,10 @@ function App() {
     keysStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.keysStyle) ??
       keysStyles.find((s) => s.name === 'Sustained 7ths')!,
   );
-  const [metronomeOn, setMetronomeOn] = useState(DEFAULT_SONG_PRESET?.metronome ?? false);
+  const [metronomeMuted, setMetronomeMutedState] = useState(!(DEFAULT_SONG_PRESET?.metronome ?? false));
+  const [chordsMuted, setChordsMutedState] = useState(false);
+  const [bassMuted, setBassMutedState] = useState(false);
+  const [drumsMuted, setDrumsMutedState] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [customDrumStyle, setCustomDrumStyle] = useState<DrumStyle | null>(null);
   const [midiError, setMidiError] = useState<string | null>(null);
@@ -152,14 +157,14 @@ function App() {
   useEffect(() => setKickVolume(kickVolume), [kickVolume]);
   useEffect(() => setSnareVolume(snareVolume), [snareVolume]);
   useEffect(() => setHihatVolume(hihatVolume), [hihatVolume]);
+  useEffect(() => setChordsMuted(chordsMuted), [chordsMuted]);
+  useEffect(() => setBassMuted(bassMuted), [bassMuted]);
+  useEffect(() => setDrumsMuted(drumsMuted), [drumsMuted]);
+  useEffect(() => setMetronomeMuted(metronomeMuted), [metronomeMuted]);
 
   useEffect(() => {
     if (isPlaying) setTransportTempo(tempo);
   }, [tempo, isPlaying]);
-
-  useEffect(() => {
-    if (isPlaying) setMetronomeEnabled(metronomeOn);
-  }, [metronomeOn, isPlaying]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -220,7 +225,7 @@ function App() {
     setMusicalKey(preset.key);
     setScale(preset.scale);
     setTempo(preset.tempo);
-    setMetronomeOn(preset.metronome);
+    setMetronomeMutedState(!preset.metronome);
     setLoopStart(preset.loopStart);
     setLoopEnd(preset.loopEnd);
     setPlacements(
@@ -260,7 +265,7 @@ function App() {
       key: musicalKey,
       scale,
       tempo,
-      metronome: metronomeOn,
+      metronome: !metronomeMuted,
       loopStart,
       loopEnd,
       drumStyle: drumStyle.name,
@@ -320,7 +325,6 @@ function App() {
       bass: bassStyle.rule,
       bassPattern: bassStyle.pattern ?? null,
       keys: keysStyle.rule,
-      metronome: metronomeOn,
     });
     setIsPlaying(true);
   }, [
@@ -334,7 +338,6 @@ function App() {
     drumStyle,
     bassStyle,
     keysStyle,
-    metronomeOn,
   ]);
 
   useEffect(() => {
@@ -371,8 +374,6 @@ function App() {
         onScaleChange={setScale}
         tempo={tempo}
         onTempoChange={setTempo}
-        metronomeOn={metronomeOn}
-        onMetronomeChange={setMetronomeOn}
         isPlaying={isPlaying}
         onTogglePlay={handleTogglePlay}
       />
@@ -385,12 +386,6 @@ function App() {
             <details className="more-section">
               <summary>More</summary>
               <div className="more-section-content">
-                <VolumeSlider
-                  id="volume-metronome"
-                  label="Metronome volume"
-                  value={metronomeVolume}
-                  onChange={setMetronomeVolumeState}
-                />
                 <MidiUpload onFile={handleMidiUpload} error={midiError} />
                 <SongPresetFileControls
                   onSave={handleSaveSongPreset}
@@ -438,16 +433,18 @@ function App() {
               onInstrumentChange={setDrumsInstrumentState}
               volume={drumsVolume}
               onVolumeChange={setDrumsVolumeState}
+              muted={drumsMuted}
+              onToggleMuted={() => setDrumsMutedState((v) => !v)}
               expanded={drumsExpanded}
               onToggleExpanded={() => setDrumsExpanded((v) => !v)}
+              expandedContent={
+                <>
+                  <MiniFader id="volume-kick" label="Kick" value={kickVolume} onChange={setKickVolumeState} />
+                  <MiniFader id="volume-snare" label="Snare" value={snareVolume} onChange={setSnareVolumeState} />
+                  <MiniFader id="volume-hihat" label="Hihat" value={hihatVolume} onChange={setHihatVolumeState} />
+                </>
+              }
             />
-            {drumsExpanded && (
-              <>
-                <MiniFader id="volume-kick" label="Kick" value={kickVolume} onChange={setKickVolumeState} />
-                <MiniFader id="volume-snare" label="Snare" value={snareVolume} onChange={setSnareVolumeState} />
-                <MiniFader id="volume-hihat" label="Hihat" value={hihatVolume} onChange={setHihatVolumeState} />
-              </>
-            )}
             <ChannelStrip
               label="Bass"
               accent="bass"
@@ -459,6 +456,8 @@ function App() {
               onInstrumentChange={setBassInstrumentState}
               volume={bassVolume}
               onVolumeChange={setBassVolumeState}
+              muted={bassMuted}
+              onToggleMuted={() => setBassMutedState((v) => !v)}
             />
             <ChannelStrip
               label="Harmony"
@@ -471,6 +470,16 @@ function App() {
               onInstrumentChange={setChordsInstrumentState}
               volume={chordsVolume}
               onVolumeChange={setChordsVolumeState}
+              muted={chordsMuted}
+              onToggleMuted={() => setChordsMutedState((v) => !v)}
+            />
+            <ChannelStrip
+              label="Metronome"
+              accent="metronome"
+              volume={metronomeVolume}
+              onVolumeChange={setMetronomeVolumeState}
+              muted={metronomeMuted}
+              onToggleMuted={() => setMetronomeMutedState((v) => !v)}
             />
             <div className="channel-strip channel-strip-master">
               <VerticalFader id="volume-master" value={masterVolume} onChange={setMasterVolumeState} />

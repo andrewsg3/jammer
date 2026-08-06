@@ -20,6 +20,10 @@ export function setVolume(db: number): void {
   output.volume.value = db;
 }
 
+export function setMuted(muted: boolean): void {
+  output.mute = muted;
+}
+
 export function scheduleMetronome(): void {
   disposeMetronome();
   ensureSynth();

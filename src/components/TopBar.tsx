@@ -19,8 +19,6 @@ type Props = {
   onScaleChange: (scale: ScaleName) => void;
   tempo: number;
   onTempoChange: (tempo: number) => void;
-  metronomeOn: boolean;
-  onMetronomeChange: (enabled: boolean) => void;
   isPlaying: boolean;
   onTogglePlay: () => void;
 };
@@ -44,8 +42,6 @@ export function TopBar({
   onScaleChange,
   tempo,
   onTempoChange,
-  metronomeOn,
-  onMetronomeChange,
   isPlaying,
   onTogglePlay,
 }: Props) {
@@ -71,7 +67,7 @@ export function TopBar({
   return (
     <header className="top-bar">
       <div className="top-bar-inner">
-        <h1 className="app-title font-(family-name:consolas)">backbeat</h1>
+        <h1 className="app-title font-[Consolas]">backbeat</h1>
 
         <TopBarField label="Song">
           <select
@@ -148,15 +144,6 @@ export function TopBar({
             </button>
           </div>
         </TopBarField>
-
-        <label className="top-bar-metronome">
-          <input
-            type="checkbox"
-            checked={metronomeOn}
-            onChange={(e) => onMetronomeChange(e.target.checked)}
-          />
-          Metronome
-        </label>
 
         <button type="button" className="play-button-prominent" onClick={onTogglePlay}>
           {isPlaying ? '■ Stop' : '▶ Play'}

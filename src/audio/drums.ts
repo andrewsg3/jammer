@@ -61,6 +61,10 @@ export function setVolume(db: number): void {
   output.volume.value = db;
 }
 
+export function setMuted(muted: boolean): void {
+  output.mute = muted;
+}
+
 export function setKickVolume(db: number): void {
   kickVolume.volume.value = db;
 }

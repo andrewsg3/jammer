@@ -140,19 +140,6 @@ body {
   font-size: 12px;
 }
 
-.top-bar-metronome {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  padding-bottom: 9px;
-}
-
-.top-bar-metronome input {
-  cursor: pointer;
-}
-
 .play-button-prominent {
   margin-left: auto;
   padding: 12px 28px;
@@ -288,6 +275,7 @@ select {
 
 .channel-strip {
   position: relative;
+  z-index: 1;
   width: 100px;
   flex: 0 0 100px;
   border: 1px solid var(--border);
@@ -302,26 +290,44 @@ select {
 
 .channel-strip-expand {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  padding: 2px 5px;
-  font-size: 10px;
+  top: -10px;
+  right: -10px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 15px;
   line-height: 1;
-  background: transparent;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--border);
   color: var(--text);
-  opacity: 0.6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .channel-strip-expand:hover {
-  opacity: 1;
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Floats above the layout instead of taking part in it, so expanding a strip never
+   reflows/squeezes the grid or the other strips — see ChannelStrip's expandedContent. */
+.channel-strip-popout {
+  position: absolute;
+  top: -1px;
+  left: calc(100% + 10px);
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 .channel-strip-mini {
   width: 56px;
   flex: 0 0 56px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  padding: 10px 6px 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -364,6 +370,42 @@ select {
 
 .channel-strip-harmony {
   --track-accent: #9f5fe0;
+}
+
+.channel-strip-metronome {
+  --track-accent: #6b7280;
+}
+
+.channel-strip-raised {
+  z-index: 30;
+}
+
+.channel-strip-mute {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  opacity: 0.6;
+}
+
+.channel-strip-mute:hover {
+  opacity: 1;
+}
+
+.channel-strip-mute[aria-pressed='true'] {
+  background: #d64545;
+  border-color: #d64545;
+  color: #fff;
+  opacity: 1;
+}
+
+.channel-strip-muted {
+  opacity: 0.55;
 }
 
 .channel-strip-master {

@@ -5,18 +5,25 @@ type NamedOption = { name: string };
 
 type Props<TStyle extends NamedOption, TInstrument extends NamedOption> = {
   label: string;
-  accent: 'drums' | 'bass' | 'harmony';
-  styleOptions: TStyle[];
-  selectedStyle: TStyle;
-  onStyleChange: (style: TStyle) => void;
-  instrumentOptions: TInstrument[];
-  selectedInstrument: TInstrument;
-  onInstrumentChange: (instrument: TInstrument) => void;
+  accent: 'drums' | 'bass' | 'harmony' | 'metronome';
+  // Style/instrument pickers are optional — Metronome doesn't have either, just a
+  // volume fader and a mute button.
+  styleOptions?: TStyle[];
+  selectedStyle?: TStyle;
+  onStyleChange?: (style: TStyle) => void;
+  instrumentOptions?: TInstrument[];
+  selectedInstrument?: TInstrument;
+  onInstrumentChange?: (instrument: TInstrument) => void;
   volume: number;
   onVolumeChange: (value: number) => void;
-  // Optional per-voice sub-mix disclosure — currently only Drums uses this.
+  muted: boolean;
+  onToggleMuted: () => void;
+  // Optional per-voice sub-mix disclosure — currently only Drums uses this. Rendered
+  // as a floating popout (not a flex sibling) so expanding never reflows the rest of
+  // the layout — it overlays on top instead of squeezing the grid or other strips.
   expanded?: boolean;
   onToggleExpanded?: () => void;
+  expandedContent?: React.ReactNode;
 };
 
 export function ChannelStrip<TStyle extends NamedOption, TInstrument extends NamedOption>({
@@ -30,11 +37,23 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
   onInstrumentChange,
   volume,
   onVolumeChange,
+  muted,
+  onToggleMuted,
   expanded,
   onToggleExpanded,
+  expandedContent,
 }: Props<TStyle, TInstrument>) {
+  const classes = [
+    'channel-strip',
+    `channel-strip-${accent}`,
+    expanded && 'channel-strip-raised',
+    muted && 'channel-strip-muted',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className={`channel-strip channel-strip-${accent}`}>
+    <div className={classes}>
       {onToggleExpanded && (
         <button
           type="button"
@@ -46,15 +65,30 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
           {expanded ? '◂' : '▸'}
         </button>
       )}
-      <StylePicker label="Style" options={styleOptions} selected={selectedStyle} onSelect={onStyleChange} />
-      <StylePicker
-        label="Sound"
-        options={instrumentOptions}
-        selected={selectedInstrument}
-        onSelect={onInstrumentChange}
-      />
+      {styleOptions && selectedStyle && onStyleChange && (
+        <StylePicker label="Style" options={styleOptions} selected={selectedStyle} onSelect={onStyleChange} />
+      )}
+      {instrumentOptions && selectedInstrument && onInstrumentChange && (
+        <StylePicker
+          label="Sound"
+          options={instrumentOptions}
+          selected={selectedInstrument}
+          onSelect={onInstrumentChange}
+        />
+      )}
       <VerticalFader id={`volume-${accent}`} value={volume} onChange={onVolumeChange} />
+      <button
+        type="button"
+        className="channel-strip-mute"
+        onClick={onToggleMuted}
+        aria-pressed={muted}
+        aria-label={muted ? `Unmute ${label}` : `Mute ${label}`}
+        title={muted ? 'Unmute' : 'Mute'}
+      >
+        M
+      </button>
       <span className="channel-strip-label">{label}</span>
+      {expanded && expandedContent && <div className="channel-strip-popout">{expandedContent}</div>}
     </div>
   );
 }
