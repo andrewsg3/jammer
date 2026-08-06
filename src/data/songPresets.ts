@@ -20,8 +20,10 @@ export type SongPreset = {
   scale: ScaleName;
   tempo: number;
   metronome: boolean;
-  loopStart: number;
-  loopEnd: number;
+  // Both optional — see resolveLoopRange. loopStart defaults to 0, loopEnd to the
+  // end of the last resolved placement (loop the whole progression).
+  loopStart?: number;
+  loopEnd?: number;
   drumStyle: string;
   bassStyle: string;
   keysStyle: string;
@@ -73,6 +75,26 @@ export function resolvePlacementStarts(
   });
 }
 
+/**
+ * Fills in loopStart/loopEnd when omitted — loopStart defaults to 0, loopEnd to the
+ * end of the last resolved placement, i.e. loop the whole progression once through.
+ * An explicit loopEnd is only needed to loop a subset of the chords, or to loop past
+ * the end of the progression (trailing silence).
+ */
+export function resolveLoopRange(
+  preset: Pick<SongPreset, 'loopStart' | 'loopEnd'>,
+  resolvedPlacements: { startBeat: number; lengthBeats: number }[],
+): { loopStart: number; loopEnd: number } {
+  const progressionEnd = resolvedPlacements.reduce(
+    (max, p) => Math.max(max, p.startBeat + p.lengthBeats),
+    0,
+  );
+  return {
+    loopStart: preset.loopStart ?? 0,
+    loopEnd: preset.loopEnd ?? progressionEnd,
+  };
+}
+
 export function isSongPreset(value: unknown): value is SongPreset {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
@@ -83,8 +105,8 @@ export function isSongPreset(value: unknown): value is SongPreset {
     SCALE_NAMES.includes(v.scale as ScaleName) &&
     typeof v.tempo === 'number' &&
     typeof v.metronome === 'boolean' &&
-    typeof v.loopStart === 'number' &&
-    typeof v.loopEnd === 'number' &&
+    (v.loopStart === undefined || typeof v.loopStart === 'number') &&
+    (v.loopEnd === undefined || typeof v.loopEnd === 'number') &&
     typeof v.drumStyle === 'string' &&
     typeof v.bassStyle === 'string' &&
     typeof v.keysStyle === 'string' &&

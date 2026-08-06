@@ -45,7 +45,7 @@ preset you added isn't showing up.
 | `scale`                       | `"major"` \| `"minor"` \| `"dorian"` \| `"phrygian"` \| `"lydian"` \| `"mixolydian"` \| `"locrian"` | `"minor"` means natural minor (aeolian). |
 | `tempo`                       | number               | BPM.                                                                                         |
 | `metronome`                   | boolean              | Whether the Metronome track starts unmuted.                                                 |
-| `loopStart` / `loopEnd`       | number               | Loop range in quarter-note beats. `loopEnd` is exclusive.                                   |
+| `loopStart` / `loopEnd`       | number (optional)    | Loop range in quarter-note beats. `loopEnd` is exclusive. Both optional — `loopStart` defaults to `0`, `loopEnd` to the end of the last placement (loop the whole progression once through). Only write these explicitly to loop a subset of the chords, or loop past the end of the progression. |
 | `drumStyle` / `bassStyle` / `keysStyle` | string     | Must match a style's **name** exactly — see [Styles](#styles-drumstyle-bassstyle-keysstyle) below. |
 | `chordsInstrument` / `bassInstrument` / `drumsInstrument` | string (optional) | Timbre variant name — see [Instruments](#instruments). Defaults to the first option if omitted. |
 | `customDrumPattern`           | object (optional)    | Only needed if `drumStyle` isn't a bundled/`.mid`-derived name — embeds the raw pattern so the preset stays portable. You won't normally write this by hand. |

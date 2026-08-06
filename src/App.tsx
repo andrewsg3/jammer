@@ -27,6 +27,7 @@ import {
   downloadSongPreset,
   parseSongPresetFile,
   resolvePlacementStarts,
+  resolveLoopRange,
   type SongPreset,
 } from './data/songPresets';
 import {
@@ -68,6 +69,12 @@ const DEFAULT_SONG_PRESET =
   bundledSongPresets.find((p) => p.name === urlSongName) ??
   bundledSongPresets.find((p) => p.name === 'Autumn Leaves') ??
   null;
+const DEFAULT_RESOLVED_PLACEMENTS = DEFAULT_SONG_PRESET
+  ? resolvePlacementStarts(DEFAULT_SONG_PRESET.placements)
+  : [];
+const DEFAULT_LOOP_RANGE = DEFAULT_SONG_PRESET
+  ? resolveLoopRange(DEFAULT_SONG_PRESET, DEFAULT_RESOLVED_PLACEMENTS)
+  : { loopStart: 0, loopEnd: 16 };
 
 /** Keeps ?song= in sync with whatever's actually loaded, without adding a back-button
  * stop per song switch — a plain refresh should reopen the same song, not navigate. */
@@ -85,10 +92,7 @@ function App() {
   const [scale, setScale] = useState<ScaleName>(DEFAULT_SONG_PRESET?.scale ?? 'major');
   const [placements, setPlacements] = useState<ChordPlacement[]>(
     DEFAULT_SONG_PRESET
-      ? resolvePlacementStarts(DEFAULT_SONG_PRESET.placements).map((p) => ({
-          id: crypto.randomUUID(),
-          ...p,
-        }))
+      ? DEFAULT_RESOLVED_PLACEMENTS.map((p) => ({ id: crypto.randomUUID(), ...p }))
       : STARTER_PLACEMENTS,
   );
   const [tempo, setTempo] = useState(DEFAULT_SONG_PRESET?.tempo ?? 124);
@@ -111,8 +115,8 @@ function App() {
   const [customDrumStyle, setCustomDrumStyle] = useState<DrumStyle | null>(null);
   const [midiError, setMidiError] = useState<string | null>(null);
   const [songPresetError, setSongPresetError] = useState<string | null>(null);
-  const [loopStart, setLoopStart] = useState(DEFAULT_SONG_PRESET?.loopStart ?? 0);
-  const [loopEnd, setLoopEnd] = useState(DEFAULT_SONG_PRESET?.loopEnd ?? 16);
+  const [loopStart, setLoopStart] = useState(DEFAULT_LOOP_RANGE.loopStart);
+  const [loopEnd, setLoopEnd] = useState(DEFAULT_LOOP_RANGE.loopEnd);
   const [playheadBeat, setPlayheadBeat] = useState(0);
   const [chordsVolume, setChordsVolumeState] = useState(100);
   const [bassVolume, setBassVolumeState] = useState(100);
@@ -260,14 +264,11 @@ function App() {
     setScale(preset.scale);
     setTempo(preset.tempo);
     setMetronomeMutedState(!preset.metronome);
-    setLoopStart(preset.loopStart);
-    setLoopEnd(preset.loopEnd);
-    setPlacements(
-      resolvePlacementStarts(preset.placements).map((p) => ({
-        id: crypto.randomUUID(),
-        ...p,
-      })),
-    );
+    const resolvedPlacements = resolvePlacementStarts(preset.placements);
+    const loopRange = resolveLoopRange(preset, resolvedPlacements);
+    setLoopStart(loopRange.loopStart);
+    setLoopEnd(loopRange.loopEnd);
+    setPlacements(resolvedPlacements.map((p) => ({ id: crypto.randomUUID(), ...p })));
 
     if (preset.customDrumPattern) {
       const style: DrumStyle = { name: preset.drumStyle, pattern: preset.customDrumPattern };
