@@ -188,8 +188,8 @@ function App() {
     auditionChord(chord);
   };
 
-  const handleDropChord = (selection: ChordSelection, startBeat: number) => {
-    setPlacements((prev) => [...prev, { id: crypto.randomUUID(), selection, startBeat, lengthBeats: 4 }]);
+  const handleDropChord = (selection: ChordSelection, startBeat: number, lengthBeats: number) => {
+    setPlacements((prev) => [...prev, { id: crypto.randomUUID(), selection, startBeat, lengthBeats }]);
   };
 
   const handleReplaceChord = (placement: ChordPlacement, selection: ChordSelection) => {

@@ -23,7 +23,7 @@ type Props = {
   loopStart: number;
   loopEnd: number;
   playheadBeat: number | null;
-  onDropChord: (selection: ChordSelection, startBeat: number) => void;
+  onDropChord: (selection: ChordSelection, startBeat: number, lengthBeats: number) => void;
   onReplaceChord: (placement: ChordPlacement, selection: ChordSelection) => void;
   onResize: (placement: ChordPlacement, newLength: number) => void;
   onMove: (placement: ChordPlacement, newStartBeat: number) => void;
@@ -234,9 +234,13 @@ export function ChordGrid({
       return;
     }
 
-    if (!canPlace(placements, null, dropBeat, 4)) return; // reject overlapping/row-crossing drops
+    // New chords default to the length of whichever block was last selected, rather
+    // than always resetting to a bar — makes dropping a run of same-length chords
+    // (e.g. a string of half-bar changes) not require resizing every single one.
+    const defaultLength = placements.find((p) => p.id === anchorId)?.lengthBeats ?? 4;
+    if (!canPlace(placements, null, dropBeat, defaultLength)) return; // reject overlapping/row-crossing drops
 
-    onDropChord(selection, dropBeat);
+    onDropChord(selection, dropBeat, defaultLength);
   };
 
   const handleResizeStart = (placement: ChordPlacement) => (e: ReactMouseEvent) => {

@@ -16,6 +16,7 @@
     { "selection": { "type": "chromatic", "offset": 5, "quality": "m6" }, "lengthBeats": 8 },
     { "selection": { "type": "chromatic", "offset": 5, "quality": "m6" }, "lengthBeats": 8 },
     { "selection": { "type": "chromatic", "offset": 0, "quality": "m6" }, "lengthBeats": 8 },
-    { "selection": { "type": "chromatic", "offset": 0, "quality": "dom7flat9" }, "lengthBeats": 8 } 
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "dom7flat9" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "m6" }, "lengthBeats": 8 }
   ]
 }
