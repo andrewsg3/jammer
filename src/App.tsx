@@ -194,6 +194,10 @@ function App() {
 
   const handleClear = () => setPlacements([]);
 
+  const handlePastePlacements = (newPlacements: ChordPlacement[]) => {
+    setPlacements((prev) => [...prev, ...newPlacements]);
+  };
+
   const handleLoopChange = (start: number, end: number) => {
     setLoopStart(start);
     setLoopEnd(end);
@@ -401,6 +405,7 @@ function App() {
               onClear={handleClear}
               onLoopChange={handleLoopChange}
               onAuditionChord={handleAudition}
+              onPastePlacements={handlePastePlacements}
               title={songTitle}
               onTitleChange={setSongTitle}
               author={songAuthor}

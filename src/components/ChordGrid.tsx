@@ -31,6 +31,7 @@ type Props = {
   onClear: () => void;
   onLoopChange: (loopStart: number, loopEnd: number) => void;
   onAuditionChord: (chord: Chord) => void;
+  onPastePlacements: (placements: ChordPlacement[]) => void;
   title: string;
   onTitleChange: (title: string) => void;
   author: string;
@@ -97,6 +98,7 @@ export function ChordGrid({
   onClear,
   onLoopChange,
   onAuditionChord,
+  onPastePlacements,
   title,
   onTitleChange,
   author,
@@ -104,35 +106,78 @@ export function ChordGrid({
   tempo,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // The last plain- or ctrl-clicked block — shift-click ranges are measured from here.
+  const [anchorId, setAnchorId] = useState<string | null>(null);
+  const clipboardRef = useRef<{ selection: ChordSelection; relativeStart: number; lengthBeats: number }[]>(
+    [],
+  );
 
-  // Selection follows the placement list — if it was removed elsewhere (Clear,
-  // preset load, the × button), drop the now-dangling selection.
+  // Selection follows the placement list — if any selected block was removed elsewhere
+  // (Clear, preset load, the × button), drop it from the selection.
   useEffect(() => {
-    if (selectedId !== null && !placements.some((p) => p.id === selectedId)) {
-      setSelectedId(null);
-    }
-  }, [placements, selectedId]);
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((id) => placements.some((p) => p.id === id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [placements]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!selectedId) return;
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      const hasNativeTextSelection = !!window.getSelection()?.toString();
 
+      if (isCtrlOrCmd && e.key.toLowerCase() === 'c' && !hasNativeTextSelection) {
+        if (selectedIds.size === 0) return;
+        e.preventDefault();
+        const selected = placements
+          .filter((p) => selectedIds.has(p.id))
+          .sort((a, b) => a.startBeat - b.startBeat);
+        const minStart = selected[0].startBeat;
+        clipboardRef.current = selected.map((p) => ({
+          selection: p.selection,
+          relativeStart: p.startBeat - minStart,
+          lengthBeats: p.lengthBeats,
+        }));
+        return;
+      }
+
+      if (isCtrlOrCmd && e.key.toLowerCase() === 'v') {
+        if (clipboardRef.current.length === 0) return;
+        e.preventDefault();
+        const pasteStart =
+          placements.length === 0 ? 0 : Math.max(...placements.map((p) => p.startBeat + p.lengthBeats));
+        const targets = clipboardRef.current.map((c) => ({ ...c, startBeat: pasteStart + c.relativeStart }));
+        const allFit = targets.every((t) => canPlace(placements, null, t.startBeat, t.lengthBeats));
+        if (!allFit) return; // no partial pastes — keep the result predictable
+        const pasted = targets.map((t) => ({
+          id: crypto.randomUUID(),
+          selection: t.selection,
+          startBeat: t.startBeat,
+          lengthBeats: t.lengthBeats,
+        }));
+        onPastePlacements(pasted);
+        setSelectedIds(new Set(pasted.map((p) => p.id)));
+        setAnchorId(pasted[pasted.length - 1].id);
+        return;
+      }
+
+      if (selectedIds.size === 0) return;
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        const placement = placements.find((p) => p.id === selectedId);
-        if (placement) {
-          e.preventDefault();
-          onRemove(placement);
+        e.preventDefault();
+        for (const placement of placements) {
+          if (selectedIds.has(placement.id)) onRemove(placement);
         }
+        setSelectedIds(new Set());
       } else if (e.key === 'Escape') {
-        setSelectedId(null);
+        setSelectedIds(new Set());
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, placements, onRemove]);
+  }, [selectedIds, placements, onRemove, onPastePlacements]);
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -140,7 +185,34 @@ export function ChordGrid({
 
   // Clicking anywhere in the grid that isn't a chord block clears the selection.
   const handleWrapperClickCapture = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (!(e.target as HTMLElement).closest('.chord-block')) setSelectedId(null);
+    if (!(e.target as HTMLElement).closest('.chord-block')) {
+      setSelectedIds(new Set());
+      setAnchorId(null);
+    }
+  };
+
+  const handleChordClick = (placement: ChordPlacement, chord: Chord) => (e: ReactMouseEvent) => {
+    if (e.shiftKey && anchorId) {
+      const sorted = [...placements].sort((a, b) => a.startBeat - b.startBeat);
+      const anchorIndex = sorted.findIndex((p) => p.id === anchorId);
+      const clickedIndex = sorted.findIndex((p) => p.id === placement.id);
+      if (anchorIndex !== -1 && clickedIndex !== -1) {
+        const [lo, hi] = anchorIndex < clickedIndex ? [anchorIndex, clickedIndex] : [clickedIndex, anchorIndex];
+        setSelectedIds(new Set(sorted.slice(lo, hi + 1).map((p) => p.id)));
+      }
+    } else if (e.ctrlKey || e.metaKey) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(placement.id)) next.delete(placement.id);
+        else next.add(placement.id);
+        return next;
+      });
+      setAnchorId(placement.id);
+    } else {
+      setSelectedIds(new Set([placement.id]));
+      setAnchorId(placement.id);
+    }
+    onAuditionChord(chord);
   };
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -334,7 +406,7 @@ export function ChordGrid({
                   return (
                     <div
                       key={placement.id}
-                      className={`chord-block${selectedId === placement.id ? ' chord-block-selected' : ''}`}
+                      className={`chord-block${selectedIds.has(placement.id) ? ' chord-block-selected' : ''}`}
                       style={{
                         gridColumn: `${localStart + 1} / span ${placement.lengthBeats}`,
                         gridRow: 1,
@@ -343,10 +415,7 @@ export function ChordGrid({
                       <div
                         className="chord-block-body"
                         onMouseDown={handleMoveStart(placement)}
-                        onClick={() => {
-                          setSelectedId(placement.id);
-                          onAuditionChord(chord);
-                        }}
+                        onClick={handleChordClick(placement, chord)}
                       >
                         <span className="chord-block-name">{chordName(chord)}</span>
                       </div>
