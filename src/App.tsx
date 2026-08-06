@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChordGrid, TOTAL_BEATS } from './components/ChordGrid';
+import { ChordGrid } from './components/ChordGrid';
 import { ChordPalette } from './components/ChordPalette';
 import { TopBar } from './components/TopBar';
 import { ChannelStrip } from './components/ChannelStrip';
