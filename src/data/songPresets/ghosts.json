@@ -8,8 +8,8 @@
   "metronome": false,
   "loopStart": 0,
   "loopEnd": 16,
-  "drumStyle": "Funk",
-  "bassStyle": "Bass",
+  "drumStyle": "Ghosts Drums",
+  "bassStyle": "Ghosts Bass",
   "keysStyle": "Sustained 7ths",
   "placements": [
     { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 0, "lengthBeats": 4 },

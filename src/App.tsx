@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChordGrid, TOTAL_BEATS } from './components/ChordGrid';
 import { ChordPalette } from './components/ChordPalette';
 import { TopBar } from './components/TopBar';
@@ -283,7 +283,7 @@ function App() {
     }
   };
 
-  const handleTogglePlay = async () => {
+  const handleTogglePlay = useCallback(async () => {
     if (isPlaying) {
       stop();
       setIsPlaying(false);
@@ -304,7 +304,41 @@ function App() {
       metronome: metronomeOn,
     });
     setIsPlaying(true);
-  };
+  }, [
+    isPlaying,
+    placements,
+    musicalKey,
+    scale,
+    loopStart,
+    loopEnd,
+    tempo,
+    drumStyle,
+    bassStyle,
+    keysStyle,
+    metronomeOn,
+  ]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      const target = e.target as HTMLElement | null;
+      // Skip when typing/selecting, and when a button or <summary> has focus —
+      // both already trigger a native click on Space, which would double-fire.
+      if (target && /^(INPUT|TEXTAREA|SELECT|BUTTON|SUMMARY)$/.test(target.tagName)) return;
+      e.preventDefault();
+      handleTogglePlay();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleTogglePlay]);
+
+  // "Hidden" styles (e.g. a song's own bundled pattern) stay resolvable by name for
+  // handleLoadSongPreset's lookup above (which searches the full drumStyles/bassStyles),
+  // but shouldn't clutter the dropdown for every other song — except the one that's
+  // actually selected right now, which needs to keep showing correctly rather than
+  // falling back to "None" because it's missing from the option list.
+  const visibleDrumStyles = drumStyles.filter((s) => !s.hidden || s.name === drumStyle.name);
+  const visibleBassStyles = bassStyles.filter((s) => !s.hidden || s.name === bassStyle.name);
 
   return (
     <>
@@ -372,7 +406,7 @@ function App() {
             <ChannelStrip
               label="Drums"
               accent="drums"
-              styleOptions={customDrumStyle ? [...drumStyles, customDrumStyle] : drumStyles}
+              styleOptions={customDrumStyle ? [...visibleDrumStyles, customDrumStyle] : visibleDrumStyles}
               selectedStyle={drumStyle}
               onStyleChange={setDrumStyle}
               instrumentOptions={drumsInstruments}
@@ -384,7 +418,7 @@ function App() {
             <ChannelStrip
               label="Bass"
               accent="bass"
-              styleOptions={bassStyles}
+              styleOptions={visibleBassStyles}
               selectedStyle={bassStyle}
               onStyleChange={setBassStyle}
               instrumentOptions={bassInstruments}

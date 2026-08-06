@@ -33,10 +33,17 @@ export type KeysRule = {
   rhythm: 'sustained' | 'comped' | 'la-pompe' | 'arpeggio-up' | 'arpeggio-updown';
 };
 
-export type DrumStyle = { name: string; pattern: DrumPattern | null };
+// hidden: true means resolvable by name (for a song preset to reference) but not
+// listed in the style picker — see the underscore-prefix convention in drumLibrary.ts.
+export type DrumStyle = { name: string; pattern: DrumPattern | null; hidden?: boolean };
 // A bass style is either algorithmic (rule, generated per-chord at render time) or a
 // fixed imported pattern (transposed to each chord's root at render time) — never both.
-export type BassStyle = { name: string; rule: BassRule | null; pattern?: BassPattern | null };
+export type BassStyle = {
+  name: string;
+  rule: BassRule | null;
+  pattern?: BassPattern | null;
+  hidden?: boolean;
+};
 export type KeysStyle = { name: string; rule: KeysRule | null };
 
 // The rest of the drum library is loaded at runtime from the .mid files in

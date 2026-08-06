@@ -2,8 +2,9 @@ import { parseMidiBassBytes } from './midiBassImport';
 import type { BassStyle } from './instrumentStyles';
 
 // Bundled bass patterns live as .mid files here, imported the same way as the
-// bundled drum patterns — see drumLibrary.ts. Adding a new one is just dropping
-// in a file; the display name comes from the file's own track-name meta event.
+// bundled drum patterns — see drumLibrary.ts, including the leading-underscore
+// "private" convention (loadable by name for a song preset, hidden from the
+// style picker otherwise).
 const bassMidiUrls = import.meta.glob<string>('./bassPatterns/*.mid', {
   eager: true,
   query: '?url',
@@ -20,7 +21,10 @@ export async function loadBundledBassStyles(): Promise<BassStyle[]> {
       const buffer = await fetch(url).then((res) => res.arrayBuffer());
       const { name, pattern } = parseMidiBassBytes(buffer);
       const fileBase = path.split('/').pop()!.replace(/\.mid$/, '');
-      const style: BassStyle = { name: name ?? titleCase(fileBase), rule: null, pattern };
+      const hidden = fileBase.startsWith('_');
+      const fallbackName = titleCase(hidden ? fileBase.slice(1) : fileBase);
+      const resolvedName = hidden ? fallbackName : (name ?? fallbackName);
+      const style: BassStyle = { name: resolvedName, rule: null, pattern, hidden };
       return style;
     }),
   );
