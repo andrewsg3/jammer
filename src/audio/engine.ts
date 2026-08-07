@@ -1,7 +1,9 @@
 import * as Tone from 'tone';
 import { chordTones, type Chord, type ChordPlacement, type ScaleName } from '../data/progressions';
+import { PIANO_SAMPLE_URLS } from '../data/pianoSamples';
 import type { DrumPattern, TimeFeel, BassRule, BassPattern, KeysRule } from '../data/instrumentStyles';
 import type { MelodyNote } from '../data/melody';
+import type { SectionMarker } from '../data/sections';
 import {
   scheduleDrums,
   disposeDrums,
@@ -18,6 +20,8 @@ import {
   setCrashVolume as setCrashOutputVolume,
   setTomsVolume as setTomsOutputVolume,
   setMuted as setDrumsOutputMuted,
+  setCompressionEnabled as setDrumsCompressionEnabledImpl,
+  setReverbEnabled as setDrumsReverbEnabledImpl,
 } from './drums';
 import {
   scheduleBass,
@@ -25,6 +29,8 @@ import {
   setVolume as setBassOutputVolume,
   setInstrument as setBassInstrumentImpl,
   setMuted as setBassOutputMuted,
+  isInstrumentLoaded as isBassInstrumentLoadedImpl,
+  setCompressionEnabled as setBassCompressionEnabledImpl,
 } from './bass';
 import {
   scheduleKeys,
@@ -32,7 +38,9 @@ import {
   setVolume as setKeysOutputVolume,
   setInstrument as setKeysInstrumentImpl,
   setMuted as setKeysOutputMuted,
-  setEffectEnabled as setKeysEffectEnabledImpl,
+  setChorusEnabled as setKeysChorusEnabledImpl,
+  setReverbEnabled as setKeysReverbEnabledImpl,
+  isInstrumentLoaded as isKeysInstrumentLoadedImpl,
 } from './keys';
 import {
   scheduleMetronome,
@@ -48,17 +56,16 @@ import {
 } from './melody';
 
 const AUDITION_OCTAVE = 4;
-let auditionSynth: Tone.PolySynth<Tone.Synth> | null = null;
+// Always Acoustic Piano, independent of whatever instrument the Harmony track
+// is actually set to — a chord-palette preview wants one consistent, pleasant
+// sound, not whatever synth/sample the song happens to be using. Built eagerly
+// at module load (not lazily on first click) so its buffers have a head start
+// loading, same reasoning as keys.ts's own eager instrument construction.
+const auditionSynth = new Tone.Sampler({ urls: PIANO_SAMPLE_URLS, release: 1 }).toDestination();
 
 /** Plays a chord once, independent of the Transport loop — for palette clicks. */
 export async function auditionChord(chord: Chord): Promise<void> {
   await Tone.start();
-  if (!auditionSynth) {
-    auditionSynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'triangle' },
-      envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.3 },
-    }).toDestination();
-  }
   auditionSynth.triggerAttackRelease(chordTones(chord, AUDITION_OCTAVE), '4n');
 }
 
@@ -77,6 +84,7 @@ export type PlaybackParams = {
   keys: KeysRule | null;
   keysTimeFeel: TimeFeel;
   melody: MelodyNote[];
+  sections: SectionMarker[];
   tempo: number;
 };
 
@@ -162,8 +170,24 @@ export function setChordsMuted(muted: boolean): void {
   setKeysOutputMuted(muted);
 }
 
-export function setChordsEffectEnabled(enabled: boolean): void {
-  setKeysEffectEnabledImpl(enabled);
+export function setChordsChorusEnabled(enabled: boolean): void {
+  setKeysChorusEnabledImpl(enabled);
+}
+
+export function setChordsReverbEnabled(enabled: boolean): void {
+  setKeysReverbEnabledImpl(enabled);
+}
+
+export function setBassCompressionEnabled(enabled: boolean): void {
+  setBassCompressionEnabledImpl(enabled);
+}
+
+export function setDrumsCompressionEnabled(enabled: boolean): void {
+  setDrumsCompressionEnabledImpl(enabled);
+}
+
+export function setDrumsReverbEnabled(enabled: boolean): void {
+  setDrumsReverbEnabledImpl(enabled);
 }
 
 export function setBassMuted(muted: boolean): void {
@@ -188,8 +212,19 @@ export function setChordsInstrument(name: string): void {
   setKeysInstrumentImpl(name);
 }
 
+/** False while the Harmony instrument is sample-based (e.g. Acoustic Piano) and
+ * still loading — App.tsx polls this to gate Play and show a loading modal. */
+export function isKeysInstrumentLoaded(): boolean {
+  return isKeysInstrumentLoadedImpl();
+}
+
 export function setBassInstrument(name: string): void {
   setBassInstrumentImpl(name);
+}
+
+/** Same idea as isKeysInstrumentLoaded, for the Bass instrument. */
+export function isBassInstrumentLoaded(): boolean {
+  return isBassInstrumentLoadedImpl();
 }
 
 export function setDrumsInstrument(name: string): void {
@@ -205,7 +240,7 @@ export async function play(params: PlaybackParams): Promise<void> {
   Tone.Transport.loopStart = `0:${params.loopStartBeat}:0`;
   Tone.Transport.loopEnd = `0:${params.loopEndBeat}:0`;
 
-  if (params.drums) scheduleDrums(params.drums, params.drumsTimeFeel);
+  if (params.drums) scheduleDrums(params.drums, params.drumsTimeFeel, params.sections);
   if (params.bass || params.bassPattern) {
     scheduleBass(
       params.placements,

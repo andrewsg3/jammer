@@ -1,6 +1,33 @@
 import * as Tone from 'tone';
 import { STEPS_PER_BAR } from '../data/instrumentStyles';
-import type { DrumPattern, TimeFeel } from '../data/instrumentStyles';
+import type { DrumPattern, DrumVoice, TimeFeel } from '../data/instrumentStyles';
+import { getSampleUrl } from '../data/drumSamples';
+import type { SectionMarker } from '../data/sections';
+
+// Bus glue: gentle compression evens out how punchy each lane feels relative to the
+// others — the sample lanes are pulled from unrelated takes/mics with inherently
+// inconsistent levels in a way the synth lanes never were, so this matters more for
+// this track than it would have with only synths. Moderate settings (not a
+// squashed/pumping amount) when engaged. Toggleable — off by default (ratio:1 is a
+// real bypass, zero gain reduction, not just "subtle"), same pattern as bass.ts's
+// Comp toggle.
+const compressor = new Tone.Compressor({ threshold: -20, ratio: 1, attack: 0.01, release: 0.2 }).toDestination();
+
+export function setCompressionEnabled(enabled: boolean): void {
+  compressor.ratio.value = enabled ? 3 : 1;
+}
+
+// Short room reverb as a parallel send, not inserted into the dry path — enough to
+// read as one shared space (the real samples are dry, close-mic'd one-shots with no
+// room of their own) without smearing transients or washing out the dry punch.
+// Toggleable — off (muted) by default, same pattern as keys.ts's Reverb toggle.
+const reverb = new Tone.Freeverb({ roomSize: 0.25, dampening: 3500 }).toDestination();
+const reverbSend = new Tone.Volume(-16).connect(reverb);
+reverbSend.mute = true;
+
+export function setReverbEnabled(enabled: boolean): void {
+  reverbSend.mute = !enabled;
+}
 
 // Shared output so one volume control (the Drums fader) trims every voice together;
 // each lane additionally has its own node feeding into it, for the individual mix
@@ -9,7 +36,8 @@ import type { DrumPattern, TimeFeel } from '../data/instrumentStyles';
 // just triggered at different pitches) — there's no separate signal to route
 // per-pitch without giving each tom its own synth, which the pitch difference alone
 // doesn't warrant.
-const output = new Tone.Volume(0).toDestination();
+const output = new Tone.Volume(0).connect(compressor);
+output.connect(reverbSend);
 const kickVolume = new Tone.Volume(0).connect(output);
 const snareVolume = new Tone.Volume(0).connect(output);
 const rimVolume = new Tone.Volume(0).connect(output);
@@ -32,7 +60,54 @@ let rideBell: Tone.MetalSynth | null = null;
 let crash: Tone.MetalSynth | null = null;
 let toms: Tone.MembraneSynth | null = null;
 let loop: Tone.Loop | null = null;
+let sectionCrashPart: Tone.Part<{ time: string }> | null = null;
 let currentInstrument = 'Acoustic';
+
+// Which lane's Volume node a given DrumVoice's sample player should feed into —
+// same mixer node its synth already uses, so the per-voice fader/mute in the
+// channel strip's expand popout works identically whether a lane is synthesized
+// or sampled. Toms share one node across all three pitches, same as their synth.
+const ALL_DRUM_VOICES: DrumVoice[] = [
+  'kick',
+  'snare',
+  'rim',
+  'hihat',
+  'hihatOpen',
+  'hihatFoot',
+  'ride',
+  'rideBell',
+  'crash',
+  'tomHigh',
+  'tomMid',
+  'tomLow',
+];
+const voiceVolume: Record<DrumVoice, Tone.Volume> = {
+  kick: kickVolume,
+  snare: snareVolume,
+  rim: rimVolume,
+  hihat: hihatVolume,
+  hihatOpen: hihatOpenVolume,
+  hihatFoot: hihatFootVolume,
+  ride: rideVolume,
+  rideBell: rideBellVolume,
+  crash: crashVolume,
+  tomHigh: tomsVolume,
+  tomMid: tomsVolume,
+  tomLow: tomsVolume,
+};
+
+// One Tone.Player per DrumVoice that has a matching sample file for the current
+// instrument — see data/drumSamples.ts. Any voice with no file just has no entry
+// here, and scheduleDrums' triggerSample falls back to that voice's synth.
+const players: Partial<Record<DrumVoice, Tone.Player>> = {};
+
+// Fixed per-voice gain correction for sample playback — the samples come from
+// different takes/mics with genuinely different recorded levels (not something
+// the shared mixer fader should have to compensate for on every song). 0dB
+// (untouched) for any voice not listed here.
+const SAMPLE_TRIM_DB: Partial<Record<DrumVoice, number>> = {
+  hihatFoot: 8, // the foot-chick sample is recorded much quieter than the rest of the kit
+};
 
 // Placeholder synth voices — quick, plausible approximations rather than deeply
 // tuned patches, since real per-voice fidelity is planned to come from samples
@@ -115,14 +190,24 @@ function ensureSynths() {
     }).connect(hihatFootVolume);
   }
   if (!ride) {
-    // Washier and longer than the hihat — lower harmonicity, much longer envelope.
+    // Washier and longer than the hihat — lower harmonicity, longer envelope. Lower
+    // modulationIndex/octaves than the original tuning (16/2.5) plus a lowpass
+    // filter tame MetalSynth's raw harsh/buzzy top end into more of a real ride's
+    // shimmer than a piercing clang.
+    const rideFilter = new Tone.Filter(6500, 'lowpass');
+    // MetalSynth's raw output sits much hotter than the other drum voices even at
+    // matching envelope/velocity — this fixed trim corrects that, kept separate
+    // from rideVolume (the user-facing fader) so the fader itself still runs from
+    // silent to a sensible max instead of silent to overly loud.
+    const rideTrim = new Tone.Volume(-10).connect(rideVolume);
+    rideFilter.connect(rideTrim);
     ride = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 1.2, release: 0.8 },
-      harmonicity: 3.1,
-      modulationIndex: 16,
-      resonance: 3000,
-      octaves: 2.5,
-    }).connect(rideVolume);
+      envelope: { attack: 0.001, decay: 1.1, release: 0.6 },
+      harmonicity: 4.2,
+      modulationIndex: 8,
+      resonance: 2200,
+      octaves: 1.2,
+    }).connect(rideFilter);
   }
   if (!rideBell) {
     // Higher harmonicity for a more pitched, "pingy" tone — distinct from the wash.
@@ -157,6 +242,21 @@ function ensureSynths() {
           octaves: 2,
           envelope: { attack: 0.001, decay: 0.25, sustain: 0.01, release: 0.2 },
         }).connect(tomsVolume);
+  }
+
+  // Sample playback, layered on top of the synths above: any voice with a matching
+  // file for the current instrument gets a Tone.Player instead — see
+  // data/drumSamples.ts and CLAUDE.md's sample-drums plan. Built eagerly here
+  // (not lazily per-hit) so the buffer has time to load before scheduleDrums'
+  // Loop actually reaches that step, same as the synths right above it.
+  for (const voice of ALL_DRUM_VOICES) {
+    if (players[voice]) continue;
+    const url = getSampleUrl(voice, currentInstrument);
+    if (!url) continue;
+    const trimDb = SAMPLE_TRIM_DB[voice] ?? 0;
+    const player = new Tone.Player(url);
+    player.connect(trimDb === 0 ? voiceVolume[voice] : new Tone.Volume(trimDb).connect(voiceVolume[voice]));
+    players[voice] = player;
   }
 }
 
@@ -223,9 +323,35 @@ export function setInstrument(name: string): void {
   hihat = null;
   hihatOpen = null;
   toms = null;
+  // Unlike the synths above, *every* voice's sample can vary by instrument (the
+  // naming convention covers all 12 lanes, not just the 5 the synths branch on) —
+  // so every cached player gets dropped and re-resolved against the new
+  // instrument's files next time ensureSynths runs, not just a subset.
+  for (const voice of ALL_DRUM_VOICES) {
+    players[voice]?.dispose();
+    delete players[voice];
+  }
 }
 
-export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal'): void {
+/**
+ * Plays voice's sample at time, if it has one loaded — returns whether it did, so
+ * callers fall back to the synth otherwise. Velocity becomes a per-trigger gain
+ * offset (Player has no native velocity-sensitive envelope the way the synths'
+ * triggerAttackRelease does) via setValueAtTime rather than a plain assignment, so
+ * the gain change actually lands at the scheduled audio time instead of whenever
+ * this callback happens to run relative to it — the same reason every other
+ * Transport-relative value in this app goes through a Tone.Time/scheduled call
+ * rather than a direct property set.
+ */
+function triggerSample(voice: DrumVoice, time: number, velocity: number): boolean {
+  const player = players[voice];
+  if (!player || !player.loaded) return false;
+  player.volume.setValueAtTime(Tone.gainToDb(Math.max(velocity, 0.0001)), time);
+  player.start(time);
+  return true;
+}
+
+export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal', sections: SectionMarker[] = []): void {
   ensureSynths();
   const totalSteps = pattern.bars * STEPS_PER_BAR;
   let step = 0;
@@ -245,31 +371,58 @@ export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal
     try {
       for (const hit of pattern.steps) {
         if (hit.time !== step) continue;
-        if (hit.note === 'kick') kick!.triggerAttackRelease('C1', '8n', time, hit.velocity);
-        if (hit.note === 'snare') snare!.triggerAttackRelease('8n', time, hit.velocity);
-        if (hit.note === 'rim') rim!.triggerAttackRelease('32n', time, hit.velocity);
+        if (hit.note === 'kick' && !triggerSample('kick', time, hit.velocity))
+          kick!.triggerAttackRelease('C1', '8n', time, hit.velocity);
+        if (hit.note === 'snare' && !triggerSample('snare', time, hit.velocity))
+          snare!.triggerAttackRelease('8n', time, hit.velocity);
+        if (hit.note === 'rim' && !triggerSample('rim', time, hit.velocity))
+          rim!.triggerAttackRelease('32n', time, hit.velocity);
         // MetalSynth is pitched (Monophonic) unlike NoiseSynth, so it needs a frequency
         // first — the exact pitch barely matters, harmonicity/modulationIndex/resonance
         // do the actual metallic shaping; it's just a carrier.
-        if (hit.note === 'hihat') hihat!.triggerAttackRelease(200, '32n', time, hit.velocity);
-        if (hit.note === 'hihatOpen') hihatOpen!.triggerAttackRelease(200, '4n', time, hit.velocity);
-        if (hit.note === 'hihatFoot') hihatFoot!.triggerAttackRelease(150, '32n', time, hit.velocity);
-        if (hit.note === 'ride') ride!.triggerAttackRelease(300, '2n', time, hit.velocity);
-        if (hit.note === 'rideBell') rideBell!.triggerAttackRelease(600, '8n', time, hit.velocity);
-        if (hit.note === 'crash') crash!.triggerAttackRelease(250, '1n', time, hit.velocity);
-        if (hit.note === 'tomHigh') toms!.triggerAttackRelease('G3', '8n', time, hit.velocity);
-        if (hit.note === 'tomMid') toms!.triggerAttackRelease('D3', '8n', time, hit.velocity);
-        if (hit.note === 'tomLow') toms!.triggerAttackRelease('A2', '8n', time, hit.velocity);
+        if (hit.note === 'hihat' && !triggerSample('hihat', time, hit.velocity))
+          hihat!.triggerAttackRelease(200, '32n', time, hit.velocity);
+        if (hit.note === 'hihatOpen' && !triggerSample('hihatOpen', time, hit.velocity))
+          hihatOpen!.triggerAttackRelease(200, '4n', time, hit.velocity);
+        if (hit.note === 'hihatFoot' && !triggerSample('hihatFoot', time, hit.velocity))
+          hihatFoot!.triggerAttackRelease(150, '32n', time, hit.velocity);
+        if (hit.note === 'ride' && !triggerSample('ride', time, hit.velocity))
+          ride!.triggerAttackRelease(300, '2n', time, hit.velocity);
+        if (hit.note === 'rideBell' && !triggerSample('rideBell', time, hit.velocity))
+          rideBell!.triggerAttackRelease(600, '8n', time, hit.velocity);
+        if (hit.note === 'crash' && !triggerSample('crash', time, hit.velocity))
+          crash!.triggerAttackRelease(250, '1n', time, hit.velocity);
+        if (hit.note === 'tomHigh' && !triggerSample('tomHigh', time, hit.velocity))
+          toms!.triggerAttackRelease('G3', '8n', time, hit.velocity);
+        if (hit.note === 'tomMid' && !triggerSample('tomMid', time, hit.velocity))
+          toms!.triggerAttackRelease('D3', '8n', time, hit.velocity);
+        if (hit.note === 'tomLow' && !triggerSample('tomLow', time, hit.velocity))
+          toms!.triggerAttackRelease('A2', '8n', time, hit.velocity);
       }
     } finally {
       step = (step + 1) % totalSteps;
     }
   }, tickInterval).start(0);
+
+  // Section-start crash: layered on top of the repeating pattern above via its
+  // own Part scheduled against absolute song position (same mechanism bass/keys
+  // already use per-chord) — the main Loop above has no idea where in the song
+  // it is, only its own step counter, so it can't do this on its own. See
+  // CLAUDE.md's "Planned: drum fills into section starts" note for the rest of
+  // this idea (a fill in the bar before) that this is only a first slice of.
+  if (sections.length > 0) {
+    const crashEvents = sections.map((s) => ({ time: `0:${s.startBeat}:0` }));
+    sectionCrashPart = new Tone.Part<{ time: string }>((time) => {
+      if (!triggerSample('crash', time, 0.9)) crash!.triggerAttackRelease(250, '1n', time, 0.9);
+    }, crashEvents).start(0);
+  }
 }
 
 export function disposeDrums(): void {
   loop?.dispose();
   loop = null;
+  sectionCrashPart?.dispose();
+  sectionCrashPart = null;
   // See keys.ts's disposeKeys comment — force-release every voice so a long-tailed
   // hit (crash, ride) doesn't keep ringing after stop.
   kick?.triggerRelease();
@@ -282,4 +435,9 @@ export function disposeDrums(): void {
   rideBell?.triggerRelease();
   crash?.triggerRelease();
   toms?.triggerRelease();
+  // Same reasoning as the synths above — a long sample (crash, ride) mid-playback
+  // shouldn't keep ringing after stop.
+  for (const player of Object.values(players)) {
+    if (player?.state === 'started') player.stop();
+  }
 }

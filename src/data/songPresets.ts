@@ -1,7 +1,12 @@
-import { SCALE_NAMES } from './progressions';
+import { CHORD_QUALITIES, SCALE_NAMES } from './progressions';
 import type { ChordSelection, ScaleName } from './progressions';
 import type { DrumPattern } from './instrumentStyles';
 import type { MelodyNote } from './melody';
+import type { SectionMarker } from './sections';
+
+// Persisted shape — no id, same treatment as melody notes: a runtime-only React
+// key, reassigned via crypto.randomUUID() whenever a preset loads.
+export type SongPresetSection = Pick<SectionMarker, 'label' | 'startBeat' | 'lengthBeats'>;
 
 export type SongPresetPlacement = {
   selection: ChordSelection;
@@ -39,6 +44,9 @@ export type SongPreset = {
   // Optional so presets written before this existed still load fine (App.tsx falls
   // back to an empty melody, same as a song with nothing imported).
   melody?: MelodyNote[];
+  // Optional, same reasoning as melody — presets written before section markers
+  // existed just load with none.
+  sections?: SongPresetSection[];
   placements: SongPresetPlacement[];
 };
 
@@ -49,7 +57,17 @@ function isChordSelection(value: unknown): value is ChordSelection {
     return typeof v.degree === 'number';
   }
   if (v.type === 'borrowed') return typeof v.index === 'number';
-  if (v.type === 'chromatic') return typeof v.offset === 'number' && typeof v.quality === 'string';
+  // Checked against the actual known qualities, not just "is a string" — an
+  // unsupported/typo'd quality (e.g. a chord this app's ChordQuality union
+  // doesn't have yet) used to sail through validation here and only surface as a
+  // cryptic crash deep in the audio engine the moment that chord's bar played.
+  if (v.type === 'chromatic') {
+    return (
+      typeof v.offset === 'number' &&
+      typeof v.quality === 'string' &&
+      CHORD_QUALITIES.includes(v.quality as (typeof CHORD_QUALITIES)[number])
+    );
+  }
   return false;
 }
 
@@ -72,6 +90,12 @@ function isMelodyNote(value: unknown): value is MelodyNote {
     typeof v.lengthBeats === 'number' &&
     typeof v.velocity === 'number'
   );
+}
+
+function isSongPresetSection(value: unknown): value is SongPresetSection {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.label === 'string' && typeof v.startBeat === 'number' && typeof v.lengthBeats === 'number';
 }
 
 /**
@@ -126,6 +150,7 @@ export function isSongPreset(value: unknown): value is SongPreset {
     typeof v.bassStyle === 'string' &&
     typeof v.keysStyle === 'string' &&
     (v.melody === undefined || (Array.isArray(v.melody) && v.melody.every(isMelodyNote))) &&
+    (v.sections === undefined || (Array.isArray(v.sections) && v.sections.every(isSongPresetSection))) &&
     Array.isArray(v.placements) &&
     v.placements.every(isSongPresetPlacement)
   );

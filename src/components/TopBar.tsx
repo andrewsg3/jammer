@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { SCALE_NAMES, SCALE_LABELS } from '../data/progressions';
-import type { ScaleName } from '../data/progressions';
+import type { NotationStyle, ScaleName } from '../data/progressions';
 import type { SongPreset } from '../data/songPresets';
 
 const MIN_TEMPO = 40;
@@ -18,10 +18,13 @@ type Props = {
   onKeyChange: (key: string) => void;
   scale: ScaleName;
   onScaleChange: (scale: ScaleName) => void;
+  notationStyle: NotationStyle;
+  onNotationStyleChange: (notation: NotationStyle) => void;
   tempo: number;
   onTempoChange: (tempo: number) => void;
   isPlaying: boolean;
   onTogglePlay: () => void;
+  instrumentsLoading: boolean;
 };
 
 function TopBarField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -41,10 +44,13 @@ export function TopBar({
   onKeyChange,
   scale,
   onScaleChange,
+  notationStyle,
+  onNotationStyleChange,
   tempo,
   onTempoChange,
   isPlaying,
   onTogglePlay,
+  instrumentsLoading,
 }: Props) {
   const tapTimesRef = useRef<number[]>([]);
 
@@ -126,6 +132,18 @@ export function TopBar({
           </div>
         </TopBarField>
 
+        <TopBarField label="Notation">
+          <select
+            id="top-bar-notation-style"
+            aria-label="Chord notation style"
+            value={notationStyle}
+            onChange={(e) => onNotationStyleChange(e.target.value as NotationStyle)}
+          >
+            <option value="symbol">Symbol (-, °, ^7)</option>
+            <option value="written">Written (m, dim, maj7)</option>
+          </select>
+        </TopBarField>
+
         <TopBarField label="Tempo">
           <div className="top-bar-tempo-group">
             <input
@@ -149,8 +167,14 @@ export function TopBar({
           </div>
         </TopBarField>
 
-        <button type="button" className="play-button-prominent" onClick={onTogglePlay}>
-          {isPlaying ? '■ Stop' : '▶ Play'}
+        <button
+          type="button"
+          className="play-button-prominent"
+          onClick={onTogglePlay}
+          disabled={!isPlaying && instrumentsLoading}
+          title={!isPlaying && instrumentsLoading ? 'Loading instrument samples…' : undefined}
+        >
+          {!isPlaying && instrumentsLoading ? 'Loading…' : isPlaying ? '■ Stop' : '▶ Play'}
         </button>
       </div>
     </header>

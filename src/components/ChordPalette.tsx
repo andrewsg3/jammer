@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  chordName,
+  chordNameParts,
   diatonicOptions,
   diatonicSeventhOptions,
   borrowedOptions,
@@ -10,22 +10,25 @@ import {
   QUALITY_GROUPS,
   QUALITY_LABELS,
 } from '../data/progressions';
-import type { Chord, ChordOption, ChordQuality, ScaleName } from '../data/progressions';
+import type { Chord, ChordOption, ChordQuality, NotationStyle, ScaleName } from '../data/progressions';
 
 type Props = {
   musicalKey: string;
   scale: ScaleName;
+  notationStyle: NotationStyle;
   onAudition: (chord: Chord) => void;
 };
 
 function PaletteRow({
   title,
   options,
+  notationStyle,
   onAudition,
   headerExtra,
 }: {
   title: string;
   options: ChordOption[];
+  notationStyle: NotationStyle;
   onAudition: Props['onAudition'];
   headerExtra?: React.ReactNode;
 }) {
@@ -41,34 +44,42 @@ function PaletteRow({
         {headerExtra}
       </div>
       <div className="chord-palette-row">
-        {options.map((option, index) => (
-          <button
-            key={index}
-            type="button"
-            className="chord-palette-button"
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('text/plain', serializeSelection(option.selection));
-              e.dataTransfer.effectAllowed = 'copy';
-            }}
-            onClick={() => onAudition(option.chord)}
-          >
-            <span className="roman">{option.label}</span>
-            <span className="chord-name">{chordName(option.chord)}</span>
-          </button>
-        ))}
+        {options.map((option, index) => {
+          const { root, core, ext } = chordNameParts(option.chord, notationStyle);
+          return (
+            <button
+              key={index}
+              type="button"
+              className="chord-palette-button"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', serializeSelection(option.selection));
+                e.dataTransfer.effectAllowed = 'copy';
+              }}
+              onClick={() => onAudition(option.chord)}
+            >
+              <span className="roman">{option.label}</span>
+              <span className="chord-name">
+                {root}
+                {core}
+                {ext && <sup className="chord-ext">{ext}</sup>}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function ChromaticSection({ musicalKey, onAudition }: Props) {
+function ChromaticSection({ musicalKey, notationStyle, onAudition }: Props) {
   const [quality, setQuality] = useState<ChordQuality>('dom7');
 
   return (
     <PaletteRow
       title="Chromatic"
       options={chromaticOptions(musicalKey, quality)}
+      notationStyle={notationStyle}
       onAudition={onAudition}
       headerExtra={
         <select
@@ -92,22 +103,34 @@ function ChromaticSection({ musicalKey, onAudition }: Props) {
   );
 }
 
-export function ChordPalette({ musicalKey, scale, onAudition }: Props) {
+export function ChordPalette({ musicalKey, scale, notationStyle, onAudition }: Props) {
   return (
     <div className="chord-palette">
-      <PaletteRow title="Diatonic" options={diatonicOptions(musicalKey, scale)} onAudition={onAudition} />
+      <PaletteRow
+        title="Diatonic"
+        options={diatonicOptions(musicalKey, scale)}
+        notationStyle={notationStyle}
+        onAudition={onAudition}
+      />
       <PaletteRow
         title="Diatonic 7ths"
         options={diatonicSeventhOptions(musicalKey, scale)}
+        notationStyle={notationStyle}
         onAudition={onAudition}
       />
-      <PaletteRow title="Borrowed" options={borrowedOptions(musicalKey, scale)} onAudition={onAudition} />
+      <PaletteRow
+        title="Borrowed"
+        options={borrowedOptions(musicalKey, scale)}
+        notationStyle={notationStyle}
+        onAudition={onAudition}
+      />
       <PaletteRow
         title="Secondary Dominants"
         options={secondaryDominantOptions(musicalKey, scale)}
+        notationStyle={notationStyle}
         onAudition={onAudition}
       />
-      <ChromaticSection musicalKey={musicalKey} scale={scale} onAudition={onAudition} />
+      <ChromaticSection musicalKey={musicalKey} scale={scale} notationStyle={notationStyle} onAudition={onAudition} />
     </div>
   );
 }

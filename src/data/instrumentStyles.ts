@@ -43,7 +43,16 @@ export function timeFeelFactor(feel: TimeFeel): number {
 }
 
 export type BassRule = {
-  style: 'root-fifth' | 'walking' | 'syncopated' | 'octaves' | 'pedal' | 'walk-updown' | 'tumbao';
+  style:
+    | 'root-fifth'
+    | 'walking'
+    | 'syncopated'
+    | 'octaves'
+    | 'pedal'
+    | 'walk-updown'
+    | 'tumbao'
+    | 'root-fifth-pump'
+    | 'smart-walk';
 };
 
 export type BassPatternStep = {
@@ -62,10 +71,22 @@ export type BassPattern = {
 
 export type KeysRule = {
   voicing: 'triad' | 'power-chord' | 'seventh';
-  // blues-shuffle(-swing) ignore `voicing` entirely — they compute a fixed root+5th
-  // / root+6th figure of their own (see scheduleKeys), not a subset of the chord's
-  // own tones, since the 6th is a deliberate blues idiom, not part of the harmony.
-  rhythm: 'sustained' | 'comped' | 'la-pompe' | 'arpeggio-up' | 'arpeggio-updown' | 'blues-shuffle' | 'blues-shuffle-swing';
+  // blues-shuffle(-swing) and rising-sun ignore `voicing` entirely — they compute
+  // their own fixed figure (see scheduleKeys): root+5th/root+6th for the blues
+  // idiom, root/3rd/5th/octave for rising-sun's broken chord, neither a subset of
+  // whatever voicing happens to be selected.
+  rhythm:
+    | 'sustained'
+    | 'comped'
+    | 'la-pompe'
+    | 'charleston'
+    | 'arpeggio-up'
+    | 'arpeggio-updown'
+    | 'rising-sun'
+    | 'bossa-nova'
+    | 'bossa-nova-2'
+    | 'blues-shuffle'
+    | 'blues-shuffle-swing';
 };
 
 // hidden: true means resolvable by name (for a song preset to reference) but not
@@ -97,6 +118,8 @@ export const baseBassStyles: BassStyle[] = [
   { name: 'Pedal', rule: { style: 'pedal' } },
   { name: 'Walk Up & Down', rule: { style: 'walk-updown' } },
   { name: 'Tumbao', rule: { style: 'tumbao' } },
+  { name: 'Root-Fifth Pump', rule: { style: 'root-fifth-pump' } },
+  { name: 'Smart Walking', rule: { style: 'smart-walk' } },
 ];
 
 export const keysStyles: KeysStyle[] = [
@@ -108,9 +131,13 @@ export const keysStyles: KeysStyle[] = [
   { name: 'Sustained Triads', rule: { voicing: 'triad', rhythm: 'sustained' } },
   { name: 'Comped 7ths', rule: { voicing: 'seventh', rhythm: 'comped' } },
   { name: 'La Pompe', rule: { voicing: 'seventh', rhythm: 'la-pompe' } },
+  { name: 'Charleston', rule: { voicing: 'seventh', rhythm: 'charleston' } },
   { name: 'Arpeggiated (Triads)', rule: { voicing: 'triad', rhythm: 'arpeggio-up' } },
   { name: 'Arpeggiated (7ths)', rule: { voicing: 'seventh', rhythm: 'arpeggio-up' } },
   { name: 'Broken Chord (Up-Down)', rule: { voicing: 'seventh', rhythm: 'arpeggio-updown' } },
+  { name: 'Rising Sun Arpeggio', rule: { voicing: 'triad', rhythm: 'rising-sun' } },
+  { name: 'Bossa Nova', rule: { voicing: 'seventh', rhythm: 'bossa-nova' } },
+  { name: 'Bossa Nova 2', rule: { voicing: 'seventh', rhythm: 'bossa-nova-2' } },
   { name: 'Blues Shuffle', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle' } },
   { name: 'Blues Shuffle (Swing)', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle-swing' } },
 ];
@@ -120,11 +147,19 @@ export const keysStyles: KeysStyle[] = [
 // "Electric Piano" changes the sound that pattern is played with.
 export type Instrument = { name: string };
 
+// Acoustic Piano first — it's the default (see App.tsx, which falls back to
+// keysInstruments[0] whenever no song preset/saved choice says otherwise).
 export const keysInstruments: Instrument[] = [
+  { name: 'Acoustic Piano' },
   { name: 'Electric Piano' },
   { name: 'Electric Cello' },
   { name: 'Kalimba' },
   { name: 'Steel Pan' },
 ];
-export const bassInstruments: Instrument[] = [{ name: 'Upright' }, { name: 'Electric' }];
+export const bassInstruments: Instrument[] = [
+  { name: 'Upright' },
+  { name: 'Upright (Synth)' },
+  { name: 'Electric' },
+  { name: 'Electric (Synth)' },
+];
 export const drumsInstruments: Instrument[] = [{ name: 'Acoustic' }, { name: 'Electronic' }];

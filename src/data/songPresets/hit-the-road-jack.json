@@ -7,9 +7,9 @@
   "tempo": 140,
   "metronome": false,
   "loopStart": 0,
-  "drumStyle": "Jazz Swing",
-  "bassStyle": "Pedal",
-  "keysStyle": "Comped 7ths",
+  "drumStyle": "Jazz Shuffle",
+  "bassStyle": "Smart Walking",
+  "keysStyle": "La Pompe",
   "placements": [
     { "selection": { "type": "chromatic", "offset": 0, "quality": "min" }, "lengthBeats": 2 },
     { "selection": { "type": "chromatic", "offset": 10, "quality": "maj" }, "lengthBeats": 2 },

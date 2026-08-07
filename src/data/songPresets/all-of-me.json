@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "name": "All of Me",
+  "author": "Gerald Marks",
+  "key": "C",
+  "scale": "major",
+  "tempo": 128,
+  "metronome": false,
+  "loopStart": 0,
+  "drumStyle": "Jazz Shuffle",
+  "bassStyle": "Smart Walking",
+  "keysStyle": "La Pompe",
+  "sections": [
+    { "label": "A", "startBeat": 0, "lengthBeats": 32 },
+    { "label": "B", "startBeat": 32, "lengthBeats": 32 },
+    { "label": "A", "startBeat": 64, "lengthBeats": 32 },
+    { "label": "C", "startBeat": 96, "lengthBeats": 32 }
+  ],
+  "placements": [
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "maj7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 4, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 9, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 4, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 9, "quality": "min7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "maj7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 4, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 9, "quality": "dom7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "maj7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "m6" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 4, "quality": "min7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 9, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "6" }, "lengthBeats": 2 },
+    { "selection": { "type": "chromatic", "offset": 3, "quality": "dim7" }, "lengthBeats": 2 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 2 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 2 }
+  ]
+}
+ 

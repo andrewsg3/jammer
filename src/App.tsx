@@ -3,11 +3,10 @@ import { ChordGrid } from './components/ChordGrid';
 import { ChordPalette } from './components/ChordPalette';
 import { TopBar } from './components/TopBar';
 import { ChannelStrip } from './components/ChannelStrip';
-import { VerticalFader } from './components/VerticalFader';
 import { MiniFader } from './components/MiniFader';
 import { MidiUpload } from './components/MidiUpload';
 import { SongPresetFileControls } from './components/SongPresetFileControls';
-import type { Chord, ChordPlacement, ChordSelection, ScaleName } from './data/progressions';
+import type { Chord, ChordPlacement, ChordSelection, NotationStyle, ScaleName } from './data/progressions';
 import {
   baseDrumStyles,
   baseBassStyles,
@@ -25,6 +24,7 @@ import { loadBundledBassStyles } from './data/bassLibrary';
 import { parseMidiDrumPattern } from './data/midiDrumImport';
 import { parseMidiMelodyFile } from './data/midiMelodyImport';
 import type { MelodyNote } from './data/melody';
+import type { SectionMarker } from './data/sections';
 import {
   bundledSongPresets,
   downloadSongPreset,
@@ -61,9 +61,15 @@ import {
   setBassMuted,
   setDrumsMuted,
   setMetronomeMuted,
-  setChordsEffectEnabled,
+  setChordsChorusEnabled,
+  setChordsReverbEnabled,
+  setBassCompressionEnabled,
+  setDrumsCompressionEnabled,
+  setDrumsReverbEnabled,
   setMelodyVolume,
   setMelodyMuted,
+  isKeysInstrumentLoaded,
+  isBassInstrumentLoaded,
 } from './audio/engine';
 
 // Fallback only — used if bundledSongPresets is somehow empty (e.g. all preset
@@ -110,6 +116,7 @@ function App() {
   const [songAuthor, setSongAuthor] = useState(DEFAULT_SONG_PRESET?.author ?? '');
   const [musicalKey, setMusicalKey] = useState(DEFAULT_SONG_PRESET?.key ?? 'C');
   const [scale, setScale] = useState<ScaleName>(DEFAULT_SONG_PRESET?.scale ?? 'major');
+  const [notationStyle, setNotationStyle] = useState<NotationStyle>('symbol');
   const [placements, setPlacements] = useState<ChordPlacement[]>(
     DEFAULT_SONG_PRESET
       ? DEFAULT_RESOLVED_PLACEMENTS.map((p) => ({ id: crypto.randomUUID(), ...p }))
@@ -132,36 +139,48 @@ function App() {
   const [keysTimeFeel, setKeysTimeFeel] = useState<TimeFeelOption>(TIME_FEEL_OPTIONS[0]);
   const [metronomeMuted, setMetronomeMutedState] = useState(!(DEFAULT_SONG_PRESET?.metronome ?? false));
   const [chordsMuted, setChordsMutedState] = useState(false);
-  const [chordsEffectEnabled, setChordsEffectEnabledState] = useState(false);
+  const [chordsChorusEnabled, setChordsChorusEnabledState] = useState(false);
+  const [chordsReverbEnabled, setChordsReverbEnabledState] = useState(false);
+  const [bassCompressionEnabled, setBassCompressionEnabledState] = useState(false);
   const [bassMuted, setBassMutedState] = useState(false);
+  const [drumsCompressionEnabled, setDrumsCompressionEnabledState] = useState(false);
+  const [drumsReverbEnabled, setDrumsReverbEnabledState] = useState(false);
   const [drumsMuted, setDrumsMutedState] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [customDrumStyle, setCustomDrumStyle] = useState<DrumStyle | null>(null);
   const [midiError, setMidiError] = useState<string | null>(null);
   const [melody, setMelody] = useState<MelodyNote[]>(DEFAULT_SONG_PRESET?.melody ?? []);
   const [melodyError, setMelodyError] = useState<string | null>(null);
+  const [sections, setSections] = useState<SectionMarker[]>(
+    (DEFAULT_SONG_PRESET?.sections ?? []).map((s) => ({ id: crypto.randomUUID(), ...s })),
+  );
   const [melodyMuted, setMelodyMutedState] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [songPresetError, setSongPresetError] = useState<string | null>(null);
   const [loopStart, setLoopStart] = useState(DEFAULT_LOOP_RANGE.loopStart);
   const [loopEnd, setLoopEnd] = useState(DEFAULT_LOOP_RANGE.loopEnd);
   const [playheadBeat, setPlayheadBeat] = useState(0);
-  const [chordsVolume, setChordsVolumeState] = useState(100);
-  const [bassVolume, setBassVolumeState] = useState(100);
-  const [drumsVolume, setDrumsVolumeState] = useState(100);
+  // The four main track faders start at 70%, not 100 — headroom to boost
+  // whichever track needs it, rather than already maxed out with nowhere to go.
+  const [chordsVolume, setChordsVolumeState] = useState(70);
+  const [bassVolume, setBassVolumeState] = useState(70);
+  const [drumsVolume, setDrumsVolumeState] = useState(70);
   const [metronomeVolume, setMetronomeVolumeState] = useState(100);
-  const [melodyVolume, setMelodyVolumeState] = useState(100);
+  const [melodyVolume, setMelodyVolumeState] = useState(70);
   const [masterVolume, setMasterVolumeState] = useState(100);
   const [drumsExpanded, setDrumsExpanded] = useState(false);
   const [kickVolume, setKickVolumeState] = useState(100);
   const [snareVolume, setSnareVolumeState] = useState(100);
   const [rimVolume, setRimVolumeState] = useState(100);
-  const [hihatVolume, setHihatVolumeState] = useState(100);
-  const [hihatOpenVolume, setHihatOpenVolumeState] = useState(100);
-  const [hihatFootVolume, setHihatFootVolumeState] = useState(100);
-  const [rideVolume, setRideVolumeState] = useState(100);
-  const [rideBellVolume, setRideBellVolumeState] = useState(100);
-  const [crashVolume, setCrashVolumeState] = useState(100);
+  // Cymbals default quieter than the rest of the kit — the real recorded samples
+  // (hihat/ride/crash family) sit much louder relative to the drum shells than the
+  // old synths ever did, so 100% here was overwhelming the mix out of the gate.
+  const [hihatVolume, setHihatVolumeState] = useState(50);
+  const [hihatOpenVolume, setHihatOpenVolumeState] = useState(50);
+  const [hihatFootVolume, setHihatFootVolumeState] = useState(50);
+  const [rideVolume, setRideVolumeState] = useState(50);
+  const [rideBellVolume, setRideBellVolumeState] = useState(50);
+  const [crashVolume, setCrashVolumeState] = useState(50);
   const [tomsVolume, setTomsVolumeState] = useState(100);
   const [chordsInstrument, setChordsInstrumentState] = useState<Instrument>(
     keysInstruments.find((i) => i.name === DEFAULT_SONG_PRESET?.chordsInstrument) ?? keysInstruments[0],
@@ -176,6 +195,31 @@ function App() {
   useEffect(() => setChordsInstrument(chordsInstrument.name), [chordsInstrument]);
   useEffect(() => setBassInstrument(bassInstrument.name), [bassInstrument]);
   useEffect(() => setDrumsInstrument(drumsInstrument.name), [drumsInstrument]);
+
+  // Gates Play + shows a loading modal while the Harmony and/or Bass instrument
+  // is sample-based (e.g. Acoustic Piano, sampled Upright/Electric bass) and
+  // still loading its buffer(s) — the setChordsInstrument/setBassInstrument
+  // effects just above already kicked off those loads eagerly (not lazily at
+  // first Play — see keys.ts's and bass.ts's setInstrument) by the time this
+  // one's initial check runs. Polling rather than a load callback since
+  // Tone.Sampler doesn't expose one after construction, only at construction
+  // time — see isInstrumentLoaded.
+  const [instrumentsLoading, setInstrumentsLoadingState] = useState(true);
+  useEffect(() => {
+    const checkLoaded = () => isKeysInstrumentLoaded() && isBassInstrumentLoaded();
+    if (checkLoaded()) {
+      setInstrumentsLoadingState(false);
+      return;
+    }
+    setInstrumentsLoadingState(true);
+    const interval = window.setInterval(() => {
+      if (checkLoaded()) {
+        setInstrumentsLoadingState(false);
+        window.clearInterval(interval);
+      }
+    }, 150);
+    return () => window.clearInterval(interval);
+  }, [chordsInstrument, bassInstrument]);
 
   // Canonicalizes ?song= on first load — clears a stale/unrecognized value, or fills
   // it in when the app opened with none, so the URL always matches what's loaded.
@@ -231,7 +275,11 @@ function App() {
   useEffect(() => setCrashVolume(crashVolume), [crashVolume]);
   useEffect(() => setTomsVolume(tomsVolume), [tomsVolume]);
   useEffect(() => setChordsMuted(chordsMuted), [chordsMuted]);
-  useEffect(() => setChordsEffectEnabled(chordsEffectEnabled), [chordsEffectEnabled]);
+  useEffect(() => setChordsChorusEnabled(chordsChorusEnabled), [chordsChorusEnabled]);
+  useEffect(() => setChordsReverbEnabled(chordsReverbEnabled), [chordsReverbEnabled]);
+  useEffect(() => setBassCompressionEnabled(bassCompressionEnabled), [bassCompressionEnabled]);
+  useEffect(() => setDrumsCompressionEnabled(drumsCompressionEnabled), [drumsCompressionEnabled]);
+  useEffect(() => setDrumsReverbEnabled(drumsReverbEnabled), [drumsReverbEnabled]);
   useEffect(() => setBassMuted(bassMuted), [bassMuted]);
   useEffect(() => setDrumsMuted(drumsMuted), [drumsMuted]);
   useEffect(() => setMetronomeMuted(metronomeMuted), [metronomeMuted]);
@@ -295,6 +343,25 @@ function App() {
 
   const handlePlayheadChange = (beat: number) => setPlayheadBeat(beat);
 
+  const handleAddSection = (startBeat: number, lengthBeats: number) => {
+    // Cycles A, B, C, ... Z, A, B, ... — good enough for how many sections a lead
+    // sheet actually has; nothing stops renaming past Z by hand anyway.
+    const label = String.fromCharCode(65 + (sections.length % 26));
+    setSections((prev) => [...prev, { id: crypto.randomUUID(), label, startBeat, lengthBeats }]);
+  };
+
+  const handleRenameSection = (section: SectionMarker, label: string) => {
+    setSections((prev) => prev.map((s) => (s.id === section.id ? { ...s, label } : s)));
+  };
+
+  const handleMoveSection = (section: SectionMarker, newStartBeat: number) => {
+    setSections((prev) => prev.map((s) => (s.id === section.id ? { ...s, startBeat: newStartBeat } : s)));
+  };
+
+  const handleRemoveSection = (section: SectionMarker) => {
+    setSections((prev) => prev.filter((s) => s.id !== section.id));
+  };
+
   const handleLoadSongPreset = (preset: SongPreset) => {
     if (isPlaying) {
       stop();
@@ -334,6 +401,7 @@ function App() {
       drumsInstruments.find((i) => i.name === preset.drumsInstrument) ?? drumsInstruments[0],
     );
     setMelody(preset.melody ?? []);
+    setSections((preset.sections ?? []).map((s) => ({ id: crypto.randomUUID(), ...s })));
     setSongPresetError(null);
   };
 
@@ -357,6 +425,10 @@ function App() {
       customDrumPattern:
         customDrumStyle && drumStyle.name === customDrumStyle.name ? customDrumStyle.pattern : null,
       melody: melody.length > 0 ? melody : undefined,
+      sections:
+        sections.length > 0
+          ? sections.map(({ label, startBeat, lengthBeats }) => ({ label, startBeat, lengthBeats }))
+          : undefined,
       placements: placements.map(({ selection, startBeat, lengthBeats }) => ({
         selection,
         startBeat,
@@ -406,6 +478,7 @@ function App() {
       return;
     }
     if (placements.length === 0) return;
+    if (instrumentsLoading) return; // still loading sample buffers — see the modal below
     await play({
       key: musicalKey,
       scale,
@@ -422,6 +495,7 @@ function App() {
       keys: keysStyle.rule,
       keysTimeFeel: keysTimeFeel.value,
       melody,
+      sections,
     });
     setIsPlaying(true);
   }, [
@@ -440,6 +514,8 @@ function App() {
     keysStyle,
     keysTimeFeel,
     melody,
+    sections,
+    instrumentsLoading,
   ]);
 
   useEffect(() => {
@@ -474,11 +550,22 @@ function App() {
         onKeyChange={setMusicalKey}
         scale={scale}
         onScaleChange={setScale}
+        notationStyle={notationStyle}
+        onNotationStyleChange={setNotationStyle}
         tempo={tempo}
         onTempoChange={setTempo}
         isPlaying={isPlaying}
         onTogglePlay={handleTogglePlay}
+        instrumentsLoading={instrumentsLoading}
       />
+      {instrumentsLoading && (
+        <div className="loading-modal-backdrop">
+          <div className="loading-modal" role="alert" aria-live="polite">
+            <div className="loading-modal-spinner" aria-hidden="true" />
+            <p>Loading instrument samples…</p>
+          </div>
+        </div>
+      )}
       <main className="app">
         <div className="layout">
           <div className={`layout-sidebar${sidebarCollapsed ? ' layout-sidebar-collapsed' : ''}`}>
@@ -494,7 +581,12 @@ function App() {
             {!sidebarCollapsed && (
               <>
                 <h2 className="panel-title">Chord Palette</h2>
-                <ChordPalette musicalKey={musicalKey} scale={scale} onAudition={handleAudition} />
+                <ChordPalette
+                  musicalKey={musicalKey}
+                  scale={scale}
+                  notationStyle={notationStyle}
+                  onAudition={handleAudition}
+                />
 
                 <details className="more-section">
                   <summary>More</summary>
@@ -520,8 +612,10 @@ function App() {
             <ChordGrid
               placements={placements}
               melody={melody}
+              sections={sections}
               musicalKey={musicalKey}
               scale={scale}
+              notationStyle={notationStyle}
               loopStart={loopStart}
               loopEnd={loopEnd}
               playheadBeat={playheadBeat}
@@ -536,6 +630,10 @@ function App() {
               onLoopChange={handleLoopChange}
               onAuditionChord={handleAudition}
               onPastePlacements={handlePastePlacements}
+              onAddSection={handleAddSection}
+              onRenameSection={handleRenameSection}
+              onMoveSection={handleMoveSection}
+              onRemoveSection={handleRemoveSection}
               title={songTitle}
               onTitleChange={setSongTitle}
               author={songAuthor}
@@ -562,6 +660,20 @@ function App() {
               onVolumeChange={setDrumsVolumeState}
               muted={drumsMuted}
               onToggleMuted={() => setDrumsMutedState((v) => !v)}
+              effects={[
+                {
+                  key: 'comp',
+                  label: 'Comp',
+                  enabled: drumsCompressionEnabled,
+                  onToggle: () => setDrumsCompressionEnabledState((v) => !v),
+                },
+                {
+                  key: 'reverb',
+                  label: 'Reverb',
+                  enabled: drumsReverbEnabled,
+                  onToggle: () => setDrumsReverbEnabledState((v) => !v),
+                },
+              ]}
               expanded={drumsExpanded}
               onToggleExpanded={() => setDrumsExpanded((v) => !v)}
               expandedContent={
@@ -610,6 +722,14 @@ function App() {
               onVolumeChange={setBassVolumeState}
               muted={bassMuted}
               onToggleMuted={() => setBassMutedState((v) => !v)}
+              effects={[
+                {
+                  key: 'comp',
+                  label: 'Comp',
+                  enabled: bassCompressionEnabled,
+                  onToggle: () => setBassCompressionEnabledState((v) => !v),
+                },
+              ]}
             />
             <ChannelStrip
               label="Harmony"
@@ -627,8 +747,20 @@ function App() {
               onVolumeChange={setChordsVolumeState}
               muted={chordsMuted}
               onToggleMuted={() => setChordsMutedState((v) => !v)}
-              effectEnabled={chordsEffectEnabled}
-              onToggleEffect={() => setChordsEffectEnabledState((v) => !v)}
+              effects={[
+                {
+                  key: 'chorus',
+                  label: 'Chorus',
+                  enabled: chordsChorusEnabled,
+                  onToggle: () => setChordsChorusEnabledState((v) => !v),
+                },
+                {
+                  key: 'reverb',
+                  label: 'Reverb',
+                  enabled: chordsReverbEnabled,
+                  onToggle: () => setChordsReverbEnabledState((v) => !v),
+                },
+              ]}
             />
             <ChannelStrip
               label="Melody"
@@ -646,10 +778,7 @@ function App() {
               muted={metronomeMuted}
               onToggleMuted={() => setMetronomeMutedState((v) => !v)}
             />
-            <div className="channel-strip channel-strip-master">
-              <VerticalFader id="volume-master" value={masterVolume} onChange={setMasterVolumeState} />
-              <span className="channel-strip-label">Master</span>
-            </div>
+            <ChannelStrip label="Master" accent="master" volume={masterVolume} onVolumeChange={setMasterVolumeState} />
             </div>
           </div>
         </div>

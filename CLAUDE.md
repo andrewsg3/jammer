@@ -155,6 +155,60 @@ add a note needs both a beat position (already solved, see `clientPosToGlobalBea
 (new: inverse of `staffStepsAboveBottomLine`, mapping a Y coordinate back to a MIDI pitch).
 Worth treating as its own scoped effort, not bundled into a smaller task.
 
+## Planned: drum fills into section starts
+Every section marker (see `data/sections.ts`) now gets a crash on its downbeat — `audio/drums.ts`'s
+`scheduleDrums` takes an optional `sections` param and layers a `Tone.Part` of one-off crash hits
+(scheduled at each section's absolute `startBeat`) on top of the main repeating pattern `Tone.Loop`,
+the same "events scheduled against absolute song position" mechanism bass/keys already use per-chord.
+The main Loop itself has no concept of song position at all (just its own step counter modulo the
+pattern length), which is why this needed a second, independent part rather than a tweak to the loop.
+
+Still just the crash half of the idea — the more useful half, a short drum fill in the bar *leading
+into* a section change, isn't implemented. The hard part isn't the scheduling (same mechanism, just
+scheduled a bar earlier) but where the fill itself comes from: there's no "fill" concept anywhere in
+the pattern data today, and a genuinely good-sounding fill isn't something worth trying to generate
+algorithmically. The honest move would be one fixed, hand-authored placeholder fill (e.g. a
+descending tom run into the crash) rather than a fill "engine" — consistent with this file's
+placeholder-first philosophy elsewhere (see the synth voices note above).
+
+## Planned: sections + arrangement in song presets
+Song presets currently store one flat `placements` array covering the whole timeline. When a
+section repeats verbatim (e.g. Autumn Leaves' AABC form, where the two "A" sections are
+identical chords), it has to be typed out twice in the JSON. The idea: a preset instead defines
+each section once — a self-contained chord progression, no start/length stored on it at all,
+since both are derivable (length from its own chords, start from its position in the play
+order) — plus a separate `arrangement: string[]` listing what order the named sections play in,
+repeats allowed.
+
+**Scope, decided in advance:** file-format-only. The live chord grid, its drag/resize/move
+editing, and `SectionMarker` rendering (`data/sections.ts`, `ChordGrid.tsx`) stay exactly as they
+are — on load, sections+arrangement just expands into today's flat, independently-editable
+placements, the same shape `resolvePlacementStarts` already produces. No live-linked/shared
+section editing (editing one occurrence of a repeated section never touches another once
+loaded), no new arrangement-reordering UI (hand-authored in the JSON for now, like sections
+markers already are). Both explicitly ruled out to keep this a load/save-layer change rather
+than a rebuild of the editor's core interaction model.
+
+Sketch of the actual mechanism (`data/songPresets.ts`):
+- New `SongPresetSectionDef = { label: string; placements: SongPresetPlacement[] }` — same
+  placement shape/rules as today (`startBeat` optional, relative to that section's own start).
+- `resolveArrangement(sections, arrangement)` (load-side): for each label in `arrangement`,
+  resolve that section's own placements via the *existing* `resolvePlacementStarts` to get its
+  local (0-based) chords + total length, then place that sequence at the running global cursor
+  and advance it — producing both the flat placements and a derived `SectionMarker[]` in exactly
+  the shape everything downstream already consumes.
+- `deriveSectionsAndArrangement(placements, sections)` (save-side, the reverse): slice
+  placements by each `SectionMarker`'s range, rebase to relative-startBeat, and dedupe
+  identical `{label, placements}` containers across markers so a preset that already has
+  repeated sections doesn't re-duplicate them on save — this is what actually delivers "don't
+  retype A twice."
+- `SongPreset`/`isSongPreset` accept **either** shape (new `sections`+`arrangement`, or today's
+  flat `placements` + optional flat-marker `sections`) — existing bundled presets and anything
+  already hand-authored keep loading unchanged indefinitely; only `handleSaveSongPreset` would
+  start writing the new shape going forward.
+
+Not started — shelved for now, no bundled presets migrated.
+
 ## Direction: what this app needs next
 Asked-and-answered product question, worth keeping around since it'll come up again. Given how
 much of the recent work went into looking/feeling like a real fake book (staff notation, key

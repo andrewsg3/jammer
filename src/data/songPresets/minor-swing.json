@@ -9,7 +9,7 @@
   "loopStart": 0,
   "loopEnd": 64,
   "drumStyle": "None",
-  "bassStyle": "Walking",
+  "bassStyle": "Smart Walking",
   "keysStyle": "La Pompe",
   "placements": [
     { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 0, "lengthBeats": 8 },

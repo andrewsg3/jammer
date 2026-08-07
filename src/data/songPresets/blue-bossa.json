@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "name": "Blue Bossa",
+  "author": "Kenny Dorham",
+  "key": "C",
+  "scale": "minor",
+  "tempo": 128,
+  "metronome": false,
+  "loopStart": 0,
+  "drumStyle": "Bossa Nova",
+  "bassStyle": "Tumbao",
+  "keysStyle": "Bossa Nova 2",
+  "sections": [
+    { "label": "A", "startBeat": 0, "lengthBeats": 32 },
+    { "label": "B", "startBeat": 32, "lengthBeats": 32 }
+  ],
+  "placements": [
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "min7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dim7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7flat9" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 3, "quality": "min7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 8, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 1, "quality": "maj7" }, "lengthBeats": 8 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dim7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7flat9" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "dim7" }, "lengthBeats": 2 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7flat9" }, "lengthBeats": 2 }
+  ]
+}

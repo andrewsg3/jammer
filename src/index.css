@@ -179,7 +179,11 @@ body {
 
 .layout-grid {
   flex: 1;
-  min-width: 40vw;
+  /* Capped at the pixel value 40vw reaches once .app hits its own max-width: 1400px
+     cap — otherwise this floor keeps growing with raw viewport width past that point
+     and squeezes .channel-strip-column (min-width: 0) down to nothing on wide
+     screens, since .layout never wraps. */
+  min-width: min(40vw, 560px);
   min-height: 0;
   overflow-y: auto;
 }
@@ -308,12 +312,17 @@ select option {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Wrapped rows (see .channel-strip-rail) can end up taller than the layout row
+     has room for — scroll vertically rather than overflow the page, same
+     per-pane-scrolls-itself approach .layout-sidebar/.layout-grid already use. */
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 .channel-strip-rail {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
   /* Room for the scrollbar so it doesn't sit flush against (or clip) the last fader. */
   padding-bottom: 6px;
 }
@@ -474,17 +483,25 @@ select option {
   opacity: 0.55;
 }
 
+.channel-strip-fx-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+}
+
 .channel-strip-fx {
-  width: 26px;
-  height: 22px;
-  padding: 0;
-  font-size: 10px;
+  height: 20px;
+  padding: 0 5px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1;
   background: transparent;
   border: 1px solid var(--border);
+  border-radius: 3px;
   color: var(--text);
   opacity: 0.6;
+  white-space: nowrap;
 }
 
 .channel-strip-fx:hover {
@@ -501,7 +518,6 @@ select option {
 .channel-strip-master {
   margin-left: 14px;
   border-left: 2px solid var(--border);
-  justify-content: center;
 }
 
 .vertical-fader {
@@ -954,7 +970,10 @@ button:hover {
   align-items: center;
   justify-content: space-between;
   padding: 2px 0;
-  font-family: 'Noto Music', Georgia, 'Times New Roman', serif;
+  /* Architects Daughter, not Noto Music — its digits match the handwritten look
+     everywhere else on the sheet (chord symbols, etc.); Noto Music's are a plain
+     geometric style that stood out next to them. */
+  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
   font-size: 15px;
   line-height: 1;
   color: #1a1a1a;
@@ -1057,9 +1076,19 @@ button:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
-  font-size: 15px;
+  font-size: 19px;
   line-height: 1;
   font-weight: 400;
+}
+
+/* Real-book engraving convention: everything past the triad-quality marker (7ths,
+   9ths, alterations) sets smaller and raised, like a real book's superscript
+   extensions — the quality marker itself (-, °, +, ^) stays full size next to the
+   root, see chordNameParts. Shared between the sheet's chord labels and the
+   palette's chord-name buttons (different base font-size, same relative sizing). */
+.chord-ext {
+  font-size: 0.62em;
+  vertical-align: super;
 }
 
 .chord-block-remove {
@@ -1127,4 +1156,130 @@ button:hover {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+.loading-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.loading-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 36px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.loading-modal-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: loading-modal-spin 0.8s linear infinite;
+}
+
+@keyframes loading-modal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-modal-spinner {
+    animation: none;
+  }
+}
+
+.section-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 4px 4px;
+}
+
+.section-add-button {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.section-add-button:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.section-strip {
+  position: relative;
+}
+
+/* Real-book style: a single boxed capital letter marking where the section
+   starts — not a highlighted range (see App.tsx's SectionMarker: lengthBeats
+   still exists, but only as internal bookkeeping so two markers can't be
+   dragged on top of each other, never rendered). Black, not the app's own
+   accent color, so it reads as notation — like a rehearsal-mark box in an
+   actual fake book — rather than as a UI/mixer element. */
+.section-marker {
+  position: absolute;
+  top: 1px;
+  display: flex;
+  align-items: center;
+  cursor: grab;
+}
+
+.section-marker-label {
+  display: inline-block;
+  min-width: 11px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #1a1a1a;
+  border: 1px solid #1a1a1a;
+  padding: 1px 3px;
+  cursor: text;
+  white-space: nowrap;
+}
+
+.section-marker-label-input {
+  font-size: 11px;
+  font-weight: 700;
+  width: 40px;
+  border: 1px solid #1a1a1a;
+  padding: 1px 3px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.section-marker-remove {
+  margin-left: 2px;
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  line-height: 1;
+  color: #1a1a1a;
+  opacity: 0;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.section-marker:hover .section-marker-remove {
+  opacity: 0.6;
 }

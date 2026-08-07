@@ -8,8 +8,8 @@
   "metronome": false,
   "loopStart": 0,
   "drumStyle": "",
-  "bassStyle": "Walking",
-  "keysStyle": "Sustained (7ths)",
+  "bassStyle": "Root-Fifth",
+  "keysStyle": "Sustained 7ths",
   "placements": [
     { "selection": { "type": "chromatic", "offset": 0, "quality": "min" }, "startBeat": 0, "lengthBeats": 4 },
     { "selection": { "type": "chromatic", "offset": 7, "quality": "aug" }, "lengthBeats": 2 },

@@ -1,8 +1,16 @@
 import * as Tone from 'tone';
-import { chordTones, resolveSelection, type ChordPlacement, type Chord, type ScaleName } from '../data/progressions';
+import {
+  chordTones,
+  resolveSelection,
+  rootSemitone,
+  type ChordPlacement,
+  type Chord,
+  type ScaleName,
+} from '../data/progressions';
 import { STEPS_PER_BEAT, timeFeelFactor } from '../data/instrumentStyles';
 import type { BassRule, BassPattern, TimeFeel } from '../data/instrumentStyles';
 import { REFERENCE_ROOT_MIDI } from '../data/midiBassImport';
+import { UPRIGHT_SAMPLE_URLS, ELECTRIC_SAMPLE_URLS } from '../data/bassSamples';
 
 // Tone.js's Bars:Beats:Sixteenths time strings accept a fractional sixteenths
 // component, so a STEPS_PER_BEAT (12-per-beat) step converts to sixteenths just by
@@ -28,15 +36,45 @@ function beatToTime(beat: number): string {
 
 const BASS_OCTAVE = 2;
 
-const output = new Tone.Volume(0).toDestination();
+// Toggleable compressor — always in the chain (like keys.ts's chorus/reverb),
+// off by default via ratio:1 (mathematically zero gain reduction, a real bypass
+// rather than a parameter that merely makes compression subtle) rather than
+// rewiring the audio graph live. Evens out the gap between the sampled
+// instruments' inherently inconsistent recorded levels and the synths' more
+// uniform output, and generally makes the line punchier/more consistent.
+const compressor = new Tone.Compressor({ threshold: -18, ratio: 1, attack: 0.005, release: 0.15 }).toDestination();
 
-let synth: Tone.MonoSynth | Tone.PluckSynth | null = null;
+export function setCompressionEnabled(enabled: boolean): void {
+  compressor.ratio.value = enabled ? 3 : 1;
+}
+
+const output = new Tone.Volume(0).connect(compressor);
+
+let synth: Tone.MonoSynth | Tone.PluckSynth | Tone.Sampler | null = null;
 let currentInstrument = 'Upright';
 type BassEvent = { time: string; note: string; duration: string; velocity: number };
 let part: Tone.Part<BassEvent> | null = null;
 
 function buildSynth() {
-  if (currentInstrument === 'Electric') {
+  // Checked by key count, not a specific hardcoded note like "C2"/"G#2" — which
+  // note ends up as the anchor depends entirely on whatever data/bassSamples.ts
+  // parses the bundled file's name as, and a hardcoded check silently (no error,
+  // just a wrong-sounding fallback) goes stale the moment that note's spelling
+  // changes, exactly what happened here once already.
+  if (currentInstrument === 'Upright' && Object.keys(UPRIGHT_SAMPLE_URLS).length > 0) {
+    // Real recorded pizzicato (see data/bassSamples.ts) rather than a synth patch
+    // — Tone.Sampler repitches the one sampled note to cover the rest of the
+    // range. Falls through to the synth below if the sample isn't there.
+    // +6dB trim — the raw recording sits quieter than the synth patches at the
+    // same nominal fader position.
+    return new Tone.Sampler({ urls: UPRIGHT_SAMPLE_URLS, release: 0.3 }).connect(new Tone.Volume(6).connect(output));
+  }
+  if (currentInstrument === 'Electric' && Object.keys(ELECTRIC_SAMPLE_URLS).length > 0) {
+    // Same technique as sampled 'Upright' above, one anchor note repitched by
+    // Tone.Sampler. Falls through to 'Electric (Synth)' below if missing.
+    return new Tone.Sampler({ urls: ELECTRIC_SAMPLE_URLS, release: 0.2 }).connect(output);
+  }
+  if (currentInstrument === 'Electric (Synth)') {
     // Karplus-Strong string synthesis — genuinely plucked/woody, a good fit for
     // upright pizzicato without needing sampled strings.
     return new Tone.MonoSynth({
@@ -67,8 +105,12 @@ function buildSynth() {
       }
   }).connect(output);
   }
-  // Sawtooth through a lowpass filter that closes down after the pluck —
-  // brighter attack settling into a warmer sustain, like a plucked bass string.
+  // 'Upright (Synth)' — the original generated upright sound, kept as its own
+  // selectable option rather than replaced outright by the sampled 'Upright'
+  // above. Also the fallback if 'Upright'/'Electric' are picked but their
+  // samples aren't bundled, and for any other/future instrument name. Sawtooth
+  // through a lowpass filter that closes down after the pluck — brighter attack
+  // settling into a warmer sustain, like a plucked bass string.
   return new Tone.MonoSynth({
     oscillator: { type: 'sawtooth' },
     envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.3 },
@@ -97,10 +139,22 @@ export function setMuted(muted: boolean): void {
 }
 
 export function setInstrument(name: string): void {
-  if (name === currentInstrument) return;
-  currentInstrument = name;
-  synth?.dispose();
-  synth = null;
+  if (name !== currentInstrument) {
+    currentInstrument = name;
+    synth?.dispose();
+    synth = null;
+  }
+  // Eagerly (not lazily at first Play) so a sample-based instrument's buffer
+  // starts loading as soon as it's selected — see isInstrumentLoaded and
+  // keys.ts's identical reasoning for the piano.
+  ensureSynth();
+}
+
+/** False only while the current instrument is sample-based (Tone.Sampler) and
+ * still loading its buffer — always true for the synth patches. */
+export function isInstrumentLoaded(): boolean {
+  if (!synth) return false;
+  return synth instanceof Tone.Sampler ? synth.loaded : true;
 }
 
 function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null {
@@ -135,6 +189,14 @@ function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null 
     case 'tumbao':
       // Handled by tumbaoEvents (needs sixteenth-note placement and next-chord
       // lookahead, which this per-beat/single-chord function can't express).
+      return null;
+    case 'root-fifth-pump':
+      // Handled by rootFifthPumpEvents (needs sixteenth-note placement this
+      // per-beat/single-chord function can't express).
+      return null;
+    case 'smart-walk':
+      // Handled by smartWalkAllEvents (needs the whole progression at once for
+      // chord-change lookahead and a continuous register pointer).
       return null;
   }
 }
@@ -175,6 +237,38 @@ function tumbaoEvents(chord: Chord, nextChord: Chord | null, placement: ChordPla
     } else {
       push(barStart + 12, fifth, '4n', 0.75); // beat 4: fifth
     }
+  }
+  return events;
+}
+
+/**
+ * Root-fifth pump: a driving four-beat cell — root on beat 1, root again on the
+ * "and" of beat 2 (a dotted-quarter later), fifth on beat 3, fifth on beat 4 —
+ * tiled continuously across the placement, so it repeats once per bar and keeps
+ * cycling into any following bars. Half the speed of the original two-beat-cell
+ * version: same shape, uniformly stretched to fill a full bar instead of half of
+ * one. Needs its own sixteenth-resolution generator (like tumbaoEvents) rather
+ * than noteForBeat, since that only ever places one note per whole beat.
+ */
+function rootFifthPumpEvents(chord: Chord, placement: ChordPlacement): BassEvent[] {
+  const tones = chordTones(chord, BASS_OCTAVE);
+  const root = tones[0];
+  const fifth = tones[2] ?? root;
+  const totalSixteenths = placement.lengthBeats * 4;
+  const events: BassEvent[] = [];
+
+  const push = (offset: number, note: string) => {
+    if (offset >= totalSixteenths) return;
+    const beat = placement.startBeat + Math.floor(offset / 4);
+    const sixteenths = offset % 4;
+    events.push({ time: `0:${beat}:${sixteenths}`, note, duration: '16n', velocity: 0.8 });
+  };
+
+  for (let cellStart = 0; cellStart < totalSixteenths; cellStart += 16) {
+    push(cellStart, root); // beat 1
+    push(cellStart + 6, root); // "and" of 2
+    push(cellStart + 8, fifth); // beat 3
+    push(cellStart + 12, fifth); // beat 4
   }
   return events;
 }
@@ -237,6 +331,144 @@ function wholeProgressionEvents(placements: ChordPlacement[], pattern: BassPatte
   return events;
 }
 
+// Range for the smart-walk generator: wide enough for real melodic motion, narrow
+// enough to stay clearly "bass" — roughly E1 to G3.
+const SMART_WALK_LOW = 28;
+const SMART_WALK_HIGH = 55;
+
+/** The instance of `pitchClass` closest to `reference` — may land above or below it. */
+function nearestMidi(reference: number, pitchClass: number): number {
+  const base = reference - (((reference % 12) + 12) % 12) + (((pitchClass % 12) + 12) % 12);
+  let best = base;
+  for (const candidate of [base - 12, base, base + 12]) {
+    if (Math.abs(candidate - reference) < Math.abs(best - reference)) best = candidate;
+  }
+  return best;
+}
+
+function clampToBassRange(midi: number): number {
+  while (midi < SMART_WALK_LOW) midi += 12;
+  while (midi > SMART_WALK_HIGH) midi -= 12;
+  return midi;
+}
+
+/**
+ * One bar of smart-walking bass. Beat 1 is always `chord`'s root; beat 4 is a
+ * chromatic approach tone into `targetChord`'s root (the *next* chord's root on a
+ * bar right before a change, thanks to the lookahead in smartWalkAllEvents — or
+ * just next bar's own root if the chord is holding). Beats 2 and 3 are `chord`'s
+ * own tones, picked to land close to the straight line between beat 1 and the
+ * approach tone, so the line leans the same direction it's about to move rather
+ * than wandering. `pointer` threads the last note's absolute pitch in from the
+ * previous bar (see smartWalkAllEvents) so octave choices stay smooth instead of
+ * leaping — and a held chord still gets real movement, alternating up/down bar to
+ * bar, rather than collapsing back onto the same note it started on.
+ */
+function smartWalkBarEvents(
+  chord: Chord,
+  targetChord: Chord,
+  bar: number,
+  cellStart: number,
+  totalSixteenths: number,
+  placement: ChordPlacement,
+  pointer: { midi: number },
+): BassEvent[] {
+  const events: BassEvent[] = [];
+  const push = (offset: number, midi: number, velocity: number) => {
+    if (offset >= totalSixteenths) return;
+    const beat = placement.startBeat + Math.floor(offset / 4);
+    const sixteenths = offset % 4;
+    events.push({
+      time: `0:${beat}:${sixteenths}`,
+      note: Tone.Frequency(midi, 'midi').toNote(),
+      duration: '4n',
+      velocity,
+    });
+  };
+
+  const rootPc = rootSemitone(chord.root);
+  const targetPc = rootSemitone(targetChord.root);
+  const rootMidi = clampToBassRange(nearestMidi(pointer.midi, rootPc));
+  push(cellStart, rootMidi, 0.85);
+
+  const sameTarget = targetPc === rootPc;
+  const direction = sameTarget ? (bar % 2 === 0 ? 1 : -1) : nearestMidi(rootMidi, targetPc) >= rootMidi ? 1 : -1;
+  const targetMidi = clampToBassRange(sameTarget ? rootMidi + direction * 12 : nearestMidi(rootMidi, targetPc));
+  const approachMidi = direction === 1 ? targetMidi - 1 : targetMidi + 1;
+
+  const chordTonePcs = chordTones(chord, BASS_OCTAVE)
+    .map((n) => Tone.Frequency(n).toMidi() % 12)
+    .filter((pc) => pc !== rootPc);
+
+  const pickMid = (fraction: number) => {
+    const desired = rootMidi + (approachMidi - rootMidi) * fraction;
+    const pcs = chordTonePcs.length > 0 ? chordTonePcs : [rootPc];
+    let best = nearestMidi(desired, pcs[0]);
+    for (const pc of pcs) {
+      const candidate = nearestMidi(desired, pc);
+      if (Math.abs(candidate - desired) < Math.abs(best - desired)) best = candidate;
+    }
+    return best;
+  };
+
+  push(cellStart + 4, pickMid(1 / 3), 0.7); // beat 2
+  push(cellStart + 8, pickMid(2 / 3), 0.7); // beat 3
+  push(cellStart + 12, approachMidi, 0.75); // beat 4: chromatic approach
+
+  pointer.midi = approachMidi;
+  return events;
+}
+
+/** Walks `chord` across a single placement, bar by bar, approaching `nextChord`'s
+ * root (if any) on the last bar. */
+function smartWalkPlacementEvents(
+  chord: Chord,
+  nextChord: Chord | null,
+  placement: ChordPlacement,
+  pointer: { midi: number },
+): BassEvent[] {
+  const totalSixteenths = placement.lengthBeats * 4;
+  const events: BassEvent[] = [];
+  let bar = 0;
+  for (let cellStart = 0; cellStart < totalSixteenths; cellStart += 16, bar++) {
+    const isLastBar = cellStart + 16 >= totalSixteenths;
+    const targetChord = isLastBar && nextChord ? nextChord : chord;
+    events.push(...smartWalkBarEvents(chord, targetChord, bar, cellStart, totalSixteenths, placement, pointer));
+  }
+  return events;
+}
+
+/**
+ * Runs the walk across the whole progression rather than placement-by-placement,
+ * since the two things that make it "smart" — approaching the next chord change,
+ * and keeping octave choices smooth — both need to see past a single placement's
+ * own boundary. Placements are sorted by startBeat first because the walk needs a
+ * real left-to-right chord sequence, not insertion order. "Next" only counts as
+ * real lookahead when the following placement starts exactly where this one ends
+ * (same adjacency rule tumbaoEvents uses) — across a gap, a bar just walks back to
+ * its own root instead of reaching for a chord that isn't actually coming next.
+ */
+function smartWalkAllEvents(placements: ChordPlacement[], key: string, scale: ScaleName, factor: number): BassEvent[] {
+  const sorted = [...placements].sort((a, b) => a.startBeat - b.startBeat);
+  const events: BassEvent[] = [];
+  if (sorted.length === 0) return events;
+
+  const firstChord = resolveSelection(key, scale, sorted[0].selection);
+  const pointer = { midi: Tone.Frequency(chordTones(firstChord, BASS_OCTAVE)[0]).toMidi() };
+
+  for (let i = 0; i < sorted.length; i++) {
+    const placement = sorted[i];
+    const chord = resolveSelection(key, scale, placement.selection);
+    const next = sorted[i + 1];
+    const nextChord =
+      next && next.startBeat === placement.startBeat + placement.lengthBeats
+        ? resolveSelection(key, scale, next.selection)
+        : null;
+    events.push(...withTimeFeel(placement, factor, (vp) => smartWalkPlacementEvents(chord, nextChord, vp, pointer)));
+  }
+  return events;
+}
+
 /**
  * Applies half/double time by generating against a *virtual* placement — same start,
  * length scaled by `factor` — then rescaling each resulting event's absolute beat
@@ -287,6 +519,10 @@ export function scheduleBass(
         events.push(...withTimeFeel(placement, factor, (vp) => patternEvents(chord, pattern, vp)));
       }
     }
+  } else if (rule && rule.style === 'smart-walk') {
+    // Needs the whole progression at once (chord-change lookahead + a continuous
+    // register pointer), not the per-placement loop below — see smartWalkAllEvents.
+    events.push(...smartWalkAllEvents(placements, key, scale, factor));
   } else if (rule) {
     for (const placement of placements) {
       const chord = resolveSelection(key, scale, placement.selection);
@@ -294,6 +530,10 @@ export function scheduleBass(
         const next = placements.find((p) => p.startBeat === placement.startBeat + placement.lengthBeats);
         const nextChord = next ? resolveSelection(key, scale, next.selection) : null;
         events.push(...withTimeFeel(placement, factor, (vp) => tumbaoEvents(chord, nextChord, vp)));
+        continue;
+      }
+      if (rule.style === 'root-fifth-pump') {
+        events.push(...withTimeFeel(placement, factor, (vp) => rootFifthPumpEvents(chord, vp)));
         continue;
       }
       events.push(
@@ -319,5 +559,12 @@ export function disposeBass(): void {
   part = null;
   // See disposeKeys's comment — an already-scheduled note's release time is baked
   // into the Web Audio graph at trigger time, so force-release the active voice too.
-  synth?.triggerRelease();
+  // Sampler's triggerRelease needs to know which note(s) to release (it's
+  // polyphonic-capable, unlike MonoSynth/PluckSynth) — releaseAll sidesteps
+  // having to track that for what's always single-note-at-a-time content anyway.
+  if (synth instanceof Tone.Sampler) {
+    synth.releaseAll();
+  } else {
+    synth?.triggerRelease();
+  }
 }

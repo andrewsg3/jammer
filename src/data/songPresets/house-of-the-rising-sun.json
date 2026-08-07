@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "name": "House of the Rising Sun",
+  "author": "Misc. Traditional",
+  "key": "A",
+  "scale": "minor",
+  "tempo": 132,
+  "metronome": false,
+  "loopStart": 0,
+  "drumStyle": "Rock",
+  "bassStyle": "Pedal",
+  "keysStyle": "Arpeggiated (7ths)",
+  "placements": [
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 3, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 8, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 3, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 3, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 8, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "min" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 4 }
+  ]
+}

@@ -21,7 +21,10 @@ export type ChordQuality =
   | 'dom7sharp5'
   | 'dom13'
   | 'm11'
-  | 'maj13';
+  | 'maj13'
+  | 'dom7sharp11'
+  | 'dom7flat9flat5'
+  | 'maj7sharp11';
 
 export type Chord = {
   root: string;
@@ -96,9 +99,64 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   dom13: [0, 4, 7, 10, 14, 21],
   m11: [0, 3, 7, 10, 14, 17],
   maj13: [0, 4, 7, 11, 14, 21],
+  dom7sharp11: [0, 4, 7, 10, 18], // e.g. F7#11 — the "Girl from Ipanema" bridge chord (Lydian dominant)
+  dom7flat9flat5: [0, 4, 6, 10, 13], // altered dominant — common resolving into a minor ii-V-i
+  maj7sharp11: [0, 4, 7, 11, 18], // Lydian major 7th — e.g. Cmaj7#11
 };
 
-const QUALITY_SUFFIX: Record<ChordQuality, string> = {
+export type NotationStyle = 'symbol' | 'written';
+
+// A quality's symbol suffix split the way real-book engravings actually set it:
+// "core" is the triad-quality marker (-, °, +, △ for major, or blank for a plain
+// major/dominant root) at full size right next to the root; "ext" is everything
+// after it (7ths/9ths/alterations) set smaller and raised, like a real superscript
+// figured-bass-style extension. "△" is U+25B3 (White Up-Pointing Triangle), not
+// the Greek letter "Δ" (U+0394) — checked both against Architects Daughter (the
+// chord-symbol font) by rendering them at size and comparing stroke weight to
+// known-good glyphs from this same table: "Δ" comes out visibly bolder than its
+// neighbors (a dead giveaway — this font has no bold weight at all — so it's
+// silently falling back to a different font mid-label), while "△" matches the
+// surrounding stroke weight and is actually this font's own glyph. Not "ø" either
+// — same fallback problem, no thin/bold tell available to find an alternate
+// codepoint for it, so "-7b5" mirrors how hand-copied books write half-diminished
+// when they don't have the ø glyph available either — same "-" this table
+// already uses for minor, not a separate convention.
+export type ChordSuffixParts = { core: string; ext: string };
+const QUALITY_SUFFIX_SYMBOL_PARTS: Record<ChordQuality, ChordSuffixParts> = {
+  maj: { core: '', ext: '' },
+  min: { core: '-', ext: '' },
+  dom7: { core: '', ext: '7' },
+  // "△" isn't a triad-quality marker like -/°/+ (it doesn't make the chord any
+  // less major, the way "-" does) — it's really just a fancier "7", so it
+  // belongs in the superscript ext with the digit, not full-size in core.
+  maj7: { core: '', ext: '△7' },
+  min7: { core: '-', ext: '7' },
+  dim: { core: '°', ext: '' },
+  dim7: { core: '°', ext: '7' },
+  m7b5: { core: '-', ext: '7b5' },
+  aug: { core: '+', ext: '' },
+  sus2: { core: '', ext: 'sus2' },
+  sus4: { core: '', ext: 'sus4' },
+  '6': { core: '', ext: '6' },
+  m6: { core: '-', ext: '6' },
+  add9: { core: '', ext: 'add9' },
+  dom9: { core: '', ext: '9' },
+  maj9: { core: '', ext: '△9' },
+  m9: { core: '-', ext: '9' },
+  dom7sharp9: { core: '', ext: '7#9' },
+  dom7flat9: { core: '', ext: '7b9' },
+  dom7sharp5: { core: '', ext: '7#5' },
+  dom13: { core: '', ext: '13' },
+  m11: { core: '-', ext: '11' },
+  maj13: { core: '', ext: '△13' },
+  dom7sharp11: { core: '', ext: '7#11' },
+  dom7flat9flat5: { core: '', ext: '7b9b5' },
+  maj7sharp11: { core: '', ext: '△7#11' },
+};
+
+// Plain-English suffixes — spelled out (m, maj7, dim, m7b5) rather than
+// engraving shorthand, for anyone who'd rather read chords than decode symbols.
+const QUALITY_SUFFIX_WRITTEN: Record<ChordQuality, string> = {
   maj: '',
   min: 'm',
   dom7: '7',
@@ -122,6 +180,9 @@ const QUALITY_SUFFIX: Record<ChordQuality, string> = {
   dom13: '13',
   m11: 'm11',
   maj13: 'maj13',
+  dom7sharp11: '7#11',
+  dom7flat9flat5: '7b9b5',
+  maj7sharp11: 'maj7#11',
 };
 
 export const QUALITY_GROUPS: { label: string; qualities: ChordQuality[] }[] = [
@@ -131,7 +192,17 @@ export const QUALITY_GROUPS: { label: string; qualities: ChordQuality[] }[] = [
   { label: 'Extensions', qualities: ['add9', 'dom9', 'maj9', 'm9'] },
   {
     label: 'Altered / Exotic',
-    qualities: ['dom7sharp9', 'dom7flat9', 'dom7sharp5', 'dom13', 'm11', 'maj13'],
+    qualities: [
+      'dom7sharp9',
+      'dom7flat9',
+      'dom7sharp5',
+      'dom13',
+      'm11',
+      'maj13',
+      'dom7sharp11',
+      'dom7flat9flat5',
+      'maj7sharp11',
+    ],
   },
 ];
 
@@ -159,7 +230,16 @@ export const QUALITY_LABELS: Record<ChordQuality, string> = {
   dom13: 'Dominant 13',
   m11: 'Minor 11',
   maj13: 'Major 13',
+  dom7sharp11: 'Dominant 7♯11 (Lydian Dominant)',
+  dom7flat9flat5: 'Dominant 7♭9♭5 (Altered)',
+  maj7sharp11: 'Major 7♯11 (Lydian)',
 };
+
+// Every ChordQuality's own key, for validating a song-preset's chromatic-selection
+// quality string at load time — see isChordSelection in songPresets.ts. Derived
+// from QUALITY_LABELS (rather than hand-duplicated) so it can't silently drift out
+// of sync with the actual ChordQuality union as new qualities get added.
+export const CHORD_QUALITIES = Object.keys(QUALITY_LABELS) as ChordQuality[];
 
 // Each mode is the major scale rotated to start on a different degree — e.g. dorian
 // is "the white keys starting on D." Intervals below are that rotation worked out
@@ -275,9 +355,22 @@ export function chordTones(chord: Chord, baseOctave: number): string[] {
   });
 }
 
-/** e.g. "Dm", "G7", "Bdim" */
-export function chordName(chord: Chord): string {
-  return `${chord.root}${QUALITY_SUFFIX[chord.quality]}`;
+/** e.g. "D-", "G7", "B°" (symbol style) or "Dm", "G7", "Bdim" (written style). */
+export function chordName(chord: Chord, notation: NotationStyle = 'symbol'): string {
+  if (notation === 'written') return `${chord.root}${QUALITY_SUFFIX_WRITTEN[chord.quality]}`;
+  const { core, ext } = QUALITY_SUFFIX_SYMBOL_PARTS[chord.quality];
+  return `${chord.root}${core}${ext}`;
+}
+
+/**
+ * Same as chordName, but split for real-book-style rendering: "core" (the -/°/+/^
+ * triad-quality marker) at full size right after the root, "ext" (7ths/9ths/
+ * alterations) meant to be set smaller and raised. 'written' notation has no such
+ * split — plain-English suffixes ("m7", "dim7") read as one run, not a superscript.
+ */
+export function chordNameParts(chord: Chord, notation: NotationStyle = 'symbol'): ChordSuffixParts & { root: string } {
+  if (notation === 'written') return { root: chord.root, core: QUALITY_SUFFIX_WRITTEN[chord.quality], ext: '' };
+  return { root: chord.root, ...QUALITY_SUFFIX_SYMBOL_PARTS[chord.quality] };
 }
 
 /** The diatonic chord built on a given scale degree of a key. */

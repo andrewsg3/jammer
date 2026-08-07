@@ -5,7 +5,7 @@ type NamedOption = { name: string };
 
 type Props<TStyle extends NamedOption, TInstrument extends NamedOption, TFeel extends NamedOption> = {
   label: string;
-  accent: 'drums' | 'bass' | 'harmony' | 'metronome' | 'melody';
+  accent: 'drums' | 'bass' | 'harmony' | 'metronome' | 'melody' | 'master';
   // Style/instrument/feel pickers are all optional — Metronome has none of them,
   // just a volume fader and a mute button; Feel is currently Drums-only.
   styleOptions?: TStyle[];
@@ -19,11 +19,13 @@ type Props<TStyle extends NamedOption, TInstrument extends NamedOption, TFeel ex
   onFeelChange?: (feel: TFeel) => void;
   volume: number;
   onVolumeChange: (value: number) => void;
-  muted: boolean;
-  onToggleMuted: () => void;
-  // Optional test toggle for a per-track effect — currently Harmony-only (chorus).
-  effectEnabled?: boolean;
-  onToggleEffect?: () => void;
+  // Optional — Master has no mute concept, unlike every real instrument track.
+  muted?: boolean;
+  onToggleMuted?: () => void;
+  // Zero or more per-track effect toggles (Harmony: Chorus/Reverb; Bass: Comp) —
+  // each is its own always-connected node whose wet/amount just flips on/off
+  // (see keys.ts/bass.ts), not something rewiring the audio graph live.
+  effects?: { key: string; label: string; enabled: boolean; onToggle: () => void }[];
   // Optional per-voice sub-mix disclosure — currently only Drums uses this. Rendered
   // as a floating popout (not a flex sibling) so expanding never reflows the rest of
   // the layout — it overlays on top instead of squeezing the grid or other strips.
@@ -61,8 +63,7 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
   onVolumeChange,
   muted,
   onToggleMuted,
-  effectEnabled,
-  onToggleEffect,
+  effects,
   expanded,
   onToggleExpanded,
   expandedContent,
@@ -112,27 +113,34 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
         <PickerPlaceholder />
       )}
       <VerticalFader id={`volume-${accent}`} value={volume} onChange={onVolumeChange} />
-      <button
-        type="button"
-        className="channel-strip-mute"
-        onClick={onToggleMuted}
-        aria-pressed={muted}
-        aria-label={muted ? `Unmute ${label}` : `Mute ${label}`}
-        title={muted ? 'Unmute' : 'Mute'}
-      >
-        M
-      </button>
-      {onToggleEffect && (
+      {onToggleMuted && (
         <button
           type="button"
-          className="channel-strip-fx"
-          onClick={onToggleEffect}
-          aria-pressed={effectEnabled}
-          aria-label={effectEnabled ? 'Disable test effect' : 'Enable test effect'}
-          title={effectEnabled ? 'Disable test effect (chorus)' : 'Enable test effect (chorus)'}
+          className="channel-strip-mute"
+          onClick={onToggleMuted}
+          aria-pressed={muted}
+          aria-label={muted ? `Unmute ${label}` : `Mute ${label}`}
+          title={muted ? 'Unmute' : 'Mute'}
         >
-          FX
+          M
         </button>
+      )}
+      {effects && effects.length > 0 && (
+        <div className="channel-strip-fx-row">
+          {effects.map((fx) => (
+            <button
+              key={fx.key}
+              type="button"
+              className="channel-strip-fx"
+              onClick={fx.onToggle}
+              aria-pressed={fx.enabled}
+              aria-label={fx.enabled ? `Disable ${fx.label}` : `Enable ${fx.label}`}
+              title={fx.enabled ? `Disable ${fx.label}` : `Enable ${fx.label}`}
+            >
+              {fx.label}
+            </button>
+          ))}
+        </div>
       )}
       <span className="channel-strip-label">{label}</span>
       {expanded && expandedContent && <div className="channel-strip-popout">{expandedContent}</div>}
