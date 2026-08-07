@@ -29,6 +29,12 @@ export type ChordQuality =
 export type Chord = {
   root: string;
   quality: ChordQuality;
+  // Optional slash-chord bass note (absolute note name, no octave) — e.g. "D7/F#"
+  // is { root: 'D', quality: 'dom7', bass: 'F#' }. Chord *tones* (3rd/5th/etc.)
+  // still derive from root/quality as usual (see chordTones/QUALITY_INTERVALS) —
+  // only the note a bass line (or a comping left hand) treats as "the root" for
+  // playback changes; see bassRootNote below.
+  bass?: string;
 };
 
 export type Progression = Chord[];
@@ -355,22 +361,38 @@ export function chordTones(chord: Chord, baseOctave: number): string[] {
   });
 }
 
-/** e.g. "D-", "G7", "B°" (symbol style) or "Dm", "G7", "Bdim" (written style). */
+/** e.g. "D-", "G7", "B°" (symbol style) or "Dm", "G7", "Bdim" (written style). A
+ * slash chord appends "/<bass>" at full size, same in both notation styles — real
+ * books never shrink or superscript the bass note. */
 export function chordName(chord: Chord, notation: NotationStyle = 'symbol'): string {
-  if (notation === 'written') return `${chord.root}${QUALITY_SUFFIX_WRITTEN[chord.quality]}`;
+  const bass = chord.bass ? `/${chord.bass}` : '';
+  if (notation === 'written') return `${chord.root}${QUALITY_SUFFIX_WRITTEN[chord.quality]}${bass}`;
   const { core, ext } = QUALITY_SUFFIX_SYMBOL_PARTS[chord.quality];
-  return `${chord.root}${core}${ext}`;
+  return `${chord.root}${core}${ext}${bass}`;
 }
 
 /**
  * Same as chordName, but split for real-book-style rendering: "core" (the -/°/+/^
  * triad-quality marker) at full size right after the root, "ext" (7ths/9ths/
- * alterations) meant to be set smaller and raised. 'written' notation has no such
- * split — plain-English suffixes ("m7", "dim7") read as one run, not a superscript.
+ * alterations) meant to be set smaller and raised, "bass" (the optional slash
+ * note, already including its own leading "/") at full size after everything
+ * else. 'written' notation has no core/ext split — plain-English suffixes ("m7",
+ * "dim7") read as one run, not a superscript — but still gets the slash bass.
  */
-export function chordNameParts(chord: Chord, notation: NotationStyle = 'symbol'): ChordSuffixParts & { root: string } {
-  if (notation === 'written') return { root: chord.root, core: QUALITY_SUFFIX_WRITTEN[chord.quality], ext: '' };
-  return { root: chord.root, ...QUALITY_SUFFIX_SYMBOL_PARTS[chord.quality] };
+export function chordNameParts(
+  chord: Chord,
+  notation: NotationStyle = 'symbol',
+): ChordSuffixParts & { root: string; bass: string } {
+  const bass = chord.bass ? `/${chord.bass}` : '';
+  if (notation === 'written') return { root: chord.root, core: QUALITY_SUFFIX_WRITTEN[chord.quality], ext: '', bass };
+  return { root: chord.root, ...QUALITY_SUFFIX_SYMBOL_PARTS[chord.quality], bass };
+}
+
+/** The note (no octave) a bass line / comping left hand should treat as this
+ * chord's root — the slash bass note for a slash chord, else the chord's own
+ * root. Third/fifth/etc. always derive from the real root/quality regardless. */
+export function bassRootNote(chord: Chord): string {
+  return chord.bass ?? chord.root;
 }
 
 /** The diatonic chord built on a given scale degree of a key. */
@@ -404,7 +426,15 @@ export type ChordSelection =
   | { type: 'secondaryDominant'; degree: ScaleDegree }
   // Any of the 12 chromatic roots (0-11 semitones above the tonic) at any quality —
   // the escape hatch from the curated diatonic/borrowed lists.
-  | { type: 'chromatic'; offset: number; quality: ChordQuality };
+  | {
+      type: 'chromatic';
+      offset: number;
+      quality: ChordQuality;
+      // Optional slash-chord bass, expressed the same way as offset — semitones
+      // above the tonic — so it transposes correctly if the song's key changes,
+      // rather than being hardcoded to an absolute note name.
+      bassOffset?: number;
+    };
 
 export type ChordPlacement = {
   id: string;
@@ -425,7 +455,9 @@ export function serializeSelection(selection: ChordSelection): string {
     case 'secondaryDominant':
       return `secondaryDominant:${selection.degree}`;
     case 'chromatic':
-      return `chromatic:${selection.offset}:${selection.quality}`;
+      return `chromatic:${selection.offset}:${selection.quality}:${
+        selection.bassOffset !== undefined ? selection.bassOffset : ''
+      }`;
   }
 }
 
@@ -440,8 +472,15 @@ export function deserializeSelection(value: string): ChordSelection {
       return { type: 'borrowed', index: Number(rest[0]) };
     case 'secondaryDominant':
       return { type: 'secondaryDominant', degree: Number(rest[0]) as ScaleDegree };
-    case 'chromatic':
-      return { type: 'chromatic', offset: Number(rest[0]), quality: rest[1] as ChordQuality };
+    case 'chromatic': {
+      const bassOffset = rest[2] !== undefined && rest[2] !== '' ? Number(rest[2]) : undefined;
+      return {
+        type: 'chromatic',
+        offset: Number(rest[0]),
+        quality: rest[1] as ChordQuality,
+        ...(bassOffset !== undefined ? { bassOffset } : {}),
+      };
+    }
     default:
       throw new Error(`Unknown chord selection: "${value}"`);
   }
@@ -485,7 +524,7 @@ function shiftRoot(key: string, offset: number): string {
   return SEMITONE_TO_NOTE[shifted];
 }
 
-function shiftRootFlat(key: string, offset: number): string {
+export function shiftRootFlat(key: string, offset: number): string {
   const shifted = (rootSemitone(key) + offset) % 12;
   return SEMITONE_TO_NOTE_FLAT[shifted];
 }
@@ -537,15 +576,19 @@ export function secondaryDominantOptions(key: string, scale: ScaleName): ChordOp
 // matching the convention already used for borrowed chords.
 const CHROMATIC_DEGREE_LABELS = ['1', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'];
 
-export function chromaticChord(key: string, offset: number, quality: ChordQuality): Chord {
-  return { root: shiftRootFlat(key, offset), quality };
+export function chromaticChord(key: string, offset: number, quality: ChordQuality, bassOffset?: number): Chord {
+  const chord: Chord = { root: shiftRootFlat(key, offset), quality };
+  if (bassOffset !== undefined) chord.bass = shiftRootFlat(key, bassOffset);
+  return chord;
 }
 
-/** All 12 chromatic roots at a single given quality — the chord-builder's root row. */
-export function chromaticOptions(key: string, quality: ChordQuality): ChordOption[] {
+/** All 12 chromatic roots at a single given quality — the chord-builder's root row.
+ * `bassOffset`, when given, is applied to every option (the same slash bass note
+ * dragged onto whichever root you pick). */
+export function chromaticOptions(key: string, quality: ChordQuality, bassOffset?: number): ChordOption[] {
   return CHROMATIC_DEGREE_LABELS.map((label, offset) => ({
-    selection: { type: 'chromatic', offset, quality },
-    chord: chromaticChord(key, offset, quality),
+    selection: { type: 'chromatic', offset, quality, ...(bassOffset !== undefined ? { bassOffset } : {}) },
+    chord: chromaticChord(key, offset, quality, bassOffset),
     label,
   }));
 }
@@ -568,6 +611,6 @@ export function resolveSelection(key: string, scale: ScaleName, selection: Chord
       return { root: shiftRoot(target.root, 7), quality: 'dom7' };
     }
     case 'chromatic':
-      return chromaticChord(key, selection.offset, selection.quality);
+      return chromaticChord(key, selection.offset, selection.quality, selection.bassOffset);
   }
 }

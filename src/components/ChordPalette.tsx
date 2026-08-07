@@ -7,10 +7,16 @@ import {
   secondaryDominantOptions,
   chromaticOptions,
   serializeSelection,
+  shiftRootFlat,
   QUALITY_GROUPS,
   QUALITY_LABELS,
 } from '../data/progressions';
 import type { Chord, ChordOption, ChordQuality, NotationStyle, ScaleName } from '../data/progressions';
+
+// Same 12 chromatic roots as the main quality picker's row, for the "/bass" dropdown
+// — offsets, not absolute note names, so the picked bass note transposes correctly
+// if the song's key changes (see ChordSelection's chromatic.bassOffset).
+const BASS_NOTE_OFFSETS = Array.from({ length: 12 }, (_, offset) => offset);
 
 type Props = {
   musicalKey: string;
@@ -45,7 +51,7 @@ function PaletteRow({
       </div>
       <div className="chord-palette-row">
         {options.map((option, index) => {
-          const { root, core, ext } = chordNameParts(option.chord, notationStyle);
+          const { root, core, ext, bass } = chordNameParts(option.chord, notationStyle);
           return (
             <button
               key={index}
@@ -63,6 +69,7 @@ function PaletteRow({
                 {root}
                 {core}
                 {ext && <sup className="chord-ext">{ext}</sup>}
+                {bass}
               </span>
             </button>
           );
@@ -74,30 +81,50 @@ function PaletteRow({
 
 function ChromaticSection({ musicalKey, notationStyle, onAudition }: Props) {
   const [quality, setQuality] = useState<ChordQuality>('dom7');
+  // undefined = no slash bass — every row below is a plain chord, same as before
+  // this existed. Applies the same picked bass note to all 12 roots at once
+  // (drag whichever root you want with that bass already attached), rather than
+  // needing a separate picker per root.
+  const [bassOffset, setBassOffset] = useState<number | undefined>(undefined);
 
   return (
     <PaletteRow
       title="Chromatic"
-      options={chromaticOptions(musicalKey, quality)}
+      options={chromaticOptions(musicalKey, quality, bassOffset)}
       notationStyle={notationStyle}
       onAudition={onAudition}
       headerExtra={
-        <select
-          className="quality-select"
-          value={quality}
-          onChange={(e) => setQuality(e.target.value as ChordQuality)}
-          aria-label="Chromatic chord quality"
-        >
-          {QUALITY_GROUPS.map((group) => (
-            <optgroup key={group.label} label={group.label}>
-              {group.qualities.map((q) => (
-                <option key={q} value={q}>
-                  {QUALITY_LABELS[q]}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        <>
+          <select
+            className="quality-select"
+            value={quality}
+            onChange={(e) => setQuality(e.target.value as ChordQuality)}
+            aria-label="Chromatic chord quality"
+          >
+            {QUALITY_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.qualities.map((q) => (
+                  <option key={q} value={q}>
+                    {QUALITY_LABELS[q]}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <select
+            className="quality-select"
+            value={bassOffset ?? ''}
+            onChange={(e) => setBassOffset(e.target.value === '' ? undefined : Number(e.target.value))}
+            aria-label="Slash chord bass note"
+          >
+            <option value="">no /bass</option>
+            {BASS_NOTE_OFFSETS.map((offset) => (
+              <option key={offset} value={offset}>
+                /{shiftRootFlat(musicalKey, offset)}
+              </option>
+            ))}
+          </select>
+        </>
       }
     />
   );

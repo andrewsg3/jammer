@@ -3,6 +3,7 @@ import {
   chordTones,
   resolveSelection,
   rootSemitone,
+  bassRootNote,
   type ChordPlacement,
   type Chord,
   type ScaleName,
@@ -42,10 +43,15 @@ const BASS_OCTAVE = 2;
 // rewiring the audio graph live. Evens out the gap between the sampled
 // instruments' inherently inconsistent recorded levels and the synths' more
 // uniform output, and generally makes the line punchier/more consistent.
-const compressor = new Tone.Compressor({ threshold: -18, ratio: 1, attack: 0.005, release: 0.15 }).toDestination();
+const compressor = new Tone.Compressor({ threshold: -30, ratio: 1, attack: 0.005, release: 0.15 }).toDestination();
 
 export function setCompressionEnabled(enabled: boolean): void {
-  compressor.ratio.value = enabled ? 3 : 1;
+  // -30dB threshold means most of the line sits above it, so a 6:1 ratio actually
+  // reads as an audible punch/sustain boost rather than the barely-there change a
+  // higher threshold + gentler ratio produced (confirmed by directly reading the
+  // live DynamicsCompressorNode's params in the browser — toggling it was always
+  // wired correctly, just tuned too subtle to notice on sparse bass content).
+  compressor.ratio.value = enabled ? 6 : 1;
 }
 
 const output = new Tone.Volume(0).connect(compressor);
@@ -157,8 +163,17 @@ export function isInstrumentLoaded(): boolean {
   return synth instanceof Tone.Sampler ? synth.loaded : true;
 }
 
+// A chord's tones with the bottom one swapped for its slash bass note, if it has
+// one — 3rd/5th/7th (positions 1+) still come from the chord's real root/quality,
+// only "the root" a bass line would actually play changes. See bassRootNote.
+function rootTones(chord: Chord, baseOctave: number): string[] {
+  const tones = chordTones(chord, baseOctave);
+  tones[0] = `${bassRootNote(chord)}${baseOctave}`;
+  return tones;
+}
+
 function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null {
-  const tones = chordTones(chord, BASS_OCTAVE);
+  const tones = rootTones(chord, BASS_OCTAVE);
   const root = tones[0];
   const fifth = tones[2] ?? root;
   const beatInBar = beat % 4;
@@ -173,7 +188,7 @@ function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null 
     case 'syncopated':
       return beatInBar === 0 || beatInBar === 2 ? root : null;
     case 'octaves': {
-      const rootHigh = chordTones(chord, BASS_OCTAVE + 1)[0];
+      const rootHigh = rootTones(chord, BASS_OCTAVE + 1)[0];
       return beatInBar % 2 === 0 ? root : rootHigh;
     }
     case 'pedal':
@@ -181,7 +196,7 @@ function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null 
     case 'walk-updown': {
       // Climbs root -> ...chord tones... -> octave, then back down, running
       // continuously across the chord's full duration rather than resetting each bar.
-      const octaveRoot = chordTones(chord, BASS_OCTAVE + 1)[0];
+      const octaveRoot = rootTones(chord, BASS_OCTAVE + 1)[0];
       const up = [...tones, octaveRoot];
       const updown = [...up, ...up.slice(1, -1).reverse()];
       return updown[beat % updown.length];
@@ -210,11 +225,11 @@ function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null 
  * only ever looks at the current one).
  */
 function tumbaoEvents(chord: Chord, nextChord: Chord | null, placement: ChordPlacement): BassEvent[] {
-  const tones = chordTones(chord, BASS_OCTAVE);
+  const tones = rootTones(chord, BASS_OCTAVE);
   const root = tones[0];
   const third = tones[1] ?? root;
   const fifth = tones[2] ?? root;
-  const nextRoot = nextChord ? chordTones(nextChord, BASS_OCTAVE)[0] : root;
+  const nextRoot = nextChord ? rootTones(nextChord, BASS_OCTAVE)[0] : root;
 
   const totalSixteenths = placement.lengthBeats * 4;
   const events: BassEvent[] = [];
@@ -251,7 +266,7 @@ function tumbaoEvents(chord: Chord, nextChord: Chord | null, placement: ChordPla
  * than noteForBeat, since that only ever places one note per whole beat.
  */
 function rootFifthPumpEvents(chord: Chord, placement: ChordPlacement): BassEvent[] {
-  const tones = chordTones(chord, BASS_OCTAVE);
+  const tones = rootTones(chord, BASS_OCTAVE);
   const root = tones[0];
   const fifth = tones[2] ?? root;
   const totalSixteenths = placement.lengthBeats * 4;
@@ -386,8 +401,8 @@ function smartWalkBarEvents(
     });
   };
 
-  const rootPc = rootSemitone(chord.root);
-  const targetPc = rootSemitone(targetChord.root);
+  const rootPc = rootSemitone(bassRootNote(chord));
+  const targetPc = rootSemitone(bassRootNote(targetChord));
   const rootMidi = clampToBassRange(nearestMidi(pointer.midi, rootPc));
   push(cellStart, rootMidi, 0.85);
 

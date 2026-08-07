@@ -1,5 +1,12 @@
 import * as Tone from 'tone';
-import { chordTones, resolveSelection, type ChordPlacement, type Chord, type ScaleName } from '../data/progressions';
+import {
+  chordTones,
+  resolveSelection,
+  bassRootNote,
+  type ChordPlacement,
+  type Chord,
+  type ScaleName,
+} from '../data/progressions';
 import { timeFeelFactor } from '../data/instrumentStyles';
 import type { KeysRule, TimeFeel } from '../data/instrumentStyles';
 import { PIANO_SAMPLE_URLS } from '../data/pianoSamples';
@@ -226,7 +233,11 @@ export function scheduleKeys(
 
   const events = placements.map((placement) => {
     const chord = resolveSelection(key, scale, placement.selection);
-    const root = chordTones(chord, KEYS_OCTAVE)[0];
+    // The bass note the LH plays for a slash chord (see bassRootNote) — the
+    // bossa-nova 'root' hit type and blues-shuffle's power chords are built off
+    // this, same as bass.ts's rootTones; the RH voicing (voicingNotes below)
+    // still comes straight from the chord's real quality, unaffected.
+    const root = `${bassRootNote(chord)}${KEYS_OCTAVE}`;
     const rootMidi = Tone.Frequency(root).toMidi();
     return {
       time: `0:${placement.startBeat}:0`,

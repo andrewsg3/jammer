@@ -764,12 +764,13 @@ export function ChordGrid({
                         <span className="chord-label-name">
                           {!seg.isFirst && '⟵ '}
                           {(() => {
-                            const { root, core, ext } = chordNameParts(chord, notationStyle);
+                            const { root, core, ext, bass } = chordNameParts(chord, notationStyle);
                             return (
                               <>
                                 {root}
                                 {core}
                                 {ext && <sup className="chord-ext">{ext}</sup>}
+                                {bass}
                               </>
                             );
                           })()}

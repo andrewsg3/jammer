@@ -25,7 +25,13 @@ actually here now.
   the clef, a computed key signature, and the 4/4 time signature (see `data/progressions.ts`'s
   `keySignatureAccidentals`). Placements support multi-row spans, resize/move/select/copy-paste,
   a scrubbable playhead, and a draggable loop range (rendered as 𝄆/𝄇 repeat-barline glyphs, not
-  the exact loop beat — see the row's edge, not mid-measure).
+  the exact loop beat — see the row's edge, not mid-measure). Chromatic chords can carry an
+  optional slash bass note (`Chord.bass`, `ChordSelection`'s chromatic variant `bassOffset` —
+  both offsets from the key, not absolute note names, so they transpose correctly) — e.g. "D7/F#".
+  Only the bottom note changes for playback: `progressions.ts`'s `bassRootNote()` is what bass.ts
+  and keys.ts's bossa-nova/blues-shuffle "root" hits use instead of `chord.root`, while every
+  voicing's 3rd/5th/7th still comes from the chord's real root/quality. Picked via the second
+  dropdown next to Chromatic's quality picker in `ChordPalette.tsx`.
 - **Sheet header** (`components/SheetMusicHeader.tsx`) — real-book-style masthead: tempo
   (left)/title (centered, underlined)/author (right, wraps in a `<textarea>` — a single-line
   `<input>` cannot wrap its own text, learned that the hard way), all caps, over its own blank

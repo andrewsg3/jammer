@@ -65,7 +65,8 @@ function isChordSelection(value: unknown): value is ChordSelection {
     return (
       typeof v.offset === 'number' &&
       typeof v.quality === 'string' &&
-      CHORD_QUALITIES.includes(v.quality as (typeof CHORD_QUALITIES)[number])
+      CHORD_QUALITIES.includes(v.quality as (typeof CHORD_QUALITIES)[number]) &&
+      (v.bassOffset === undefined || typeof v.bassOffset === 'number')
     );
   }
   return false;

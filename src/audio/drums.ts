@@ -11,10 +11,12 @@ import type { SectionMarker } from '../data/sections';
 // squashed/pumping amount) when engaged. Toggleable — off by default (ratio:1 is a
 // real bypass, zero gain reduction, not just "subtle"), same pattern as bass.ts's
 // Comp toggle.
-const compressor = new Tone.Compressor({ threshold: -20, ratio: 1, attack: 0.01, release: 0.2 }).toDestination();
+const compressor = new Tone.Compressor({ threshold: -28, ratio: 1, attack: 0.01, release: 0.2 }).toDestination();
 
 export function setCompressionEnabled(enabled: boolean): void {
-  compressor.ratio.value = enabled ? 3 : 1;
+  // See bass.ts's identical comment — same fix, same reason: verified the toggle
+  // itself was always wired correctly, just tuned too gently to actually hear.
+  compressor.ratio.value = enabled ? 5 : 1;
 }
 
 // Short room reverb as a parallel send, not inserted into the dry path — enough to
@@ -22,7 +24,7 @@ export function setCompressionEnabled(enabled: boolean): void {
 // room of their own) without smearing transients or washing out the dry punch.
 // Toggleable — off (muted) by default, same pattern as keys.ts's Reverb toggle.
 const reverb = new Tone.Freeverb({ roomSize: 0.25, dampening: 3500 }).toDestination();
-const reverbSend = new Tone.Volume(-16).connect(reverb);
+const reverbSend = new Tone.Volume(-10).connect(reverb);
 reverbSend.mute = true;
 
 export function setReverbEnabled(enabled: boolean): void {
