@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 import { chordTones, type Chord, type ChordPlacement, type ScaleName } from '../data/progressions';
 import type { DrumPattern, TimeFeel, BassRule, BassPattern, KeysRule } from '../data/instrumentStyles';
+import type { MelodyNote } from '../data/melody';
 import {
   scheduleDrums,
   disposeDrums,
@@ -39,6 +40,12 @@ import {
   setVolume as setMetronomeOutputVolume,
   setMuted as setMetronomeOutputMuted,
 } from './metronome';
+import {
+  scheduleMelody,
+  disposeMelody,
+  setVolume as setMelodyOutputVolume,
+  setMuted as setMelodyOutputMuted,
+} from './melody';
 
 const AUDITION_OCTAVE = 4;
 let auditionSynth: Tone.PolySynth<Tone.Synth> | null = null;
@@ -69,6 +76,7 @@ export type PlaybackParams = {
   bassTimeFeel: TimeFeel;
   keys: KeysRule | null;
   keysTimeFeel: TimeFeel;
+  melody: MelodyNote[];
   tempo: number;
 };
 
@@ -142,6 +150,14 @@ export function setMetronomeVolume(percent: number): void {
   setMetronomeOutputVolume(percentToDb(percent));
 }
 
+export function setMelodyVolume(percent: number): void {
+  setMelodyOutputVolume(percentToDb(percent));
+}
+
+export function setMelodyMuted(muted: boolean): void {
+  setMelodyOutputMuted(muted);
+}
+
 export function setChordsMuted(muted: boolean): void {
   setKeysOutputMuted(muted);
 }
@@ -201,6 +217,7 @@ export async function play(params: PlaybackParams): Promise<void> {
     );
   }
   if (params.keys) scheduleKeys(params.placements, params.key, params.scale, params.keys, params.keysTimeFeel);
+  if (params.melody.length > 0) scheduleMelody(params.melody);
   // Always scheduled — audibility is controlled by its mute state (a track like any
   // other now), not by whether it's running at all.
   scheduleMetronome();
@@ -216,5 +233,6 @@ export function stop(): void {
   disposeDrums();
   disposeBass();
   disposeKeys();
+  disposeMelody();
   disposeMetronome();
 }

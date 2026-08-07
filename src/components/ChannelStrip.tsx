@@ -5,7 +5,7 @@ type NamedOption = { name: string };
 
 type Props<TStyle extends NamedOption, TInstrument extends NamedOption, TFeel extends NamedOption> = {
   label: string;
-  accent: 'drums' | 'bass' | 'harmony' | 'metronome';
+  accent: 'drums' | 'bass' | 'harmony' | 'metronome' | 'melody';
   // Style/instrument/feel pickers are all optional — Metronome has none of them,
   // just a volume fader and a mute button; Feel is currently Drums-only.
   styleOptions?: TStyle[];

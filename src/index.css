@@ -1,3 +1,20 @@
+/* Scoped to just the codepoints actual notation uses (digits, flat/natural/sharp,
+   and the whole Musical Symbols plane incl. the treble clef) — Noto Music also has
+   full Latin coverage, so without this range restriction it would hijack ordinary
+   letters anywhere it's listed (e.g. chord-symbol text) instead of only supplying
+   the symbols the regular text fonts render poorly (Architects Daughter's flat
+   glyph in particular sits noticeably low). Self-declared rather than linked in
+   index.html — a second, unrestricted @font-face for the same family name would
+   make it ambiguous which one wins for a given character. */
+@font-face {
+  font-family: 'Noto Music';
+  src: url('https://fonts.gstatic.com/s/notomusic/v21/pe0rMIiSN5pO63htf1sxItc.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0030-0039, U+2669-266F, U+1D100-1D1FF;
+}
+
 :root {
   --text: #2b2b33;
   --bg: #ffffff;
@@ -162,7 +179,7 @@ body {
 
 .layout-grid {
   flex: 1;
-  min-width: 30vw;
+  min-width: 40vw;
   min-height: 0;
   overflow-y: auto;
 }
@@ -174,6 +191,26 @@ body {
   gap: 20px;
   min-height: 0;
   overflow-y: auto;
+}
+
+.layout-sidebar-collapsed {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.sidebar-toggle {
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
 }
 
 h1 {
@@ -199,6 +236,15 @@ select {
   padding: 8px 10px;
   width: 100%;
   box-sizing: border-box;
+}
+
+/* The dropdown *popup* list is rendered natively (often with its own light
+   background regardless of page theme), so `color: inherit` on the closed
+   <select> above isn't enough — option text needs its own explicit color
+   paired with an explicit background, or it can end up light-on-white. */
+select option {
+  color: var(--text);
+  background: var(--bg);
 }
 
 .error {
@@ -256,7 +302,8 @@ select {
 }
 
 .channel-strip-column {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   align-self: flex-start;
   display: flex;
   flex-direction: column;
@@ -266,6 +313,9 @@ select {
 .channel-strip-rail {
   display: flex;
   gap: 8px;
+  overflow-x: auto;
+  /* Room for the scrollbar so it doesn't sit flush against (or clip) the last fader. */
+  padding-bottom: 6px;
 }
 
 .panel-title {
@@ -386,6 +436,10 @@ select {
 
 .channel-strip-metronome {
   --track-accent: #6b7280;
+}
+
+.channel-strip-melody {
+  --track-accent: #4fb06d;
 }
 
 .channel-strip-raised {
@@ -649,28 +703,89 @@ button:hover {
   overflow: hidden;
 }
 
+/* Real-book style masthead: tempo left (column 1) / title centered (column 2) /
+   author right (column 3). Sitting directly on top of a blank staff, same as
+   every fake book's title page. Horizontal padding matches .chord-grid's exactly
+   (16px) so this staff's left/right edges line up with the grid's staff below it. */
 .sheet-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 24px 14px;
+  position: relative;
+  padding: 20px 16px 16px;
   border-bottom: 1px solid #ccc;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
+  text-transform: uppercase;
+  /* Safety net: if title+author genuinely can't both fit, this scrolls instead of
+     letting .chord-grid-page's overflow:hidden silently clip either of them. */
+  overflow-x: auto;
+}
+
+.sheet-header-band {
+  position: relative;
+}
+
+.sheet-header-text {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+}
+
+.sheet-header-tempo {
+  grid-column: 1;
+  justify-self: start;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .sheet-header-title-block {
+  grid-column: 2;
+  justify-self: center;
+  /* Never shrinks below the title's own natural width, even under space
+     pressure — a grid `auto` track's default minimum is min-content, not
+     max-content, so without this the title could still get squeezed and clip. */
+  min-width: max-content;
+  position: relative;
+  padding-bottom: 4px;
+  text-align: center;
+}
+
+/* Extends past the title text on both sides rather than hugging the letters —
+   text-decoration:underline alone sits flush against the glyphs. */
+.sheet-header-title-block::after {
+  content: '';
+  position: absolute;
+  left: -18px;
+  right: -18px;
+  bottom: 0;
+  height: 1.5px;
+  background: #1a1a1a;
+}
+
+.sheet-author-line {
+  grid-column: 3;
+  justify-self: end;
   min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+  font-size: 11px;
 }
 
 .sheet-title,
 .sheet-author {
   font-family: inherit;
+  text-transform: inherit;
   color: #1a1a1a;
   background: transparent;
   border: none;
   padding: 1px 2px;
   border-radius: 2px;
+  text-align: inherit;
 }
 
 .sheet-title:hover,
@@ -682,50 +797,41 @@ button:hover {
 }
 
 .sheet-title {
-  display: block;
+  display: inline-block;
   font-size: 26px;
-  font-weight: 700;
-  max-width: 100%;
-}
-
-.sheet-author-line {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  margin-top: 4px;
-  font-size: 14px;
-  font-style: italic;
-  opacity: 0.75;
+  font-weight: 400;
 }
 
 .sheet-author {
   font-size: inherit;
-  font-style: inherit;
+  /* .sheet-author-line is a flex container, and flex items default to
+     min-width:auto (won't shrink below their own content) — without this
+     override, max-width below is silently ignored and long names overflow
+     past their cell instead of truncating. */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.sheet-header-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  flex-shrink: 0;
+.sheet-clear-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
 }
 
-.sheet-marks {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: 14px;
-  white-space: nowrap;
+.sheet-header-staff {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-.sheet-time-signature {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1;
-  font-size: 18px;
-  font-weight: 700;
+.sheet-header-staff-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #333;
 }
 
 .chord-grid {
@@ -815,22 +921,126 @@ button:hover {
 }
 
 .chord-grid-row {
-  display: grid;
   position: relative;
-  height: 46px;
-  border-top: 2px solid #333;
-  border-bottom: 2px solid #333;
 }
 
-.grid-cell {
-  border-right: 1px solid #eee;
+/* The staff — clef, 5 lines, bar divisions. Empty by design: reserved space for
+   melody notation later, not a data-bearing element (see the plan noted in
+   ChordGrid.tsx). Positioned by simple fractions of the row, independent of the
+   beat grid the chord labels/loop overlay use. */
+.staff {
+  position: absolute;
+  left: 0;
+  right: 0;
 }
 
-.grid-cell.bar-line {
-  border-right: 1px solid #999;
+.staff-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #333;
+}
+
+.staff-clef {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-46%);
+  font-size: 22px;
+  line-height: 1;
+  font-family: 'Noto Music', Georgia, 'Times New Roman', serif;
+  color: #1a1a1a;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* Key signature accidentals — fixed engraving positions (see SHARP_KEY_SIG_STEPS/
+   FLAT_KEY_SIG_STEPS in staffLayout.ts), not tied to any melody note or pitch.
+   Noto Music instead of the body font — its flat/sharp glyphs sit correctly on
+   the baseline for music engraving, unlike a general text/handwriting font's. */
+.key-sig-accidental {
+  position: absolute;
+  font-family: 'Noto Music', Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  line-height: 1;
+  color: #1a1a1a;
+  /* Noto Music's flat/sharp glyphs sit noticeably below the font's own vertical
+     center (checked against its actual glyf bounding boxes) — this nudge is an
+     eyeballed correction on top of that, not exact for every zoom level. */
+  transform: translate(-50%, -50%) translateY(-2.5px);
+  pointer-events: none;
+}
+
+.staff-time-signature {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 0;
+  font-family: 'Noto Music', Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  line-height: 1;
+  color: #1a1a1a;
+  pointer-events: none;
+}
+
+.staff-barline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #333;
+}
+
+/* The closing barline of the whole chart — a thin/thick double line. */
+.staff-barline-final {
+  width: 2px;
+  background: #333;
+  box-shadow: -4px 0 0 #333;
+}
+
+/* Imported melody notes — plain noteheads, not real rhythm notation (no
+   stems/beams/duration-differentiated shapes). left/top are computed per-note in
+   ChordGrid.tsx from staffStepsAboveBottomLine; centering is via transform so that
+   coordinate can stay a simple beat-fraction/pixel pair. */
+.melody-note {
+  position: absolute;
+  width: 9px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  transform: translate(-50%, -50%) rotate(-18deg);
+  pointer-events: none;
+}
+
+.melody-ledger-line {
+  position: absolute;
+  width: 15px;
+  height: 1px;
+  background: #333;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.melody-accidental {
+  position: absolute;
+  font-family: 'Noto Music', Georgia, 'Times New Roman', serif;
+  font-size: 12px;
+  line-height: 1;
+  color: #1a1a1a;
+  /* See .key-sig-accidental's comment — same Noto Music low-glyph correction. */
+  transform: translate(calc(-100% - 5px), -50%) translateY(-2px);
+  pointer-events: none;
 }
 
 .loop-dim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.06);
   pointer-events: none;
 }
@@ -845,32 +1055,38 @@ button:hover {
   z-index: 2;
 }
 
-.chord-block {
-  position: relative;
-  margin: 6px 2px;
-  border: 1.5px solid #333;
-  border-radius: 3px;
-  background: #fff;
+/* Chord symbols float above the staff, plain-text lead-sheet style — no box or
+   fill by default. Edit affordances (remove/resize) only surface on hover or
+   selection, so the resting state reads like real notation. */
+.chord-label {
+  position: absolute;
+  top: 0;
   color: #1a1a1a;
-  display: flex;
-  align-items: center;
-  padding: 0 6px;
-  font-size: 14px;
-  font-weight: 700;
   font-family: Georgia, 'Times New Roman', serif;
-  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 3px;
+  border-radius: 3px;
 }
 
-.chord-block-body {
+.chord-label:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.chord-label-body {
   flex: 1;
   cursor: grab;
   min-width: 0;
 }
 
-.chord-block-name {
+.chord-label-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 400;
 }
 
 .chord-block-remove {
@@ -880,11 +1096,12 @@ button:hover {
   padding: 0 2px;
   font-size: 13px;
   font-family: inherit;
-  opacity: 0.6;
+  opacity: 0;
 }
 
-.chord-block-active {
-  background: #ff0;
+.chord-label:hover .chord-block-remove,
+.chord-label-selected .chord-block-remove {
+  opacity: 0.6;
 }
 
 @keyframes chord-selected-pulse {
@@ -901,27 +1118,18 @@ button:hover {
   }
 }
 
-.chord-block-selected {
+.chord-label-selected {
+  background: rgba(42, 109, 244, 0.1);
   outline: none;
   animation: chord-selected-pulse 1.4s ease-in-out infinite;
   z-index: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chord-block-selected {
+  .chord-label-selected {
     animation: none;
     box-shadow: 0 0 0 2px #2a6df4;
   }
-}
-
-/* A chord that spans multiple rows renders as one segment per row — dashed edges
-   mark the "cut" so it still reads as a single continuous chord wrapping lines. */
-.chord-block-continued {
-  border-left-style: dashed;
-}
-
-.chord-block-continues {
-  border-right-style: dashed;
 }
 
 .resize-handle {
@@ -932,6 +1140,12 @@ button:hover {
   width: 6px;
   cursor: ew-resize;
   background: rgba(0, 0, 0, 0.08);
+  opacity: 0;
+}
+
+.chord-label:hover .resize-handle,
+.chord-label-selected .resize-handle {
+  opacity: 1;
 }
 
 .clear-button {

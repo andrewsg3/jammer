@@ -175,6 +175,55 @@ const SCALE_INTERVALS: Record<ScaleName, number[]> = {
   locrian: [0, 1, 3, 5, 6, 8, 10],
 };
 
+// How many semitones above a mode's own tonic its "parent major" (the major scale
+// it's a rotation of — see the SCALE_INTERVALS comment above) starts. Lets any
+// mode borrow the standard major-key-signature table below rather than needing
+// its own: e.g. D dorian's parent major is C (2 semitones below D).
+const MODE_OFFSET_FROM_PARENT_MAJOR: Record<ScaleName, number> = {
+  major: 0,
+  dorian: 2,
+  phrygian: 4,
+  lydian: 5,
+  mixolydian: 7,
+  minor: 9,
+  locrian: 11,
+};
+
+// Standard treble-clef key signature for each major-scale tonic, indexed by
+// semitone (0=C, 1=C#/Db, ...). The tritone (6) is a genuine enharmonic tie —
+// F# and Gb both take 6 accidentals — F# is picked arbitrarily.
+const MAJOR_KEY_SIGNATURE: { sign: 'sharp' | 'flat'; count: number }[] = [
+  { sign: 'sharp', count: 0 }, // C
+  { sign: 'flat', count: 5 }, // Db
+  { sign: 'sharp', count: 2 }, // D
+  { sign: 'flat', count: 3 }, // Eb
+  { sign: 'sharp', count: 4 }, // E
+  { sign: 'flat', count: 1 }, // F
+  { sign: 'sharp', count: 6 }, // F#
+  { sign: 'sharp', count: 1 }, // G
+  { sign: 'flat', count: 4 }, // Ab
+  { sign: 'sharp', count: 3 }, // A
+  { sign: 'flat', count: 2 }, // Bb
+  { sign: 'sharp', count: 5 }, // B
+];
+
+// Standard engraving order — each accidental is added in this sequence as a key
+// picks up more sharps/flats.
+const SHARP_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
+const FLAT_ORDER = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
+
+/** The key signature (sharps or flats, in standard order) for a key + mode. */
+export function keySignatureAccidentals(
+  key: string,
+  scale: ScaleName,
+): { sign: 'sharp' | 'flat'; letters: string[] } {
+  const rootSemitone = NOTE_TO_SEMITONE[key] ?? 0;
+  const parentMajorSemitone = (((rootSemitone - MODE_OFFSET_FROM_PARENT_MAJOR[scale]) % 12) + 12) % 12;
+  const { sign, count } = MAJOR_KEY_SIGNATURE[parentMajorSemitone];
+  const order = sign === 'sharp' ? SHARP_ORDER : FLAT_ORDER;
+  return { sign, letters: order.slice(0, count) };
+}
+
 const DEGREE_QUALITIES: Record<ScaleName, ChordQuality[]> = {
   major: ['maj', 'min', 'min', 'maj', 'maj', 'min', 'dim'],
   minor: ['min', 'dim', 'maj', 'min', 'min', 'maj', 'maj'],
