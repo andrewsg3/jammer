@@ -52,7 +52,8 @@ export type BassRule = {
     | 'walk-updown'
     | 'tumbao'
     | 'root-fifth-pump'
-    | 'smart-walk';
+    | 'smart-walk'
+    | 'tunisia-vamp';
 };
 
 export type BassPatternStep = {
@@ -120,6 +121,7 @@ export const baseBassStyles: BassStyle[] = [
   { name: 'Tumbao', rule: { style: 'tumbao' } },
   { name: 'Root-Fifth Pump', rule: { style: 'root-fifth-pump' } },
   { name: 'Smart Walking', rule: { style: 'smart-walk' } },
+  { name: 'Tunisia Vamp', rule: { style: 'tunisia-vamp' } },
 ];
 
 export const keysStyles: KeysStyle[] = [

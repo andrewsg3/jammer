@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { StylePicker } from './StylePicker';
 import { VerticalFader } from './VerticalFader';
 
@@ -26,6 +27,11 @@ type Props<TStyle extends NamedOption, TInstrument extends NamedOption, TFeel ex
   // each is its own always-connected node whose wet/amount just flips on/off
   // (see keys.ts/bass.ts), not something rewiring the audio graph live.
   effects?: { key: string; label: string; enabled: boolean; onToggle: () => void }[];
+  // Optional MIDI-file import trigger — only Drums (a custom pattern) and Melody
+  // (a fixed line) have anything file-importable; Bass/Harmony are rule-generated
+  // and Metronome/Master have no notes of their own. Lives below the fader (see
+  // render order) so it never disturbs the PickerPlaceholder alignment above it.
+  midiImport?: { label: string; onFile: (file: File) => void; error?: string | null };
   // Optional per-voice sub-mix disclosure — currently only Drums uses this. Rendered
   // as a floating popout (not a flex sibling) so expanding never reflows the rest of
   // the layout — it overlays on top instead of squeezing the grid or other strips.
@@ -64,10 +70,12 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
   muted,
   onToggleMuted,
   effects,
+  midiImport,
   expanded,
   onToggleExpanded,
   expandedContent,
 }: Props<TStyle, TInstrument, TFeel>) {
+  const midiFileInputRef = useRef<HTMLInputElement>(null);
   const classes = [
     'channel-strip',
     `channel-strip-${accent}`,
@@ -124,6 +132,30 @@ export function ChannelStrip<TStyle extends NamedOption, TInstrument extends Nam
         >
           M
         </button>
+      )}
+      {midiImport && (
+        <div className="channel-strip-midi-import">
+          <button
+            type="button"
+            className="channel-strip-midi-import-button"
+            onClick={() => midiFileInputRef.current?.click()}
+            title={midiImport.label}
+          >
+            Import MIDI…
+          </button>
+          <input
+            ref={midiFileInputRef}
+            type="file"
+            accept=".mid,.midi"
+            aria-label={midiImport.label}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) midiImport.onFile(file);
+              e.target.value = '';
+            }}
+          />
+          {midiImport.error && <p className="error channel-strip-midi-import-error">{midiImport.error}</p>}
+        </div>
       )}
       {effects && effects.length > 0 && (
         <div className="channel-strip-fx-row">

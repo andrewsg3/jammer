@@ -4,8 +4,6 @@ import { ChordPalette } from './components/ChordPalette';
 import { TopBar } from './components/TopBar';
 import { ChannelStrip } from './components/ChannelStrip';
 import { MiniFader } from './components/MiniFader';
-import { MidiUpload } from './components/MidiUpload';
-import { SongPresetFileControls } from './components/SongPresetFileControls';
 import type { Chord, ChordPlacement, ChordSelection, NotationStyle, ScaleName } from './data/progressions';
 import {
   baseDrumStyles,
@@ -155,7 +153,6 @@ function App() {
     (DEFAULT_SONG_PRESET?.sections ?? []).map((s) => ({ id: crypto.randomUUID(), ...s })),
   );
   const [melodyMuted, setMelodyMutedState] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [songPresetError, setSongPresetError] = useState<string | null>(null);
   const [loopStart, setLoopStart] = useState(DEFAULT_LOOP_RANGE.loopStart);
   const [loopEnd, setLoopEnd] = useState(DEFAULT_LOOP_RANGE.loopEnd);
@@ -557,6 +554,9 @@ function App() {
         isPlaying={isPlaying}
         onTogglePlay={handleTogglePlay}
         instrumentsLoading={instrumentsLoading}
+        onSaveSongPreset={handleSaveSongPreset}
+        onImportSongPresetFile={handleImportSongPresetFile}
+        songPresetError={songPresetError}
       />
       {instrumentsLoading && (
         <div className="loading-modal-backdrop">
@@ -568,45 +568,14 @@ function App() {
       )}
       <main className="app">
         <div className="layout">
-          <div className={`layout-sidebar${sidebarCollapsed ? ' layout-sidebar-collapsed' : ''}`}>
-            <button
-              type="button"
-              className="sidebar-toggle"
-              onClick={() => setSidebarCollapsed((v) => !v)}
-              aria-label={sidebarCollapsed ? 'Expand chord palette' : 'Collapse chord palette'}
-              title={sidebarCollapsed ? 'Expand chord palette' : 'Collapse chord palette'}
-            >
-              {sidebarCollapsed ? '»' : '«'}
-            </button>
-            {!sidebarCollapsed && (
-              <>
-                <h2 className="panel-title">Chord Palette</h2>
-                <ChordPalette
-                  musicalKey={musicalKey}
-                  scale={scale}
-                  notationStyle={notationStyle}
-                  onAudition={handleAudition}
-                />
-
-                <details className="more-section">
-                  <summary>More</summary>
-                  <div className="more-section-content">
-                    <MidiUpload onFile={handleMidiUpload} error={midiError} />
-                    <MidiUpload
-                      id="midi-upload-melody"
-                      label="Import melody MIDI"
-                      onFile={handleMelodyMidiUpload}
-                      error={melodyError}
-                    />
-                    <SongPresetFileControls
-                      onSave={handleSaveSongPreset}
-                      onImportFile={handleImportSongPresetFile}
-                      error={songPresetError}
-                    />
-                  </div>
-                </details>
-              </>
-            )}
+          <div className="layout-sidebar">
+            <h2 className="panel-title">Chord Palette</h2>
+            <ChordPalette
+              musicalKey={musicalKey}
+              scale={scale}
+              notationStyle={notationStyle}
+              onAudition={handleAudition}
+            />
           </div>
           <div className="layout-grid">
             <ChordGrid
@@ -660,6 +629,7 @@ function App() {
               onVolumeChange={setDrumsVolumeState}
               muted={drumsMuted}
               onToggleMuted={() => setDrumsMutedState((v) => !v)}
+              midiImport={{ label: 'Import drum MIDI', onFile: handleMidiUpload, error: midiError }}
               effects={[
                 {
                   key: 'comp',
@@ -769,6 +739,7 @@ function App() {
               onVolumeChange={setMelodyVolumeState}
               muted={melodyMuted}
               onToggleMuted={() => setMelodyMutedState((v) => !v)}
+              midiImport={{ label: 'Import melody MIDI', onFile: handleMelodyMidiUpload, error: melodyError }}
             />
             <ChannelStrip
               label="Metronome"

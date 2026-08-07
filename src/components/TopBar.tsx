@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { SCALE_NAMES, SCALE_LABELS } from '../data/progressions';
 import type { NotationStyle, ScaleName } from '../data/progressions';
 import type { SongPreset } from '../data/songPresets';
+import { SongPresetFileControls } from './SongPresetFileControls';
 
 const MIN_TEMPO = 40;
 const MAX_TEMPO = 220;
@@ -25,6 +26,9 @@ type Props = {
   isPlaying: boolean;
   onTogglePlay: () => void;
   instrumentsLoading: boolean;
+  onSaveSongPreset: () => void;
+  onImportSongPresetFile: (file: File) => void;
+  songPresetError?: string | null;
 };
 
 function TopBarField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -51,6 +55,9 @@ export function TopBar({
   isPlaying,
   onTogglePlay,
   instrumentsLoading,
+  onSaveSongPreset,
+  onImportSongPresetFile,
+  songPresetError,
 }: Props) {
   const tapTimesRef = useRef<number[]>([]);
 
@@ -77,26 +84,34 @@ export function TopBar({
         <h1 className="app-title">jammer v0</h1>
 
         <TopBarField label="Song">
-          <select
-            id="song-preset-quick"
-            aria-label="Song preset"
-            value={currentSongName}
-            onChange={(e) => {
-              const preset = songPresets.find((p) => p.name === e.target.value);
-              if (preset) onLoadSongPreset(preset);
-            }}
-          >
-            {/* Shown when the title's been edited (or a custom preset loaded) and no
-                longer matches a bundled preset name — keeps the select's value valid. */}
-            {!songPresets.some((p) => p.name === currentSongName) && (
-              <option value={currentSongName}>{currentSongName}</option>
-            )}
-            {songPresets.map((preset) => (
-              <option key={preset.name} value={preset.name}>
-                {preset.name}
-              </option>
-            ))}
-          </select>
+          <div className="top-bar-song-group">
+            <select
+              id="song-preset-quick"
+              aria-label="Song preset"
+              value={currentSongName}
+              onChange={(e) => {
+                const preset = songPresets.find((p) => p.name === e.target.value);
+                if (preset) onLoadSongPreset(preset);
+              }}
+            >
+              {/* Shown when the title's been edited (or a custom preset loaded) and no
+                  longer matches a bundled preset name — keeps the select's value valid. */}
+              {!songPresets.some((p) => p.name === currentSongName) && (
+                <option value={currentSongName}>{currentSongName}</option>
+              )}
+              {songPresets.map((preset) => (
+                <option key={preset.name} value={preset.name}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+            <SongPresetFileControls
+              onSave={onSaveSongPreset}
+              onImportFile={onImportSongPresetFile}
+              error={songPresetError}
+              compact
+            />
+          </div>
         </TopBarField>
 
         <TopBarField label="Key">

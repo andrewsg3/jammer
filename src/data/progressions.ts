@@ -4,6 +4,7 @@ export type ChordQuality =
   | 'dom7'
   | 'maj7'
   | 'min7'
+  | 'minMaj7'
   | 'dim'
   | 'dim7'
   | 'm7b5'
@@ -19,6 +20,7 @@ export type ChordQuality =
   | 'dom7sharp9'
   | 'dom7flat9'
   | 'dom7sharp5'
+  | 'dom7flat5'
   | 'dom13'
   | 'm11'
   | 'maj13'
@@ -87,6 +89,7 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   dom7: [0, 4, 7, 10],
   maj7: [0, 4, 7, 11],
   min7: [0, 3, 7, 10],
+  minMaj7: [0, 3, 7, 11], // minor triad + major 7th — e.g. Dm(maj7)
   dim: [0, 3, 6],
   dim7: [0, 3, 6, 9],
   m7b5: [0, 3, 6, 10],
@@ -102,6 +105,7 @@ const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   dom7sharp9: [0, 4, 7, 10, 15], // "Hendrix chord" — e.g. E7#9
   dom7flat9: [0, 4, 7, 10, 13],
   dom7sharp5: [0, 4, 8, 10],
+  dom7flat5: [0, 4, 6, 10], // altered dominant, natural 5th replaced by b5 — e.g. G7b5
   dom13: [0, 4, 7, 10, 14, 21],
   m11: [0, 3, 7, 10, 14, 17],
   maj13: [0, 4, 7, 11, 14, 21],
@@ -137,6 +141,9 @@ const QUALITY_SUFFIX_SYMBOL_PARTS: Record<ChordQuality, ChordSuffixParts> = {
   // belongs in the superscript ext with the digit, not full-size in core.
   maj7: { core: '', ext: '△7' },
   min7: { core: '-', ext: '7' },
+  // Real-book convention: the minor dash plus the same △7 used for a plain
+  // major 7th — "-△7", not a separate glyph of its own.
+  minMaj7: { core: '-', ext: '△7' },
   dim: { core: '°', ext: '' },
   dim7: { core: '°', ext: '7' },
   m7b5: { core: '-', ext: '7b5' },
@@ -152,6 +159,7 @@ const QUALITY_SUFFIX_SYMBOL_PARTS: Record<ChordQuality, ChordSuffixParts> = {
   dom7sharp9: { core: '', ext: '7#9' },
   dom7flat9: { core: '', ext: '7b9' },
   dom7sharp5: { core: '', ext: '7#5' },
+  dom7flat5: { core: '', ext: '7b5' },
   dom13: { core: '', ext: '13' },
   m11: { core: '-', ext: '11' },
   maj13: { core: '', ext: '△13' },
@@ -168,6 +176,7 @@ const QUALITY_SUFFIX_WRITTEN: Record<ChordQuality, string> = {
   dom7: '7',
   maj7: 'maj7',
   min7: 'm7',
+  minMaj7: 'm(maj7)',
   dim: 'dim',
   dim7: 'dim7',
   m7b5: 'm7b5',
@@ -183,6 +192,7 @@ const QUALITY_SUFFIX_WRITTEN: Record<ChordQuality, string> = {
   dom7sharp9: '7#9',
   dom7flat9: '7b9',
   dom7sharp5: '7#5',
+  dom7flat5: '7b5',
   dom13: '13',
   m11: 'm11',
   maj13: 'maj13',
@@ -194,7 +204,7 @@ const QUALITY_SUFFIX_WRITTEN: Record<ChordQuality, string> = {
 export const QUALITY_GROUPS: { label: string; qualities: ChordQuality[] }[] = [
   { label: 'Triads', qualities: ['maj', 'min', 'dim', 'aug', 'sus2', 'sus4'] },
   { label: 'Sixths', qualities: ['6', 'm6'] },
-  { label: 'Sevenths', qualities: ['dom7', 'maj7', 'min7', 'dim7', 'm7b5'] },
+  { label: 'Sevenths', qualities: ['dom7', 'maj7', 'min7', 'minMaj7', 'dim7', 'm7b5'] },
   { label: 'Extensions', qualities: ['add9', 'dom9', 'maj9', 'm9'] },
   {
     label: 'Altered / Exotic',
@@ -202,6 +212,7 @@ export const QUALITY_GROUPS: { label: string; qualities: ChordQuality[] }[] = [
       'dom7sharp9',
       'dom7flat9',
       'dom7sharp5',
+      'dom7flat5',
       'dom13',
       'm11',
       'maj13',
@@ -218,6 +229,7 @@ export const QUALITY_LABELS: Record<ChordQuality, string> = {
   dom7: 'Dominant 7',
   maj7: 'Major 7',
   min7: 'Minor 7',
+  minMaj7: 'Minor-Major 7',
   dim: 'Diminished',
   dim7: 'Diminished 7',
   m7b5: 'Half-Diminished (m7♭5)',
@@ -233,6 +245,7 @@ export const QUALITY_LABELS: Record<ChordQuality, string> = {
   dom7sharp9: 'Dominant 7♯9 (Hendrix)',
   dom7flat9: 'Dominant 7♭9',
   dom7sharp5: 'Dominant 7♯5',
+  dom7flat5: 'Dominant 7♭5',
   dom13: 'Dominant 13',
   m11: 'Minor 11',
   maj13: 'Major 13',

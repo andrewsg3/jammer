@@ -213,6 +213,10 @@ function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null 
       // Handled by smartWalkAllEvents (needs the whole progression at once for
       // chord-change lookahead and a continuous register pointer).
       return null;
+    case 'tunisia-vamp':
+      // Handled by tunisiaVampEvents (needs sixteenth-note placement this
+      // per-beat/single-chord function can't express).
+      return null;
   }
 }
 
@@ -284,6 +288,46 @@ function rootFifthPumpEvents(chord: Chord, placement: ChordPlacement): BassEvent
     push(cellStart + 6, root); // "and" of 2
     push(cellStart + 8, fifth); // beat 3
     push(cellStart + 12, fifth); // beat 4
+  }
+  return events;
+}
+
+/**
+ * The "A Night in Tunisia" vamp bass figure: a symmetric arc arpeggio across one
+ * bar — root, 3rd, 5th, octave rising on 1, 1&, 2, 2& (that last note held
+ * through beat 3, since nothing re-attacks there), then 5th, 3rd falling back on
+ * 3& and 4& (3& likewise held through beat 4) before landing back on the root
+ * for the next bar's downbeat. Needs its own sixteenth-resolution generator
+ * (like rootFifthPumpEvents) since noteForBeat only ever places one note per
+ * whole beat.
+ */
+function tunisiaVampEvents(chord: Chord, placement: ChordPlacement): BassEvent[] {
+  const tones = rootTones(chord, BASS_OCTAVE);
+  const root = tones[0];
+  const third = tones[1] ?? root;
+  const fifth = tones[2] ?? root;
+  // The real 7th when the chord has one (min7/dom7/etc.) — arpeggiating up
+  // through root-3rd-5th-7th is the actual chord-tone shape this figure wants
+  // for a seventh chord. Falls back to the octave root for a plain triad
+  // (maj/min), which has no 7th to reach for.
+  const seventh = tones[3] ?? rootTones(chord, BASS_OCTAVE + 1)[0];
+  const totalSixteenths = placement.lengthBeats * 4;
+  const events: BassEvent[] = [];
+
+  const push = (offset: number, note: string, duration: string) => {
+    if (offset >= totalSixteenths) return;
+    const beat = placement.startBeat + Math.floor(offset / 4);
+    const sixteenths = offset % 4;
+    events.push({ time: `0:${beat}:${sixteenths}`, note, duration, velocity: 0.8 });
+  };
+
+  for (let barStart = 0; barStart < totalSixteenths; barStart += 16) {
+    push(barStart, root, '8n'); // beat 1
+    push(barStart + 2, third, '8n'); // 1&
+    push(barStart + 4, fifth, '8n'); // beat 2
+    push(barStart + 6, seventh, '4n'); // 2& — held through beat 3
+    push(barStart + 10, fifth, '4n'); // 3& — held through beat 4
+    push(barStart + 14, third, '8n'); // 4&
   }
   return events;
 }
@@ -549,6 +593,10 @@ export function scheduleBass(
       }
       if (rule.style === 'root-fifth-pump') {
         events.push(...withTimeFeel(placement, factor, (vp) => rootFifthPumpEvents(chord, vp)));
+        continue;
+      }
+      if (rule.style === 'tunisia-vamp') {
+        events.push(...withTimeFeel(placement, factor, (vp) => tunisiaVampEvents(chord, vp)));
         continue;
       }
       events.push(
