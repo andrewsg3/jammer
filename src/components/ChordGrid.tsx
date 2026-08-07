@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react';
-import { chordName, deserializeSelection, resolveSelection } from '../data/progressions';
+import { chordName, deserializeSelection, resolveSelection, keySignatureAccidentals } from '../data/progressions';
 import type { Chord, ChordPlacement, ChordSelection, ScaleName } from '../data/progressions';
+import { staffStepsAboveBottomLine } from '../data/melody';
+import type { MelodyNote } from '../data/melody';
 import { SheetMusicHeader } from './SheetMusicHeader';
+import { STAFF_HEIGHT, STAFF_LINE_GAP, SHARP_KEY_SIG_STEPS, FLAT_KEY_SIG_STEPS } from './staffLayout';
 
 // 12 rows of 4 bars — a full lead-sheet page (A4-ish proportions), not just a loop snippet.
 export const GRID_BARS = 48;
@@ -12,12 +15,18 @@ const BEATS_PER_ROW = BARS_PER_ROW * BEATS_PER_BAR; // 16
 export const TOTAL_BEATS = GRID_BARS * BEATS_PER_BAR; // 192
 const ROWS = GRID_BARS / BARS_PER_ROW; // 12
 
-const ROW_HEIGHT = 68; // px — ruler (14) + cell row (46) + row gap (8), for Y-position math
+const RULER_HEIGHT = 14;
+const CHORD_LABEL_HEIGHT = 22; // px — strip above the staff where chord symbols sit (Limelight needs a bit more headroom than plain serif did)
+const ROW_CONTENT_HEIGHT = CHORD_LABEL_HEIGHT + STAFF_HEIGHT;
+const ROW_GAP = 8;
+// px — ruler + (chord-label strip + staff) + row gap, for Y-position math (clientPosToGlobalBeat).
+const ROW_HEIGHT = RULER_HEIGHT + ROW_CONTENT_HEIGHT + ROW_GAP;
 const MIN_LENGTH_BEATS = 1; // 1/4 bar
 const MIN_LOOP_LENGTH_BEATS = 1;
 
 type Props = {
   placements: ChordPlacement[];
+  melody: MelodyNote[];
   musicalKey: string;
   scale: ScaleName;
   loopStart: number;
@@ -115,6 +124,7 @@ function clientPosToGlobalBeat(wrapperRect: DOMRect, clientX: number, clientY: n
 
 export function ChordGrid({
   placements,
+  melody,
   musicalKey,
   scale,
   loopStart,
@@ -217,7 +227,7 @@ export function ChordGrid({
 
   // Clicking anywhere in the grid that isn't a chord block clears the selection.
   const handleWrapperClickCapture = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (!(e.target as HTMLElement).closest('.chord-block')) {
+    if (!(e.target as HTMLElement).closest('.chord-label')) {
       setSelectedIds(new Set());
       setAnchorId(null);
     }
@@ -369,7 +379,7 @@ export function ChordGrid({
   const handlePlayheadScrubStart = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (isPlaying) return;
     const target = e.target as HTMLElement;
-    if (target.closest('.chord-block') || target.closest('.loop-handle')) return;
+    if (target.closest('.chord-label') || target.closest('.loop-handle')) return;
     if (!wrapperRef.current) return;
     const wrapperRect = wrapperRef.current.getBoundingClientRect();
 
@@ -430,43 +440,148 @@ export function ChordGrid({
                     style={{ left: `${((playheadBeat - rowStart) / BEATS_PER_ROW) * 100}%` }}
                   />
                 )}
+              </div>
+              <div
+                className={`chord-grid-row${isPlaying ? '' : ' chord-grid-row-scrubbable'}`}
+                style={{ height: ROW_CONTENT_HEIGHT }}
+              >
+                {/* Loop start/end markers — repeat-sign stand-ins, sitting right at
+                    the row's edge (not the exact loop beat) and inline with the
+                    staff rather than up in the ruler. Still the same drag-to-set-
+                    loop-range handles as before, just re-skinned/repositioned. */}
                 {loopStartRow === row && (
                   <div
                     className="loop-handle loop-handle-start"
-                    style={{ left: `${((loopStart - rowStart) / BEATS_PER_ROW) * 100}%` }}
+                    style={{ top: CHORD_LABEL_HEIGHT + STAFF_HEIGHT / 2 }}
                     onMouseDown={handleLoopStartDrag}
+                    role="slider"
+                    aria-label="Loop start"
+                    aria-valuenow={loopStart}
                   >
-                    <span className="loop-handle-dots" />
+                    𝄆
                   </div>
                 )}
                 {loopEndHomeRow === row && (
                   <div
                     className="loop-handle loop-handle-end"
-                    style={{ left: `${((loopEnd - rowStart) / BEATS_PER_ROW) * 100}%` }}
+                    style={{ top: CHORD_LABEL_HEIGHT + STAFF_HEIGHT / 2 }}
                     onMouseDown={handleLoopEndDrag}
+                    role="slider"
+                    aria-label="Loop end"
+                    aria-valuenow={loopEnd}
                   >
-                    <span className="loop-handle-dots" />
+                    𝄇
                   </div>
                 )}
-              </div>
-              <div
-                className={`chord-grid-row${isPlaying ? '' : ' chord-grid-row-scrubbable'}`}
-                style={{ gridTemplateColumns: `repeat(${BEATS_PER_ROW}, 1fr)` }}
-              >
-                {Array.from({ length: BEATS_PER_ROW }, (_, i) => (
-                  <div
-                    key={`cell-${row}-${i}`}
-                    className={`grid-cell${(i + 1) % BEATS_PER_BAR === 0 ? ' bar-line' : ''}`}
-                    style={{ gridColumn: i + 1, gridRow: 1 }}
-                  />
-                ))}
+                {/* The staff itself — clef, 5 lines, bar divisions, and any imported melody
+                    notes, positioned by simple fractions/pixel offsets of the row rather
+                    than CSS Grid (see staffStepsAboveBottomLine in data/melody.ts for the
+                    pitch → y math). */}
+                <div className="staff" style={{ top: CHORD_LABEL_HEIGHT, height: STAFF_HEIGHT }}>
+                  {row === 0 &&
+                    (() => {
+                      const { sign, letters } = keySignatureAccidentals(musicalKey, scale);
+                      const stepsFor = sign === 'sharp' ? SHARP_KEY_SIG_STEPS : FLAT_KEY_SIG_STEPS;
+                      const symbol = sign === 'sharp' ? '♯' : '♭';
+                      const ACCIDENTAL_SPACING = 7;
+                      const KEY_SIG_START_X = 24;
+                      const timeSigX = KEY_SIG_START_X + letters.length * ACCIDENTAL_SPACING + 6;
+                      return (
+                        <>
+                          <span className="staff-clef" aria-hidden="true">
+                            𝄞
+                          </span>
+                          {letters.map((letter, i) => (
+                            <span
+                              key={letter}
+                              className="key-sig-accidental"
+                              style={{
+                                left: KEY_SIG_START_X + i * ACCIDENTAL_SPACING,
+                                top: STAFF_HEIGHT - stepsFor[letter] * (STAFF_LINE_GAP / 2),
+                              }}
+                              aria-hidden="true"
+                            >
+                              {symbol}
+                            </span>
+                          ))}
+                          <div className="staff-time-signature" style={{ left: timeSigX }} aria-label="Time signature 4/4">
+                            <span>4</span>
+                            <span>4</span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <div key={`line-${row}-${i}`} className="staff-line" style={{ top: i * STAFF_LINE_GAP }} />
+                  ))}
+                  {Array.from({ length: BARS_PER_ROW + 1 }, (_, i) => (
+                    <div
+                      key={`bar-${row}-${i}`}
+                      className={`staff-barline${row === ROWS - 1 && i === BARS_PER_ROW ? ' staff-barline-final' : ''}`}
+                      style={{ left: `${(i / BARS_PER_ROW) * 100}%` }}
+                    />
+                  ))}
+                  {melody
+                    .filter((note) => note.startBeat >= rowStart && note.startBeat < rowEnd)
+                    .flatMap((note, i) => {
+                      const { steps, sharp } = staffStepsAboveBottomLine(note.midi);
+                      const y = STAFF_HEIGHT - steps * (STAFF_LINE_GAP / 2);
+                      const left = `${((note.startBeat - rowStart) / BEATS_PER_ROW) * 100}%`;
+                      // Ledger lines only appear where a note actually needs one — every
+                      // line-spacing step the note sits beyond the staff edge, not just a
+                      // flat "out of range" line. See the derivation in CLAUDE.md's melody
+                      // plan; middle C (one line below the staff) is the reference case.
+                      const linesBelow = steps < 0 ? Math.floor(-steps / 2) : 0;
+                      const linesAbove = steps > 8 ? Math.floor((steps - 8) / 2) : 0;
+                      const elements = [
+                        <div key={`note-${row}-${i}`} className="melody-note" style={{ left, top: y }} />,
+                      ];
+                      if (sharp) {
+                        elements.push(
+                          <span
+                            key={`acc-${row}-${i}`}
+                            className="melody-accidental"
+                            style={{ left, top: y }}
+                            aria-hidden="true"
+                          >
+                            ♯
+                          </span>,
+                        );
+                      }
+                      for (let li = 1; li <= linesBelow; li++) {
+                        elements.push(
+                          <div
+                            key={`ledger-b-${row}-${i}-${li}`}
+                            className="melody-ledger-line"
+                            style={{ left, top: STAFF_HEIGHT + li * STAFF_LINE_GAP }}
+                          />,
+                        );
+                      }
+                      for (let li = 1; li <= linesAbove; li++) {
+                        elements.push(
+                          <div
+                            key={`ledger-a-${row}-${i}-${li}`}
+                            className="melody-ledger-line"
+                            style={{ left, top: -li * STAFF_LINE_GAP }}
+                          />,
+                        );
+                      }
+                      return elements;
+                    })}
+                </div>
                 {dimBefore > 0 && (
-                  <div className="loop-dim" style={{ gridColumn: `1 / span ${dimBefore}`, gridRow: 1 }} />
+                  <div
+                    className="loop-dim"
+                    style={{ left: 0, width: `${(dimBefore / BEATS_PER_ROW) * 100}%` }}
+                  />
                 )}
                 {dimAfter > 0 && (
                   <div
                     className="loop-dim"
-                    style={{ gridColumn: `${BEATS_PER_ROW - dimAfter + 1} / span ${dimAfter}`, gridRow: 1 }}
+                    style={{
+                      left: `${((BEATS_PER_ROW - dimAfter) / BEATS_PER_ROW) * 100}%`,
+                      width: `${(dimAfter / BEATS_PER_ROW) * 100}%`,
+                    }}
                   />
                 )}
                 {playheadRow === row && (
@@ -479,10 +594,8 @@ export function ChordGrid({
                   const placement = seg.placement;
                   const chord = resolveSelection(musicalKey, scale, placement.selection);
                   const classNames = [
-                    'chord-block',
-                    selectedIds.has(placement.id) && 'chord-block-selected',
-                    !seg.isFirst && 'chord-block-continued',
-                    !seg.isLast && 'chord-block-continues',
+                    'chord-label',
+                    selectedIds.has(placement.id) && 'chord-label-selected',
                   ]
                     .filter(Boolean)
                     .join(' ');
@@ -491,16 +604,17 @@ export function ChordGrid({
                       key={`${placement.id}-${seg.row}`}
                       className={classNames}
                       style={{
-                        gridColumn: `${seg.localStart + 1} / span ${seg.span}`,
-                        gridRow: 1,
+                        left: `${(seg.localStart / BEATS_PER_ROW) * 100}%`,
+                        width: `${(seg.span / BEATS_PER_ROW) * 100}%`,
+                        height: CHORD_LABEL_HEIGHT,
                       }}
                     >
                       <div
-                        className="chord-block-body"
+                        className="chord-label-body"
                         onMouseDown={handleMoveStart(placement)}
                         onClick={handleChordClick(placement, chord)}
                       >
-                        <span className="chord-block-name">
+                        <span className="chord-label-name">
                           {!seg.isFirst && '⟵ '}
                           {chordName(chord)}
                           {!seg.isLast && ' ⟶'}

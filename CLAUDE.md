@@ -123,3 +123,48 @@ cheap win). Plan, once sample files exist:
   already loaded via `import.meta.glob`), and accept that a Play click in the first
   instant before load completes might land silently. `Tone.loaded()` is the escape
   hatch for a real "ready" gate if that gap ever actually matters in practice.
+
+## Planned: MIDI-programmable melody on the staff
+`ChordGrid.tsx` already renders an empty 5-line staff per row (clef, lines, bar
+divisions — see the `.staff` block and `STAFF_HEIGHT`/`STAFF_LINE_GAP` constants),
+explicitly reserved for this. Deliberately **not** using a notation library
+(VexFlow etc.) — hand-rolled, approximate, doesn't need to nail every engraving
+rule (beaming, key-signature-aware spelling, rhythm-accurate note durations).
+Good enough to look like a real book at a glance; not a music engraver.
+
+- **Data model:** `MelodyNote = { time: number; pitch: number; duration: number;
+  velocity: number }` — `pitch` as a raw MIDI note number (0–127), `time`/`duration`
+  on the same `STEPS_PER_BAR` tick grid drums/bass already use (`instrumentStyles.ts`),
+  so it lines up with the existing beat math for free. Lives alongside `BassPattern`/
+  `DrumPattern` in `instrumentStyles.ts`, or a new `melody.ts` if it grows.
+- **MIDI import:** a `midiMelodyImport.ts` mirroring `midiBassImport.ts`/
+  `midiDrumImport.ts` — same `midi-file` parsing, same note-on/off → quantized-step
+  pattern, just one (presumably monophonic) track instead of per-drum-voice lanes.
+- **Pitch → staff position (the actual new part):** convert a MIDI pitch to a
+  vertical offset in the same coordinate space as the 5 rendered staff lines
+  (`top: i * STAFF_LINE_GAP` for i in 0..4). Treble clef reference: the bottom line
+  is E4. Simplification that keeps this manual instead of needing real key-signature
+  spelling: split each pitch into a *natural* (C/D/E/F/G/A/B → diatonic step 0–6,
+  semitone offsets `[0,2,4,5,7,9,11]`) plus an optional sharp — any black key is
+  always spelled as "the natural below it, sharp" (e.g. Eb renders as D#). Looks
+  slightly wrong in flat-heavy keys but is visually correct and cheap. Diatonic
+  step distance from the reference note × half a line-gap (4px, since each staff
+  step — line to adjacent space — is half of `STAFF_LINE_GAP`) gives the y-offset;
+  middle C (C4) lands exactly one ledger line below the staff, which is a good
+  sanity check when implementing this.
+- **Rendering:** notehead = small absolutely-positioned ellipse inside the existing
+  `.staff` div, `left` computed the same percentage-of-row-width way the chord
+  labels and barlines already are (`(time / BEATS_PER_ROW) * 100%`). Ledger lines
+  are short horizontal segments drawn behind the notehead at each line-spacing
+  interval beyond the staff edge, only when the note falls outside it. Sharps get
+  a small "♯" glyph to the left of the notehead. Skip stems/beams/flags entirely
+  for a first pass (every duration renders as the same plain notehead) — the
+  cheapest partial upgrade later, if it's worth it, is open vs. filled noteheads
+  for half-notes-or-longer vs. shorter, without ever building real beaming.
+- **Playback:** `audio/melody.ts` mirroring `audio/keys.ts` — a monophonic
+  `Tone.Synth` (not `PolySynth`, unless chords-within-the-melody-line turns out to
+  matter) scheduled from the imported `MelodyNote[]` via `Tone.Frequency(pitch,
+  'midi')`, same Transport-relative scheduling pattern as bass/keys.
+- **Persistence:** an optional `melody?: MelodyNote[]` field on `SongPreset`
+  (`songPresets.ts`), following the same "optional, old presets still load without
+  it" convention already used for `customDrumPattern`.

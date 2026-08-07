@@ -1,6 +1,7 @@
 import { SCALE_NAMES } from './progressions';
 import type { ChordSelection, ScaleName } from './progressions';
 import type { DrumPattern } from './instrumentStyles';
+import type { MelodyNote } from './melody';
 
 export type SongPresetPlacement = {
   selection: ChordSelection;
@@ -35,6 +36,9 @@ export type SongPreset = {
   chordsInstrument?: string;
   bassInstrument?: string;
   drumsInstrument?: string;
+  // Optional so presets written before this existed still load fine (App.tsx falls
+  // back to an empty melody, same as a song with nothing imported).
+  melody?: MelodyNote[];
   placements: SongPresetPlacement[];
 };
 
@@ -56,6 +60,17 @@ function isSongPresetPlacement(value: unknown): value is SongPresetPlacement {
     isChordSelection(v.selection) &&
     (v.startBeat === undefined || typeof v.startBeat === 'number') &&
     typeof v.lengthBeats === 'number'
+  );
+}
+
+function isMelodyNote(value: unknown): value is MelodyNote {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.startBeat === 'number' &&
+    typeof v.midi === 'number' &&
+    typeof v.lengthBeats === 'number' &&
+    typeof v.velocity === 'number'
   );
 }
 
@@ -110,6 +125,7 @@ export function isSongPreset(value: unknown): value is SongPreset {
     typeof v.drumStyle === 'string' &&
     typeof v.bassStyle === 'string' &&
     typeof v.keysStyle === 'string' &&
+    (v.melody === undefined || (Array.isArray(v.melody) && v.melody.every(isMelodyNote))) &&
     Array.isArray(v.placements) &&
     v.placements.every(isSongPresetPlacement)
   );

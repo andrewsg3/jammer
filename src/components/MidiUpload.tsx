@@ -1,15 +1,17 @@
 type Props = {
   onFile: (file: File) => void;
   error?: string | null;
+  label?: string;
+  id?: string;
 };
 
-export function MidiUpload({ onFile, error }: Props) {
+export function MidiUpload({ onFile, error, label = 'Import drum MIDI', id = 'midi-upload' }: Props) {
   return (
     <div className="midi-upload">
-      <label htmlFor="midi-upload">
-        Import drum MIDI
+      <label htmlFor={id}>
+        {label}
         <input
-          id="midi-upload"
+          id={id}
           type="file"
           accept=".mid,.midi"
           onChange={(e) => {

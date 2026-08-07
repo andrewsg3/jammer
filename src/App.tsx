@@ -23,6 +23,8 @@ import {
 import { loadBundledDrumStyles } from './data/drumLibrary';
 import { loadBundledBassStyles } from './data/bassLibrary';
 import { parseMidiDrumPattern } from './data/midiDrumImport';
+import { parseMidiMelodyFile } from './data/midiMelodyImport';
+import type { MelodyNote } from './data/melody';
 import {
   bundledSongPresets,
   downloadSongPreset,
@@ -60,6 +62,8 @@ import {
   setDrumsMuted,
   setMetronomeMuted,
   setChordsEffectEnabled,
+  setMelodyVolume,
+  setMelodyMuted,
 } from './audio/engine';
 
 // Fallback only — used if bundledSongPresets is somehow empty (e.g. all preset
@@ -134,6 +138,10 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [customDrumStyle, setCustomDrumStyle] = useState<DrumStyle | null>(null);
   const [midiError, setMidiError] = useState<string | null>(null);
+  const [melody, setMelody] = useState<MelodyNote[]>(DEFAULT_SONG_PRESET?.melody ?? []);
+  const [melodyError, setMelodyError] = useState<string | null>(null);
+  const [melodyMuted, setMelodyMutedState] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [songPresetError, setSongPresetError] = useState<string | null>(null);
   const [loopStart, setLoopStart] = useState(DEFAULT_LOOP_RANGE.loopStart);
   const [loopEnd, setLoopEnd] = useState(DEFAULT_LOOP_RANGE.loopEnd);
@@ -142,6 +150,7 @@ function App() {
   const [bassVolume, setBassVolumeState] = useState(100);
   const [drumsVolume, setDrumsVolumeState] = useState(100);
   const [metronomeVolume, setMetronomeVolumeState] = useState(100);
+  const [melodyVolume, setMelodyVolumeState] = useState(100);
   const [masterVolume, setMasterVolumeState] = useState(100);
   const [drumsExpanded, setDrumsExpanded] = useState(false);
   const [kickVolume, setKickVolumeState] = useState(100);
@@ -209,6 +218,7 @@ function App() {
   useEffect(() => setBassVolume(bassVolume), [bassVolume]);
   useEffect(() => setDrumsVolume(drumsVolume), [drumsVolume]);
   useEffect(() => setMetronomeVolume(metronomeVolume), [metronomeVolume]);
+  useEffect(() => setMelodyVolume(melodyVolume), [melodyVolume]);
   useEffect(() => setMasterVolume(masterVolume), [masterVolume]);
   useEffect(() => setKickVolume(kickVolume), [kickVolume]);
   useEffect(() => setSnareVolume(snareVolume), [snareVolume]);
@@ -225,6 +235,7 @@ function App() {
   useEffect(() => setBassMuted(bassMuted), [bassMuted]);
   useEffect(() => setDrumsMuted(drumsMuted), [drumsMuted]);
   useEffect(() => setMetronomeMuted(metronomeMuted), [metronomeMuted]);
+  useEffect(() => setMelodyMuted(melodyMuted), [melodyMuted]);
 
   useEffect(() => {
     if (isPlaying) setTransportTempo(tempo);
@@ -322,6 +333,7 @@ function App() {
     setDrumsInstrumentState(
       drumsInstruments.find((i) => i.name === preset.drumsInstrument) ?? drumsInstruments[0],
     );
+    setMelody(preset.melody ?? []);
     setSongPresetError(null);
   };
 
@@ -344,6 +356,7 @@ function App() {
       drumsInstrument: drumsInstrument.name,
       customDrumPattern:
         customDrumStyle && drumStyle.name === customDrumStyle.name ? customDrumStyle.pattern : null,
+      melody: melody.length > 0 ? melody : undefined,
       placements: placements.map(({ selection, startBeat, lengthBeats }) => ({
         selection,
         startBeat,
@@ -375,6 +388,16 @@ function App() {
     }
   };
 
+  const handleMelodyMidiUpload = async (file: File) => {
+    try {
+      const { notes } = await parseMidiMelodyFile(file);
+      setMelody(notes);
+      setMelodyError(null);
+    } catch (e) {
+      setMelodyError((e as Error).message);
+    }
+  };
+
   const handleTogglePlay = useCallback(async () => {
     if (isPlaying) {
       stop();
@@ -398,6 +421,7 @@ function App() {
       bassTimeFeel: bassTimeFeel.value,
       keys: keysStyle.rule,
       keysTimeFeel: keysTimeFeel.value,
+      melody,
     });
     setIsPlaying(true);
   }, [
@@ -415,6 +439,7 @@ function App() {
     bassTimeFeel,
     keysStyle,
     keysTimeFeel,
+    melody,
   ]);
 
   useEffect(() => {
@@ -456,25 +481,45 @@ function App() {
       />
       <main className="app">
         <div className="layout">
-          <div className="layout-sidebar">
-            <h2 className="panel-title">Chord Palette</h2>
-            <ChordPalette musicalKey={musicalKey} scale={scale} onAudition={handleAudition} />
+          <div className={`layout-sidebar${sidebarCollapsed ? ' layout-sidebar-collapsed' : ''}`}>
+            <button
+              type="button"
+              className="sidebar-toggle"
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              aria-label={sidebarCollapsed ? 'Expand chord palette' : 'Collapse chord palette'}
+              title={sidebarCollapsed ? 'Expand chord palette' : 'Collapse chord palette'}
+            >
+              {sidebarCollapsed ? '»' : '«'}
+            </button>
+            {!sidebarCollapsed && (
+              <>
+                <h2 className="panel-title">Chord Palette</h2>
+                <ChordPalette musicalKey={musicalKey} scale={scale} onAudition={handleAudition} />
 
-            <details className="more-section">
-              <summary>More</summary>
-              <div className="more-section-content">
-                <MidiUpload onFile={handleMidiUpload} error={midiError} />
-                <SongPresetFileControls
-                  onSave={handleSaveSongPreset}
-                  onImportFile={handleImportSongPresetFile}
-                  error={songPresetError}
-                />
-              </div>
-            </details>
+                <details className="more-section">
+                  <summary>More</summary>
+                  <div className="more-section-content">
+                    <MidiUpload onFile={handleMidiUpload} error={midiError} />
+                    <MidiUpload
+                      id="midi-upload-melody"
+                      label="Import melody MIDI"
+                      onFile={handleMelodyMidiUpload}
+                      error={melodyError}
+                    />
+                    <SongPresetFileControls
+                      onSave={handleSaveSongPreset}
+                      onImportFile={handleImportSongPresetFile}
+                      error={songPresetError}
+                    />
+                  </div>
+                </details>
+              </>
+            )}
           </div>
           <div className="layout-grid">
             <ChordGrid
               placements={placements}
+              melody={melody}
               musicalKey={musicalKey}
               scale={scale}
               loopStart={loopStart}
@@ -584,6 +629,14 @@ function App() {
               onToggleMuted={() => setChordsMutedState((v) => !v)}
               effectEnabled={chordsEffectEnabled}
               onToggleEffect={() => setChordsEffectEnabledState((v) => !v)}
+            />
+            <ChannelStrip
+              label="Melody"
+              accent="melody"
+              volume={melodyVolume}
+              onVolumeChange={setMelodyVolumeState}
+              muted={melodyMuted}
+              onToggleMuted={() => setMelodyMutedState((v) => !v)}
             />
             <ChannelStrip
               label="Metronome"
