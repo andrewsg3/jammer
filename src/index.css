@@ -768,6 +768,9 @@ button:hover {
 .sheet-author-line {
   text-align: right;
   font-size: 10px;
+  /* Clears the Clear button, which sits absolutely positioned at top:10px in
+     the same top-right corner. */
+  margin-top: 20px;
 }
 
 .sheet-title,
@@ -804,7 +807,7 @@ button:hover {
      as the input it replaced. margin-left:auto right-aligns the whole box
      within .sheet-author-line's full-width flow. */
   display: block;
-  width: 200px;
+  width: 100px;
   max-width: 45%;
   margin-left: auto;
   resize: none;
