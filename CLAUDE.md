@@ -1,89 +1,95 @@
 # Backing Track Generator — Project Guide
 
 ## What this is
-A web app for guitarists/musicians to generate a full-band backing track (drums, bass, keys/pads)
-in any key, tempo, and genre, built from preset style patterns. Portfolio piece — should be small,
-runnable in minutes, and easy to iterate on live.
+A web app for guitarists/musicians to build a chord progression and hear it played back by
+a full band (drums, bass, keys/pads, optional melody) in any key, tempo, and style — rendered
+as an actual lead sheet (staff, clef, key/time signature, chord symbols) rather than a plain
+form. Portfolio piece. Long past its original v0 scope — see "Current shape" below for what's
+actually here now.
 
 ## Stack
-- **Vite + React** (JS or TS, TS preferred if quick to set up — don't burn time fighting types early on)
-- **Tone.js** for scheduling and playback (Web Audio under the hood). No backend — everything runs
-  client-side. No user accounts, no persistence beyond localStorage (optional, skip for v0).
-- Sample instruments: start with Tone.js's built-in synths (`Tone.Synth`, `Tone.MembraneSynth`,
-  `Tone.PolySynth`) rather than sourcing sample libraries — sounds "demo-y" but removes a huge
-  time sink. Swapping in real samples later is a drop-in change, not a rewrite.
+- **Vite + React + TypeScript.**
+- **Tone.js** for scheduling and playback (Web Audio under the hood). No backend — everything
+  runs client-side. No user accounts; song presets persist as downloadable/importable JSON
+  files, not localStorage.
+- Instruments are Tone.js synths (`Tone.Synth`, `Tone.MembraneSynth`, `Tone.PolySynth`,
+  `Tone.MonoSynth`, `Tone.FMSynth`, `Tone.MetalSynth`, `Tone.NoiseSynth` — different lanes use
+  whichever fits), not sample libraries — sounds "demo-y" but avoids sourcing/licensing sample
+  content. See "Planned: sample-based drum playback" below for the one place this is actively
+  being moved toward real samples.
+- `midi-file` for parsing imported `.mid` files (drum/bass/melody).
 
-## Scope for v0 (do this, nothing more)
-1. Chord progression input — simple text field, e.g. `Am F C G`, parsed into chord objects.
-2. Genre preset picker — 3 genres max to start (e.g. rock, funk, blues-shuffle).
-3. Key + tempo controls (key mostly just transposes the parsed chords; tempo drives Tone.Transport).
-4. Play/stop button. Drums + bass + a simple keys/pad layer, looping the chord progression.
-5. That's the whole v0. No mixer, no export, no genre editor UI, no multi-section song structure.
+## Current shape
+- **Chord grid** (`components/ChordGrid.tsx`) — a 48-bar (12 rows × 4 bars) drag/drop lead-sheet
+  page, not a text field. Chord symbols sit above a real 5-line staff per row; row 0 also carries
+  the clef, a computed key signature, and the 4/4 time signature (see `data/progressions.ts`'s
+  `keySignatureAccidentals`). Placements support multi-row spans, resize/move/select/copy-paste,
+  a scrubbable playhead, and a draggable loop range (rendered as 𝄆/𝄇 repeat-barline glyphs, not
+  the exact loop beat — see the row's edge, not mid-measure).
+- **Sheet header** (`components/SheetMusicHeader.tsx`) — real-book-style masthead: tempo
+  (left)/title (centered, underlined)/author (right, wraps in a `<textarea>` — a single-line
+  `<input>` cannot wrap its own text, learned that the hard way), all caps, over its own blank
+  staff aligned with the grid's.
+- **Drums/bass/keys** — each has multiple selectable styles (`data/drumLibrary.ts` loads
+  `.mid` files from `data/drumPatterns/`; `data/bassLibrary.ts` similarly from
+  `data/bassPatterns/`; keys styles are rule-based, defined in `data/instrumentStyles.ts`), each
+  with its own instrument/timbre variant and half/double time-feel option. MIDI files can also
+  be imported live (`components/MidiUpload.tsx` + `data/midi{Drum,Bass}Import.ts`).
+- **Melody** — a MIDI-importable, fixed (not chord-derived) line: `data/melody.ts` (data model +
+  pitch→staff-position math), `data/midiMelodyImport.ts` (import), `audio/melody.ts` (playback),
+  rendered as noteheads/ledger lines/accidentals directly on the grid's staff. See the "How
+  melody notation works" section below for the actual mechanics.
+- **Mixer** (`components/ChannelStrip.tsx` + `App.tsx`) — per-track volume/mute for drums (with
+  a per-voice sub-mix popout: kick/snare/rim/hihat×3/ride/ride bell/crash/toms), bass, keys
+  ("Harmony"), melody, and metronome, plus master. Collapsible sidebar (`layout-sidebar`) so the
+  grid can claim more width on smaller screens.
+- **Song presets** — `data/songPresets.ts` + `data/songPresets/*.json`. A preset captures
+  key/scale/tempo/loop range/styles/instruments/placements and optionally an embedded custom
+  drum pattern and/or melody. Loaded eagerly via `import.meta.glob`; adding a new bundled song is
+  just dropping a new JSON file there (must pass `isSongPreset`'s shape check).
 
-Resist scope creep — every genre, mixer knob, or export format is a v1+ feature. The goal is
-"click play, hear a full band groove in the chosen key/tempo/genre" as fast as possible.
+## Fonts / notation rendering
+- **Architects Daughter** (Google Fonts) — chord symbols and the sheet header text. Chosen over
+  a cursive script for legibility on dense chord symbols (e.g. "F#m7b5"); has no bold weight, so
+  nothing here fakes one (synthetic bold looks blurry on a handwriting-style font).
+- **Noto Music** — self-declared `@font-face` in `index.css` with a `unicode-range` scoped to
+  digits + the accidental symbols + the whole Musical Symbols Unicode plane (clef, repeat
+  barlines). Deliberately *not* loaded broadly — it has full Latin coverage too, and without the
+  range restriction it would hijack ordinary chord-symbol text. Its accidental glyphs also sit
+  measurably below the font's own vertical center (checked against the actual glyf bounding
+  boxes), hence the small manual `translateY` nudges next to each use.
+- **Staff geometry** lives in `components/staffLayout.ts` (`STAFF_HEIGHT`, `STAFF_LINE_GAP`,
+  and the key-signature accidental positions) — shared between `ChordGrid.tsx` and
+  `SheetMusicHeader.tsx` so their staves always match exactly, without one importing the other
+  (would be circular — `ChordGrid.tsx` renders `SheetMusicHeader`).
 
-## Core data model
-Single source of truth: **chord progression + genre preset**. Each instrument track reads from
-this, not from each other.
+## How melody notation works
+Deliberately **not** using a notation library (VexFlow etc.) — hand-rolled and approximate, not
+aiming to nail every engraving rule (no beaming, no rhythm-accurate note-duration shapes, no
+real key-signature-aware spelling). Good enough to look like a real book at a glance.
 
-```ts
-type Chord = { root: string; quality: 'maj' | 'min' | 'dom7' | 'maj7' | 'min7'; };
-type Progression = Chord[]; // one chord per bar, simplest case
+- **Data model** (`data/melody.ts`): `MelodyNote = { startBeat: number; midi: number;
+  lengthBeats: number; velocity: number }` — absolute beat position (same coordinate space as
+  `ChordPlacement.startBeat`), not tiled/transposed like bass patterns are; a melody is a fixed
+  line composed against real chords, so there's nothing to re-derive per chord.
+- **Pitch → staff position**: `spellPitch`/`staffStepsAboveBottomLine` split a MIDI pitch into a
+  natural letter (diatonic step) plus an optional sharp — every black key is spelled as "the
+  natural below it, sharp" (e.g. Eb renders as D#). Wrong in flat-heavy keys, cheap and always
+  visually plausible. Middle C lands exactly one ledger line below the staff — the sanity check
+  used when building this.
+- **MIDI import** (`data/midiMelodyImport.ts`): real note-on/note-off pairing (unlike the drum/
+  bass importers, which only care about note-on) since a melody's actual durations matter for
+  both playback and rendering.
+- **Playback** (`audio/melody.ts`): a single monophonic `Tone.Synth`, scheduled straight from
+  the imported notes — no chord-tracking logic needed at all, unlike bass/keys.
 
-type DrumPattern = {
-  // fixed MIDI-style pattern, one bar, independent of chords
-  steps: { time: number; note: 'kick' | 'snare' | 'hihat'; velocity: number }[];
-  bars: number;
-};
-
-type BassRule = {
-  style: 'root-fifth' | 'walking' | 'syncopated';
-  // generates notes per-chord at render time, not fixed MIDI
-};
-
-type KeysRule = {
-  voicing: 'triad' | 'power-chord' | 'seventh';
-  rhythm: 'sustained' | 'comped';
-};
-
-type GenrePreset = {
-  name: string;
-  drums: DrumPattern;
-  bass: BassRule;
-  keys: KeysRule;
-};
-```
-
-Drums are fixed loops (tempo-scaled, not pitch-scaled). Bass and keys are generated per-chord from
-the progression at render/schedule time — this is the one part of the app with actual "logic" in
-it; everything else is playback.
-
-## Folder structure (keep flat, this is a small app)
-```
-src/
-  App.tsx
-  audio/
-    engine.ts        // Tone.Transport setup, play/stop, scheduling
-    drums.ts          // drum pattern playback
-    bass.ts            // bass rule -> notes
-    keys.ts            // keys rule -> notes
-  data/
-    progressions.ts   // parsing "Am F C G" -> Chord[]
-    genrePresets.ts   // the 2-3 GenrePreset objects, hardcoded
-  components/
-    ChordInput.tsx
-    GenrePicker.tsx
-    TransportControls.tsx  // key/tempo/play-stop
-```
-
-## Explicit non-goals for v0
-- No AI/generative anything (no "suggest a progression" feature — that's a different project).
-- No real audio samples / sample libraries.
-- No user-uploaded MIDI.
+## Explicit non-goals (still true)
+- No AI/generative anything.
+- No user accounts, no server-side anything.
 - No mobile-specific UI work.
-- No genre "sliders" or parametrized style engine — hardcode genre presets, it's faster and
-  the point of v0 is a working demo, not a scalable content pipeline.
+- No real notation engraving (beaming, rhythm-accurate note shapes, key-aware enharmonic
+  spelling) — see "How melody notation works" above.
+- No in-browser MIDI editor yet — melody is import-only. See "Planned" below.
 
 ## How to run
 ```
@@ -92,79 +98,75 @@ npm run dev
 ```
 
 ## Notes for whoever's iterating on this (me)
-- If adding a genre: add a new `GenrePreset` object in `genrePresets.ts`. No other file should
-  need to change — that's the test of whether the data model is actually doing its job.
+- Adding a drum/bass style: drop a new `.mid` file in `data/drumPatterns/` or
+  `data/bassPatterns/` — no code change needed. A leading underscore (`_name.mid`) makes it
+  loadable by name (for a song preset to reference) without cluttering the style picker.
+- Adding a keys style: add an entry to `keysStyles` in `data/instrumentStyles.ts` (voicing +
+  rhythm combination).
+- Adding a bundled song: drop a new `.json` file in `data/songPresets/` matching `SongPreset`'s
+  shape (`isSongPreset` validates on load — invalid files are skipped with a console warning,
+  not a crash).
 - If the app feels robotic on loop repeats, the cheap win is light humanization: jitter velocity
-  ±10%, occasionally vary a hi-hat pattern every 4 bars. Not needed for v0 but noted here so
-  future-me doesn't forget it's an easy, high-impact next step.
+  ±10%, occasionally vary a hi-hat pattern every 4 bars. Still not done, still cheap.
+- Before committing/pushing: check `git status` for anything under `data/drumSamples/` or
+  similar unreviewed binary assets — see the sample-based drums note below for why that
+  directory in particular needs a licensing gut-check before it's ever committed.
 
 ## Planned: sample-based drum playback
-The drum engine (`audio/drums.ts`) now has one lane per physical sound source — kick,
-snare, rim, hihat (closed/open/foot), ride, ride bell, crash, and three tom pitches
-(see `DrumVoice` in `data/instrumentStyles.ts`) — each currently a placeholder synth.
-Real samples are the next step for these specifically (bass/keys are pitched,
-multi-sample instruments — a separate, bigger undertaking; drums are one-shots, the
-cheap win). Plan, once sample files exist:
+The drum engine (`audio/drums.ts`) has one lane per physical sound source — kick, snare, rim,
+hihat (closed/open/foot), ride, ride bell, crash, and three tom pitches (see `DrumVoice` in
+`data/instrumentStyles.ts`) — each currently a placeholder synth. Real samples are the next step
+for these specifically (bass/keys are pitched, multi-sample instruments — a separate, bigger
+undertaking; drums are one-shots, the cheap win). **Not yet wired up** — `audio/drums.ts` still
+has no `Tone.Player` usage, despite converted sample files having existed at points during
+development. Plan, once sample files exist:
 
-- **Location/naming:** `src/data/drumSamples/`, one short one-shot per lane, filenames
-  matching `DrumVoice` exactly (`kick.wav`, `hihat-open.wav`, `ride-bell.wav`, etc.).
-  No pitch-mapping needed — unlike bass/keys, each lane is a single unpitched sound.
-- **Format:** short WAV, not MP3 — these are all sub-second transients, and MP3
-  compression artifacts are most audible on exactly that kind of sharp attack.
-- **Tone primitive:** `Tone.Player`, not `Tone.Sampler` — Sampler is for pitched,
-  multi-note instruments (the bass/keys case later); one-shot unpitched hits want a
-  plain Player per lane, connected the same way the current synths connect to each
-  lane's `Tone.Volume` node. Velocity becomes a per-trigger volume offset rather than
-  a native velocity-sensitive envelope — fine for v1; per-lane velocity-layered
-  samples (soft/hard variants) would be the natural upgrade later.
-- **Loading:** `Tone.Player` loads its buffer asynchronously, unlike the synths it
-  replaces (which are ready the instant they're constructed) — preload every drum
-  sample eagerly at module load (mirroring how the bundled `.mid` patterns are
-  already loaded via `import.meta.glob`), and accept that a Play click in the first
-  instant before load completes might land silently. `Tone.loaded()` is the escape
-  hatch for a real "ready" gate if that gap ever actually matters in practice.
+- **Location/naming:** `src/data/drumSamples/`, one short one-shot per lane per instrument
+  variant (Acoustic/Electronic), filenames matching `DrumVoice` + variant
+  (`kick-acoustic.wav`, `hihat-open-electronic.wav`, etc.). No pitch-mapping needed — unlike
+  bass/keys, each lane is a single unpitched sound.
+- **Format:** short WAV, not MP3 or AIFF — these are all sub-second transients, MP3 compression
+  artifacts are most audible on exactly that kind of sharp attack, and note that **Ableton's own
+  "compressed" AIFC pack samples use a proprietary codec (`able` fourCC) that only Ableton itself
+  can decode** — ffmpeg and everything else will fail on them with a "could not find COMM tag"
+  error. Use Ableton's "Collect All and Save" to get real, standard PCM copies first.
+- **Licensing gut-check before committing:** sample files sourced from a commercial pack
+  (Ableton factory content, etc.) are typically fine to use *in a production*, but redistributing
+  the raw sample files themselves in a public repo is a different question the pack's license
+  may not clearly cover — worth resolving explicitly before committing `drumSamples/`, not
+  silently included in a routine commit.
+- **Tone primitive:** `Tone.Player`, not `Tone.Sampler` — Sampler is for pitched, multi-note
+  instruments (the bass/keys case later); one-shot unpitched hits want a plain Player per lane,
+  connected the same way the current synths connect to each lane's `Tone.Volume` node. Velocity
+  becomes a per-trigger volume offset rather than a native velocity-sensitive envelope — fine for
+  v1; per-lane velocity-layered samples (soft/hard variants) would be the natural upgrade later.
+- **Loading:** `Tone.Player` loads its buffer asynchronously, unlike the synths it replaces
+  (ready the instant they're constructed) — preload every drum sample eagerly at module load
+  (mirroring how the bundled `.mid` patterns are already loaded via `import.meta.glob`), and
+  accept that a Play click in the first instant before load completes might land silently.
+  `Tone.loaded()` is the escape hatch for a real "ready" gate if that gap ever actually matters.
 
-## Planned: MIDI-programmable melody on the staff
-`ChordGrid.tsx` already renders an empty 5-line staff per row (clef, lines, bar
-divisions — see the `.staff` block and `STAFF_HEIGHT`/`STAFF_LINE_GAP` constants),
-explicitly reserved for this. Deliberately **not** using a notation library
-(VexFlow etc.) — hand-rolled, approximate, doesn't need to nail every engraving
-rule (beaming, key-signature-aware spelling, rhythm-accurate note durations).
-Good enough to look like a real book at a glance; not a music engraver.
+## Planned: in-browser MIDI editor
+Melody is currently import-only — no way to program a line by hand, only drop in a `.mid` file.
+A real editor is a genuinely bigger job than it sounds: comparable in scope to what
+`ChordGrid.tsx` itself already is (400+ lines of drag/resize/move/select/clipboard logic), just
+extended to a 2D pitch-and-time surface instead of chords' 1D time-only placement — clicking to
+add a note needs both a beat position (already solved, see `clientPosToGlobalBeat`) and a pitch
+(new: inverse of `staffStepsAboveBottomLine`, mapping a Y coordinate back to a MIDI pitch).
+Worth treating as its own scoped effort, not bundled into a smaller task.
 
-- **Data model:** `MelodyNote = { time: number; pitch: number; duration: number;
-  velocity: number }` — `pitch` as a raw MIDI note number (0–127), `time`/`duration`
-  on the same `STEPS_PER_BAR` tick grid drums/bass already use (`instrumentStyles.ts`),
-  so it lines up with the existing beat math for free. Lives alongside `BassPattern`/
-  `DrumPattern` in `instrumentStyles.ts`, or a new `melody.ts` if it grows.
-- **MIDI import:** a `midiMelodyImport.ts` mirroring `midiBassImport.ts`/
-  `midiDrumImport.ts` — same `midi-file` parsing, same note-on/off → quantized-step
-  pattern, just one (presumably monophonic) track instead of per-drum-voice lanes.
-- **Pitch → staff position (the actual new part):** convert a MIDI pitch to a
-  vertical offset in the same coordinate space as the 5 rendered staff lines
-  (`top: i * STAFF_LINE_GAP` for i in 0..4). Treble clef reference: the bottom line
-  is E4. Simplification that keeps this manual instead of needing real key-signature
-  spelling: split each pitch into a *natural* (C/D/E/F/G/A/B → diatonic step 0–6,
-  semitone offsets `[0,2,4,5,7,9,11]`) plus an optional sharp — any black key is
-  always spelled as "the natural below it, sharp" (e.g. Eb renders as D#). Looks
-  slightly wrong in flat-heavy keys but is visually correct and cheap. Diatonic
-  step distance from the reference note × half a line-gap (4px, since each staff
-  step — line to adjacent space — is half of `STAFF_LINE_GAP`) gives the y-offset;
-  middle C (C4) lands exactly one ledger line below the staff, which is a good
-  sanity check when implementing this.
-- **Rendering:** notehead = small absolutely-positioned ellipse inside the existing
-  `.staff` div, `left` computed the same percentage-of-row-width way the chord
-  labels and barlines already are (`(time / BEATS_PER_ROW) * 100%`). Ledger lines
-  are short horizontal segments drawn behind the notehead at each line-spacing
-  interval beyond the staff edge, only when the note falls outside it. Sharps get
-  a small "♯" glyph to the left of the notehead. Skip stems/beams/flags entirely
-  for a first pass (every duration renders as the same plain notehead) — the
-  cheapest partial upgrade later, if it's worth it, is open vs. filled noteheads
-  for half-notes-or-longer vs. shorter, without ever building real beaming.
-- **Playback:** `audio/melody.ts` mirroring `audio/keys.ts` — a monophonic
-  `Tone.Synth` (not `PolySynth`, unless chords-within-the-melody-line turns out to
-  matter) scheduled from the imported `MelodyNote[]` via `Tone.Frequency(pitch,
-  'midi')`, same Transport-relative scheduling pattern as bass/keys.
-- **Persistence:** an optional `melody?: MelodyNote[]` field on `SongPreset`
-  (`songPresets.ts`), following the same "optional, old presets still load without
-  it" convention already used for `customDrumPattern`.
+## Direction: what this app needs next
+Asked-and-answered product question, worth keeping around since it'll come up again. Given how
+much of the recent work went into looking/feeling like a real fake book (staff notation, key
+signatures, MIDI melody import) rather than into export/production tooling or pedagogy, **jam/
+practice aid** is the natural next identity to lean into — it's the shortest path from the
+current shape, versus retrofitting this into a demo maker (needs audio export, song-structure/
+arrangement, better instrument quality) or a music theory teacher (needs genuinely new
+pedagogical features — scale/chord-tone highlighting, ear training — that nothing here currently
+hints at).
+
+Highest-leverage next pieces, in order:
+1. **Finish sample-based drums** (see above) — the biggest remaining gap between "looks real"
+   (the notation work) and "sounds real" for something you'd actually want to jam along to.
+2. **The in-browser MIDI editor** (see above) — program a head to play/comp against, not just
+   import one.
