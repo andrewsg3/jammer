@@ -440,29 +440,39 @@ export function ChordGrid({
                     style={{ left: `${((playheadBeat - rowStart) / BEATS_PER_ROW) * 100}%` }}
                   />
                 )}
-                {loopStartRow === row && (
-                  <div
-                    className="loop-handle loop-handle-start"
-                    style={{ left: `${((loopStart - rowStart) / BEATS_PER_ROW) * 100}%` }}
-                    onMouseDown={handleLoopStartDrag}
-                  >
-                    <span className="loop-handle-dots" />
-                  </div>
-                )}
-                {loopEndHomeRow === row && (
-                  <div
-                    className="loop-handle loop-handle-end"
-                    style={{ left: `${((loopEnd - rowStart) / BEATS_PER_ROW) * 100}%` }}
-                    onMouseDown={handleLoopEndDrag}
-                  >
-                    <span className="loop-handle-dots" />
-                  </div>
-                )}
               </div>
               <div
                 className={`chord-grid-row${isPlaying ? '' : ' chord-grid-row-scrubbable'}`}
                 style={{ height: ROW_CONTENT_HEIGHT }}
               >
+                {/* Loop start/end markers — repeat-sign stand-ins, sitting right at
+                    the row's edge (not the exact loop beat) and inline with the
+                    staff rather than up in the ruler. Still the same drag-to-set-
+                    loop-range handles as before, just re-skinned/repositioned. */}
+                {loopStartRow === row && (
+                  <div
+                    className="loop-handle loop-handle-start"
+                    style={{ top: CHORD_LABEL_HEIGHT + STAFF_HEIGHT / 2 }}
+                    onMouseDown={handleLoopStartDrag}
+                    role="slider"
+                    aria-label="Loop start"
+                    aria-valuenow={loopStart}
+                  >
+                    𝄆
+                  </div>
+                )}
+                {loopEndHomeRow === row && (
+                  <div
+                    className="loop-handle loop-handle-end"
+                    style={{ top: CHORD_LABEL_HEIGHT + STAFF_HEIGHT / 2 }}
+                    onMouseDown={handleLoopEndDrag}
+                    role="slider"
+                    aria-label="Loop end"
+                    aria-valuenow={loopEnd}
+                  >
+                    𝄇
+                  </div>
+                )}
                 {/* The staff itself — clef, 5 lines, bar divisions, and any imported melody
                     notes, positioned by simple fractions/pixel offsets of the row rather
                     than CSS Grid (see staffStepsAboveBottomLine in data/melody.ts for the

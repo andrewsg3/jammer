@@ -722,33 +722,35 @@ button:hover {
   position: relative;
 }
 
+/* Tempo/title are absolutely positioned (title centers on the container itself,
+   unaffected by author's width — the whole point, since a shared-row layout
+   means keeping title centered fights author's width for long names). Author is
+   left in normal flow, right-aligned within a fixed-width box that wraps — it's
+   the only normal-flow child, so it's also what gives .sheet-header-text (and
+   therefore the band, via its minHeight) real height when a name wraps to more
+   than one line; an absolutely-positioned author wouldn't grow the container. */
 .sheet-header-text {
   position: relative;
   z-index: 1;
-  height: 100%;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 16px;
 }
 
 .sheet-header-tempo {
-  grid-column: 1;
-  justify-self: start;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 13px;
   white-space: nowrap;
 }
 
 .sheet-header-title-block {
-  grid-column: 2;
-  justify-self: center;
-  /* Never shrinks below the title's own natural width, even under space
-     pressure — a grid `auto` track's default minimum is min-content, not
-     max-content, so without this the title could still get squeezed and clip. */
-  min-width: max-content;
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   padding-bottom: 4px;
   text-align: center;
+  white-space: nowrap;
 }
 
 /* Extends past the title text on both sides rather than hugging the letters —
@@ -764,16 +766,8 @@ button:hover {
 }
 
 .sheet-author-line {
-  grid-column: 3;
-  justify-self: end;
-  min-width: 0;
-  max-width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 4px;
-  font-size: 11px;
+  text-align: right;
+  font-size: 10px;
 }
 
 .sheet-title,
@@ -804,14 +798,17 @@ button:hover {
 
 .sheet-author {
   font-size: inherit;
-  /* .sheet-author-line is a flex container, and flex items default to
-     min-width:auto (won't shrink below their own content) — without this
-     override, max-width below is silently ignored and long names overflow
-     past their cell instead of truncating. */
-  min-width: 0;
-  max-width: 100%;
+  line-height: 1.3;
+  /* Fixed width (not content-based, unlike title) is what forces wrapping — a
+     textarea with no width constraint just grows to fit one line, same problem
+     as the input it replaced. margin-left:auto right-aligns the whole box
+     within .sheet-author-line's full-width flow. */
+  display: block;
+  width: 200px;
+  max-width: 45%;
+  margin-left: auto;
+  resize: none;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .sheet-clear-button {
@@ -870,54 +867,27 @@ button:hover {
   pointer-events: none;
 }
 
-/* Musical repeat-barline symbol: two stacked dots, a thin line, a gap, then a
-   thick line (left to right) — the standard "end repeat" shape. loop-handle-start
-   mirrors the whole thing via scaleX(-1) to read thick, gap, thin, dots — the
-   "start repeat" shape — rather than duplicating the layout for both directions. */
+/* Loop start/end markers — an emoji stand-in for a repeat barline, sitting right
+   at the row's edge (not the exact loop beat position) and vertically inline with
+   the staff. Still draggable via the same handlers as before — only the visual
+   changed, not the interaction. */
 .loop-handle {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 14px;
-  margin-left: -7px;
+  transform: translateY(-50%);
+  font-family: 'Noto Music', Georgia, 'Times New Roman', serif;
+  font-size: 22px;
+  line-height: 1;
+  color: #1a1a1a;
   cursor: ew-resize;
+  user-select: none;
 }
 
 .loop-handle-start {
-  transform: scaleX(-1);
+  left: -8px;
 }
 
-.loop-handle-dots {
-  position: absolute;
-  left: 0;
-  top: 2px;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 6px 0 var(--accent);
-}
-
-.loop-handle::before {
-  /* thin line */
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 0;
-  bottom: 0;
-  width: 1.5px;
-  background: var(--accent);
-}
-
-.loop-handle::after {
-  /* thick line */
-  content: '';
-  position: absolute;
-  left: 10px;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--accent);
+.loop-handle-end {
+  right: -8px;
 }
 
 .chord-grid-row {
