@@ -1600,33 +1600,77 @@ button:hover {
   text-align: center;
 }
 
+/* Chord + its number sit side by side as one unit — current and next repeat the
+   same [chord][number] pattern at two sizes, rather than the number/label
+   floating separately above or a "Next:" caption spelling out what's implied by
+   being the smaller, lower row. */
+.mobile-player__now-playing-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35em;
+  flex-wrap: wrap;
+}
+
+.mobile-player__now-playing-row--next {
+  opacity: 0.6;
+}
+
+/* Small and baseline-aligned next to the huge chord text — reads almost like a
+   subscript, secondary to the chord rather than competing with it for size. */
 .mobile-player__now-playing-countdown {
-  font-size: clamp(28px, 12vw, 64px);
+  font-size: clamp(16px, 6vw, 32px);
   font-weight: 700;
   line-height: 1;
-  color: var(--accent);
-  opacity: 0.7;
+  color: var(--text);
+  opacity: 0.6;
   font-variant-numeric: tabular-nums;
+}
+
+/* Same rehearsal-mark box shape as the desktop chart's .section-marker-label, but
+   inverted to sit on this modal's own dark background instead of the desktop's
+   paper white: text/border in the modal's own text color, background matching the
+   modal itself (var(--bg), not paper) so it reads as an outline on the page rather
+   than a cutout pasted over it. Sized up from the desktop's 11px: there it's one
+   mark among many on a dense page, here it's the only one, meant to be read at a
+   glance from across a room. */
+.mobile-player__now-playing-section {
+  display: inline-block;
+  font-size: clamp(16px, 5vw, 24px);
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--text);
+  background: var(--bg);
+  border: 2px solid var(--text);
+  padding: 5px 16px;
 }
 
 .mobile-player__now-playing-current {
   font-size: clamp(56px, 22vw, 160px);
   font-weight: 700;
   line-height: 1;
+  color: var(--accent);
   word-break: break-word;
 }
 
+/* Bigger than the old "Next: X" line — same weight/treatment as the current
+   chord, just scaled down, so it reads as "the same kind of thing, smaller" not
+   as fine print. */
 .mobile-player__now-playing-next {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5em;
-  font-size: clamp(18px, 6vw, 36px);
-  opacity: 0.6;
+  font-size: clamp(32px, 12vw, 88px);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  word-break: break-word;
 }
 
 .mobile-player__now-playing-next-duration {
-  font-size: 0.55em;
-  white-space: nowrap;
+  font-size: clamp(16px, 6vw, 32px);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 .mobile-player__now-playing-stop {

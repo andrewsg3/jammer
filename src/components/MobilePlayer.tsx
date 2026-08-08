@@ -13,6 +13,7 @@ import {
 } from '../data/instrumentStyles';
 import { loadBundledDrumStyles } from '../data/drumLibrary';
 import { loadBundledBassStyles } from '../data/bassLibrary';
+import type { SectionMarker } from '../data/sections';
 import { bundledSongPresets, resolveLoopRange, resolvePlacementStarts, type SongPreset } from '../data/songPresets';
 import {
   getCurrentBeat,
@@ -74,6 +75,36 @@ const DEFAULT_BASS_STYLE = baseBassStyles.find((s) => s.name === 'Walking')!;
 
 type Track = 'drums' | 'bass' | 'keys';
 
+// Same starting points as the desktop mixer (App.tsx) — tracks at 70% for
+// headroom, master/metronome at 100% — except drums, which start quieter here:
+// on a phone's small speaker the drum samples otherwise dominate the mix.
+const DEFAULT_VOLUMES = { master: 100, drums: 20, bass: 70, keys: 70, metronome: 100 };
+
+// UI-only preferences (not song data — those still stay JSON-file-only, per
+// CLAUDE.md's no-accounts/no-server-side stance). Small enough, and unrelated
+// enough to that constraint's actual reasoning, to justify the one
+// localStorage exception in an otherwise storage-free app.
+const PREFS_STORAGE_KEY = 'jammer-mobile-prefs';
+type StoredPrefs = { volumes?: typeof DEFAULT_VOLUMES; accentColor?: string; notationStyle?: NotationStyle };
+
+function loadStoredPrefs(): StoredPrefs {
+  try {
+    const raw = localStorage.getItem(PREFS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredPrefs(prefs: StoredPrefs): void {
+  try {
+    localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    // Private browsing, storage disabled/full, etc. — preferences just won't
+    // persist this session, not worth surfacing as an error.
+  }
+}
+
 /** Same real-book convention as ChordGrid's chord labels: the -/°/+/^ triad-quality
  * marker sets full size next to the root, 7ths/9ths/alterations set smaller and
  * raised (.chord-ext, shared with desktop). */
@@ -115,21 +146,24 @@ export function MobilePlayer() {
   });
   const [metronomeOn, setMetronomeOn] = useState(preset?.metronome ?? false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // Same starting points as the desktop mixer (App.tsx) — tracks at 70% for
-  // headroom, master/metronome at 100% — except drums, which start quieter here:
-  // on a phone's small speaker the drum samples otherwise dominate the mix.
-  const [volumes, setVolumes] = useState({ master: 100, drums: 20, bass: 70, keys: 70, metronome: 100 });
-  const [notationStyle, setNotationStyle] = useState<NotationStyle>('symbol');
-  // Session-only, not persisted (this app keeps no localStorage/accounts — see
-  // CLAUDE.md) — starts from whatever --accent already resolved to (light/dark
-  // default), and a manual pick simply overrides that CSS variable at the root.
-  const [accentColor, setAccentColor] = useState(() =>
-    getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+  const [volumes, setVolumes] = useState(() => loadStoredPrefs().volumes ?? DEFAULT_VOLUMES);
+  const [notationStyle, setNotationStyle] = useState<NotationStyle>(
+    () => loadStoredPrefs().notationStyle ?? 'symbol',
+  );
+  // Falls back to whatever --accent already resolved to (light/dark default) if
+  // nothing's stored yet — a manual pick simply overrides that CSS variable at
+  // the root.
+  const [accentColor, setAccentColor] = useState(
+    () => loadStoredPrefs().accentColor ?? getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
   );
 
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', accentColor);
   }, [accentColor]);
+
+  useEffect(() => {
+    saveStoredPrefs({ volumes, notationStyle, accentColor });
+  }, [volumes, notationStyle, accentColor]);
 
   const handleResetAccent = () => {
     document.documentElement.style.removeProperty('--accent');
@@ -167,6 +201,10 @@ export function MobilePlayer() {
   const placements: ChordPlacement[] = useMemo(
     () => resolvedPlacements.map((p, i) => ({ id: `mobile-${i}`, ...p })),
     [resolvedPlacements],
+  );
+  const sections: SectionMarker[] = useMemo(
+    () => (preset?.sections ?? []).map((s, i) => ({ id: `mobile-section-${i}`, ...s })),
+    [preset],
   );
 
   // A flat list of beat cells — CSS grid auto-flow wraps every BEATS_PER_ROW (four
@@ -355,7 +393,7 @@ export function MobilePlayer() {
       keys: keysStyle.rule,
       keysTimeFeel: preset.keysTimeFeel ?? 'normal',
       melody: preset.melody ?? [],
-      sections: [],
+      sections,
     });
     setIsPlaying(true);
   }, [
@@ -369,6 +407,7 @@ export function MobilePlayer() {
     drumStyle,
     bassStyle,
     keysStyle,
+    sections,
     instrumentsLoading,
   ]);
 
@@ -384,6 +423,16 @@ export function MobilePlayer() {
   const beatsUntilNextChord = currentPlacement
     ? currentPlacement.startBeat + currentPlacement.lengthBeats - playheadBeat
     : 0;
+  // The section marker in effect at the playhead — a marker covers from its own
+  // startBeat until the next one begins, so this is the latest marker reached so
+  // far, not a range-containment check (there can be gaps, and the last section
+  // should keep showing through to the end of the song).
+  const currentSection = isPlaying
+    ? sections.reduce<SectionMarker | null>(
+        (latest, s) => (s.startBeat <= playheadBeat && (!latest || s.startBeat > latest.startBeat) ? s : latest),
+        null,
+      )
+    : null;
 
   if (!preset) {
     return (
@@ -588,25 +637,27 @@ export function MobilePlayer() {
 
       {isPlaying && currentPlacement && (
         <div className="mobile-player__now-playing" role="dialog" aria-modal="true" aria-label="Now playing">
-          <div className="mobile-player__now-playing-countdown">{beatsUntilNextChord}</div>
-          <div className="mobile-player__now-playing-current">
-            <ChordLabel
-              chord={resolveSelection(musicalKey, scale, currentPlacement.selection)}
-              notation={notationStyle}
-            />
+          {currentSection && (
+            <div className="mobile-player__now-playing-section">{currentSection.label}</div>
+          )}
+          <div className="mobile-player__now-playing-row">
+            <span className="mobile-player__now-playing-current">
+              <ChordLabel
+                chord={resolveSelection(musicalKey, scale, currentPlacement.selection)}
+                notation={notationStyle}
+              />
+            </span>
+            <span className="mobile-player__now-playing-countdown">{beatsUntilNextChord}</span>
           </div>
           {nextPlacement && (
-            <div className="mobile-player__now-playing-next">
-              <span>
-                Next:{' '}
+            <div className="mobile-player__now-playing-row mobile-player__now-playing-row--next">
+              <span className="mobile-player__now-playing-next">
                 <ChordLabel
                   chord={resolveSelection(musicalKey, scale, nextPlacement.selection)}
                   notation={notationStyle}
                 />
               </span>
-              <span className="mobile-player__now-playing-next-duration">
-                {nextPlacement.lengthBeats} beat{nextPlacement.lengthBeats === 1 ? '' : 's'}
-              </span>
+              <span className="mobile-player__now-playing-next-duration">{nextPlacement.lengthBeats}</span>
             </div>
           )}
           <button className="mobile-player__now-playing-stop" onClick={handleTogglePlay}>
