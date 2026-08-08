@@ -631,6 +631,15 @@ export function MobilePlayer() {
                 <span className="mobile-player__settings-value">{volumes[key]}</span>
               </label>
             ))}
+
+            <a
+              href="https://www.buymeacoffee.com/andrewsg"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mobile-player__settings-coffee-link"
+            >
+              ☕ Buy me a coffee :)
+            </a>
           </div>
         </div>
       )}

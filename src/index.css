@@ -93,6 +93,15 @@ body {
   padding: 12px 24px;
 }
 
+/* Stacks the title and its coffee link into one unit, rather than the link
+   sitting inline beside the title as another toolbar field. */
+.top-bar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
 .app-title {
   /* Bembo if it's actually installed (a licensed/non-web-safe typeface — there's no
      web-font pipeline in this client-only app to embed it) — Georgia otherwise as a
@@ -100,8 +109,33 @@ body {
   font-family: Bembo, Georgia, 'Times New Roman', serif;
   font-size: 28px;
   font-weight: 700;
-  margin: 0 4px 6px 0;
+  margin: 0;
   white-space: nowrap;
+}
+
+/* Buy Me a Coffee's own brand yellow — recognizable as their button on sight,
+   not a generic link. Black text (not var(--text)) since #ffdd00 needs a fixed
+   dark foreground regardless of the app's own light/dark theme. Small — sits
+   underneath the logo as a footnote to it, not a toolbar-level control. */
+.coffee-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #000;
+  background: #ffdd00;
+  border-radius: 6px;
+  padding: 3px 7px;
+  text-decoration: none;
+  white-space: nowrap;
+  margin-top: 3px;
+  transition: filter 0.15s ease;
+}
+
+.coffee-link:hover,
+.coffee-link:focus-visible {
+  filter: brightness(0.92);
 }
 
 .top-bar-field {
@@ -1790,4 +1824,25 @@ button:hover {
   color: var(--text);
   cursor: pointer;
   padding: 6px;
+}
+
+/* Buy Me a Coffee's own brand yellow, same as the desktop top-bar link — black
+   text (not var(--text)) since #ffdd00 needs a fixed dark foreground regardless
+   of the app's own light/dark theme. */
+.mobile-player__settings-coffee-link {
+  align-self: center;
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #000;
+  background: #ffdd00;
+  border-radius: 8px;
+  padding: 8px 16px;
+  text-decoration: none;
+  transition: filter 0.15s ease;
+}
+
+.mobile-player__settings-coffee-link:hover,
+.mobile-player__settings-coffee-link:focus-visible {
+  filter: brightness(0.92);
 }

@@ -81,7 +81,17 @@ export function TopBar({
   return (
     <header className="top-bar">
       <div className="top-bar-inner">
-        <h1 className="app-title">jammer v0</h1>
+        <div className="top-bar-brand">
+          <h1 className="app-title">jammer v0</h1>
+          <a
+            href="https://www.buymeacoffee.com/andrewsg"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="coffee-link"
+          >
+            ☕ Buy me a coffee :)
+          </a>
+        </div>
 
         <TopBarField label="Song">
           <div className="top-bar-song-group">
