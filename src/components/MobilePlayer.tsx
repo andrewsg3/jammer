@@ -335,15 +335,22 @@ export function MobilePlayer() {
     if (isPlaying) setTransportTempo(tempo);
   }, [tempo, isPlaying]);
 
+  // A plain interval, not requestAnimationFrame — unlike App.tsx's desktop grid
+  // (which needs a smoothly-sweeping pixel-position playhead cursor), nothing
+  // here needs sub-beat resolution: playheadBeat only ever drives discrete
+  // per-beat comparisons (chart highlighting, the countdown, section lookup).
+  // Polling 60x/sec just to floor() the same value repeatedly is real, avoidable
+  // main-thread work — on a loaded/throttled phone that's exactly the kind of
+  // contention that can push Tone.js's own scheduling past its lookahead window
+  // and cause the "rushed" glitch (see onAutoStop's neighboring comment in
+  // audio/engine.ts for the same failure mode's more severe, backgrounded form).
+  // 100ms is still far tighter than a beat at any real tempo.
   useEffect(() => {
     if (!isPlaying) return;
-    let frameId: number;
-    const tick = () => {
+    const interval = window.setInterval(() => {
       setPlayheadBeat(Math.floor(getCurrentBeat()));
-      frameId = requestAnimationFrame(tick);
-    };
-    frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
+    }, 100);
+    return () => window.clearInterval(interval);
   }, [isPlaying]);
 
   useEffect(() => setDrumsMuted(!trackOn.drums), [trackOn.drums]);

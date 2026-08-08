@@ -281,20 +281,18 @@ export function scheduleKeys(
       // own notes, which is a real (not just cosmetic) audible chord-bleed bug,
       // not just an early cutoff.
       const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
+      // Explicitly releases the previous stab before each new one — same
+      // reasoning as la-pompe/bossa-nova above.
+      let hasPlayed = false;
       for (let barStart = 0; barStart < virtualLength; barStart += 4) {
-        synth!.triggerAttackRelease(
-          event.notes,
-          '16n',
-          time + Tone.Time(offsetTime(barStart / factor)).toSeconds(),
-          0.7,
-        );
+        const hitTime1 = time + Tone.Time(offsetTime(barStart / factor)).toSeconds();
+        if (hasPlayed) synth!.triggerRelease(event.notes, hitTime1);
+        synth!.triggerAttackRelease(event.notes, '16n', hitTime1, 0.7);
+        hasPlayed = true;
         if (barStart + 1.5 < virtualLength) {
-          synth!.triggerAttackRelease(
-            event.notes,
-            '16n',
-            time + Tone.Time(offsetTime((barStart + 1.5) / factor)).toSeconds(),
-            0.55,
-          );
+          const hitTime2 = time + Tone.Time(offsetTime((barStart + 1.5) / factor)).toSeconds();
+          synth!.triggerRelease(event.notes, hitTime2);
+          synth!.triggerAttackRelease(event.notes, '16n', hitTime2, 0.55);
         }
       }
     } else if (event.rhythm === 'arpeggio-up' || event.rhythm === 'arpeggio-updown') {
@@ -306,9 +304,16 @@ export function scheduleKeys(
           : event.notes;
       const stepSixteenths = 2; // 8th-note steps, in virtual (pre-time-feel) space
       const virtualTotalSixteenths = Math.max(stepSixteenths, Math.round(event.lengthBeats * 4 * factor));
+      // Explicitly releases the previous note before each new one — an arpeggio
+      // wants crisp separate notes, not each one blurring into the next via the
+      // shared synth patches' long release tail.
+      let prevNote: string | null = null;
       for (let s = 0; s < virtualTotalSixteenths; s += stepSixteenths) {
         const note = pattern[(s / stepSixteenths) % pattern.length];
-        synth!.triggerAttackRelease(note, '8n', time + Tone.Time(offsetTime(s / 4 / factor)).toSeconds(), 0.5);
+        const hitTime = time + Tone.Time(offsetTime(s / 4 / factor)).toSeconds();
+        if (prevNote) synth!.triggerRelease(prevNote, hitTime);
+        synth!.triggerAttackRelease(note, '8n', hitTime, 0.5);
+        prevNote = note;
       }
     } else if (event.rhythm === 'rising-sun') {
       // "House of the Rising Sun"-style broken-chord arpeggio, fingerpicking-style:
@@ -324,21 +329,21 @@ export function scheduleKeys(
       // floor causes real cross-placement note bleed for shorter chords.
       const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
       const tripletStep = 1 / 3;
+      // Explicitly releases whatever's still ringing before each new note — same
+      // reasoning as the other arpeggiated/stabbed rhythms above.
+      let prevNote: string | null = null;
       for (let barStart = 0; barStart < virtualLength; barStart += 4) {
-        synth!.triggerAttackRelease(
-          event.notes[0],
-          '8n',
-          time + Tone.Time(offsetTime(barStart / factor)).toSeconds(),
-          0.7,
-        );
+        const rootTime = time + Tone.Time(offsetTime(barStart / factor)).toSeconds();
+        if (prevNote) synth!.triggerRelease(prevNote, rootTime);
+        synth!.triggerAttackRelease(event.notes[0], '8n', rootTime, 0.7);
+        prevNote = event.notes[0];
         let i = 0;
         for (let b = barStart + 0.5; b < barStart + 4 && b < virtualLength; b += tripletStep) {
-          synth!.triggerAttackRelease(
-            pattern[i % pattern.length],
-            '8t',
-            time + Tone.Time(offsetTime(b / factor)).toSeconds(),
-            0.5,
-          );
+          const note = pattern[i % pattern.length];
+          const hitTime = time + Tone.Time(offsetTime(b / factor)).toSeconds();
+          if (prevNote) synth!.triggerRelease(prevNote, hitTime);
+          synth!.triggerAttackRelease(note, '8t', hitTime, 0.5);
+          prevNote = note;
           i++;
         }
       }
@@ -377,9 +382,15 @@ export function scheduleKeys(
       // the way through the beat, the same long-short ratio as an 8th-note triplet.
       const offbeat = event.rhythm === 'blues-shuffle-swing' ? 2 / 3 : 0.5;
       const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
+      // Explicitly releases the previous power-chord shape before each new hit —
+      // same reasoning as the other closely-spaced rhythms above.
+      let prevNotes: string[] = [];
       const pushShuffleHit = (beatOffset: number, notes: string[]) => {
         if (beatOffset >= virtualLength) return;
-        synth!.triggerAttackRelease(notes, '8n', time + Tone.Time(offsetTime(beatOffset / factor)).toSeconds(), 0.7);
+        const hitTime = time + Tone.Time(offsetTime(beatOffset / factor)).toSeconds();
+        if (prevNotes.length > 0) synth!.triggerRelease(prevNotes, hitTime);
+        synth!.triggerAttackRelease(notes, '8n', hitTime, 0.7);
+        prevNotes = notes;
       };
       for (let cellStart = 0; cellStart < virtualLength; cellStart += 4) {
         for (let beatInCell = 0; beatInCell < 4; beatInCell++) {
@@ -390,13 +401,14 @@ export function scheduleKeys(
       }
     } else {
       const virtualLength = Math.max(2, Math.round(event.lengthBeats * factor));
+      // Explicitly releases the previous hit before each new one — same
+      // reasoning as the other rhythms above.
+      let hasPlayed = false;
       for (let beat = 0; beat < virtualLength; beat += 2) {
-        synth!.triggerAttackRelease(
-          event.notes,
-          '4n',
-          time + Tone.Time(offsetTime(beat / factor)).toSeconds(),
-          0.6,
-        );
+        const hitTime = time + Tone.Time(offsetTime(beat / factor)).toSeconds();
+        if (hasPlayed) synth!.triggerRelease(event.notes, hitTime);
+        synth!.triggerAttackRelease(event.notes, '4n', hitTime, 0.6);
+        hasPlayed = true;
       }
     }
   }, events).start(0);
