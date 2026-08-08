@@ -181,21 +181,22 @@ add a note needs both a beat position (already solved, see `clientPosToGlobalBea
 (new: inverse of `staffStepsAboveBottomLine`, mapping a Y coordinate back to a MIDI pitch).
 Worth treating as its own scoped effort, not bundled into a smaller task.
 
-## Planned: drum fills into section starts
-Every section marker (see `data/sections.ts`) now gets a crash on its downbeat — `audio/drums.ts`'s
-`scheduleDrums` takes an optional `sections` param and layers a `Tone.Part` of one-off crash hits
-(scheduled at each section's absolute `startBeat`) on top of the main repeating pattern `Tone.Loop`,
-the same "events scheduled against absolute song position" mechanism bass/keys already use per-chord.
-The main Loop itself has no concept of song position at all (just its own step counter modulo the
-pattern length), which is why this needed a second, independent part rather than a tweak to the loop.
+## Drum fills into section starts (done)
+Every section marker (see `data/sections.ts`) gets a crash on its downbeat *and* a short lead-in
+fill in the bar before — `audio/drums.ts`'s `scheduleDrums` takes an optional `sections` param and
+layers two `Tone.Part`s of one-off hits (`sectionCrashPart`, `sectionFillPart`, each scheduled
+against sections' absolute `startBeat`) on top of the main repeating pattern `Tone.Loop`, the same
+"events scheduled against absolute song position" mechanism bass/keys already use per-chord. The
+main Loop itself has no concept of song position at all (just its own step counter modulo the
+pattern length), which is why this needed independent Parts rather than a tweak to the loop.
 
-Still just the crash half of the idea — the more useful half, a short drum fill in the bar *leading
-into* a section change, isn't implemented. The hard part isn't the scheduling (same mechanism, just
-scheduled a bar earlier) but where the fill itself comes from: there's no "fill" concept anywhere in
-the pattern data today, and a genuinely good-sounding fill isn't something worth trying to generate
-algorithmically. The honest move would be one fixed, hand-authored placeholder fill (e.g. a
-descending tom run into the crash) rather than a fill "engine" — consistent with this file's
-placeholder-first philosophy elsewhere (see the synth voices note above).
+The fill is one fixed, hand-authored placeholder (four sixteenth notes across the last beat before
+the section — tom-high, tom-high, tom-mid, tom-low, landing right as the crash hits — via
+`beatTime()`'s fractional-beat-to-Bars:Beats:Sixteenths conversion, same convention as keys.ts's
+`offsetTime`), not a fill "engine": there's no "fill" concept anywhere in the pattern data, and a
+genuinely good-sounding fill isn't something worth trying to generate algorithmically. Consistent
+with this file's placeholder-first philosophy elsewhere (see the synth voices note above). Sections
+starting inside the first bar (`startBeat < 1`) skip the fill — nothing to fill before beat 0.
 
 ## Planned: sections + arrangement in song presets
 Song presets currently store one flat `placements` array covering the whole timeline. When a

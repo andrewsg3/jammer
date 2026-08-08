@@ -63,6 +63,7 @@ let crash: Tone.MetalSynth | null = null;
 let toms: Tone.MembraneSynth | null = null;
 let loop: Tone.Loop | null = null;
 let sectionCrashPart: Tone.Part<{ time: string }> | null = null;
+let sectionFillPart: Tone.Part<{ time: string; voice: 'tomHigh' | 'tomMid' | 'tomLow' }> | null = null;
 let currentInstrument = 'Acoustic';
 
 // Which lane's Volume node a given DrumVoice's sample player should feed into —
@@ -353,6 +354,16 @@ function triggerSample(voice: DrumVoice, time: number, velocity: number): boolea
   return true;
 }
 
+// A beat position (possibly fractional, possibly negative — used below for "one
+// beat before section start") as a Bars:Beats:Sixteenths string, same convention
+// keys.ts's offsetTime uses for its own fractional-beat comping offsets.
+function beatTime(beat: number): string {
+  const wholeBeat = Math.floor(beat);
+  return `0:${wholeBeat}:${(beat - wholeBeat) * 4}`;
+}
+
+const TOM_NOTE: Record<'tomHigh' | 'tomMid' | 'tomLow', string> = { tomHigh: 'G3', tomMid: 'D3', tomLow: 'A2' };
+
 export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal', sections: SectionMarker[] = []): void {
   ensureSynths();
   const totalSteps = pattern.bars * STEPS_PER_BAR;
@@ -409,14 +420,35 @@ export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal
   // Section-start crash: layered on top of the repeating pattern above via its
   // own Part scheduled against absolute song position (same mechanism bass/keys
   // already use per-chord) — the main Loop above has no idea where in the song
-  // it is, only its own step counter, so it can't do this on its own. See
-  // CLAUDE.md's "Planned: drum fills into section starts" note for the rest of
-  // this idea (a fill in the bar before) that this is only a first slice of.
+  // it is, only its own step counter, so it can't do this on its own.
   if (sections.length > 0) {
     const crashEvents = sections.map((s) => ({ time: `0:${s.startBeat}:0` }));
     sectionCrashPart = new Tone.Part<{ time: string }>((time) => {
       if (!triggerSample('crash', time, 0.9)) crash!.triggerAttackRelease(250, '1n', time, 0.9);
     }, crashEvents).start(0);
+  }
+
+  // Fill leading into each section change — one fixed, hand-authored placeholder
+  // (a short descending tom run into the crash above), not an attempt at a real
+  // fill "engine": there's no fill concept anywhere in the pattern data, and a
+  // genuinely good-sounding fill isn't something worth trying to generate
+  // algorithmically. Same layered-Part-on-absolute-position mechanism as the
+  // crash cue; skips any section that starts inside the first bar (nothing to
+  // fill before beat 0).
+  const sectionsWithRoom = sections.filter((s) => s.startBeat >= 1);
+  if (sectionsWithRoom.length > 0) {
+    const fillEvents = sectionsWithRoom.flatMap((s) =>
+      (['tomHigh', 'tomHigh', 'tomMid', 'tomLow'] as const).map((voice, i) => ({
+        time: beatTime(s.startBeat - 1 + i * 0.25),
+        voice,
+      })),
+    );
+    sectionFillPart = new Tone.Part<{ time: string; voice: 'tomHigh' | 'tomMid' | 'tomLow' }>((time, event) => {
+      const velocity = 0.6 + (event.voice === 'tomLow' ? 0.15 : 0);
+      if (!triggerSample(event.voice, time, velocity)) {
+        toms!.triggerAttackRelease(TOM_NOTE[event.voice], '16n', time, velocity);
+      }
+    }, fillEvents).start(0);
   }
 }
 
@@ -425,6 +457,8 @@ export function disposeDrums(): void {
   loop = null;
   sectionCrashPart?.dispose();
   sectionCrashPart = null;
+  sectionFillPart?.dispose();
+  sectionFillPart = null;
   // See keys.ts's disposeKeys comment — force-release every voice so a long-tailed
   // hit (crash, ride) doesn't keep ringing after stop.
   kick?.triggerRelease();
