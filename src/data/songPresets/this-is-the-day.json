@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "name": "This is the Day",
+  "author": "The The",
+  "key": "G",
+  "scale": "major",
+  "tempo": 128,
+  "metronome": false,
+  "loopStart": 0,
+  "drumStyle": "Rock",
+  "bassStyle": "Pedal",
+  "keysStyle": "Arpeggiated (7ths)",
+  "chordsInstrument": "Acoustic Piano",
+  "bassInstrument": "Upright",
+  "drumsInstrument": "Acoustic",
+  "drumsTimeFeel": "normal",
+  "bassTimeFeel": "normal",
+  "keysTimeFeel": "normal",
+  "sections": [
+    { "label": "A", "startBeat": 0, "lengthBeats": 32 },
+    { "label": "B", "startBeat": 32, "lengthBeats": 32 }
+  ],
+  "placements": [
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 9, "quality": "min" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 9, "quality": "min" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 4, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 0, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 4, "quality": "dom7" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 5, "quality": "maj" }, "lengthBeats": 4 },
+    { "selection": { "type": "chromatic", "offset": 2, "quality": "maj" }, "lengthBeats": 4 }
+
+  ]
+}
