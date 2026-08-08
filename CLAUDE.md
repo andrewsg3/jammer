@@ -215,6 +215,57 @@ Sketch of the actual mechanism (`data/songPresets.ts`):
 
 Not started — shelved for now, no bundled presets migrated.
 
+## Planned: chord-scale suggestions, scale auditioning, and AI trading-fours
+
+Three related practice-aid ideas, in increasing order of scope — the first two are
+natural extensions of pieces that already exist; the third is a much bigger, and
+partly non-goal-conflicting, undertaking.
+
+**Suggest scales over chords.** For the currently selected/hovered chord, show
+which scale(s) are the standard jazz-theory fit for its quality and role — e.g.
+Mixolydian over a dominant 7th, Dorian over a min7 functioning as ii, Lydian over
+a major 7th borrowed from a parallel key. The data's mostly already here:
+`ChordQuality` (`progressions.ts`) and the existing `ScaleName`/`SCALE_INTERVALS`
+table just need a new lookup mapping quality (and maybe scale-degree context,
+since the "right" scale for a ii-7 differs from the same min7 quality used
+elsewhere) to a short list of candidate scale names. Natural home:
+`ChordPalette.tsx`, next to where a chord's already selected.
+
+**Audition different scales over chords.** Builds directly on `auditionChord` in
+`audio/engine.ts` — today that just plays the chord's tones once (`chordTones`).
+This wants a sibling playback path: given a chord and a chosen scale, loop a
+sustained voicing of the chord while running the scale's notes over it (ascending/
+descending), so the ear can actually hear the fit rather than just reading a
+suggested name. Needs new scheduling, not just a reuse of `auditionChord` — that
+one is a single one-shot trigger; this wants a loop.
+
+**Trading fours with an "AI" improviser using a predefined scale/style.** The most
+ambitious of the three. Confirmed scope: no audio input at all — the bot doesn't
+listen to what the human plays, it just alternates N-bar blocks on a fixed or
+randomized pattern, going quiet (or leaving the backing track running solo) for
+the human's blocks. Two design points from there:
+
+- **Where the bot's notes come from**: a bank of short pre-written licks (small
+  fixed melodic phrases, plausibly authored the same way fixed imported melody
+  data already works — see `data/melody.ts`'s `MelodyNote[]`) transposed/fit to
+  whatever chords are under that block, picked from at random or by pattern —
+  plus, as a supplement or fallback where no lick fits, algorithmic generation
+  constrained to a scale (same idea as the existing `BassRule`/`KeysRule`
+  pattern-based accompaniment engines in `instrumentStyles.ts`, just producing a
+  monophonic solo line instead of comping). Either way this stays "picks from
+  pre-written phrases / picks notes algorithmically from a scale," not a trained
+  model — worth keeping explicit given this file's "No AI/generative anything"
+  non-goal above; "AI improviser" is really shorthand for "bot soloist," not
+  actual AI.
+- **Turn-taking cue**: reuse the beat-countdown pattern already built for
+  `MobilePlayer.tsx`'s now-playing modal (`beatsUntilNextChord` et al.) — same
+  mechanism, just counting down to "your turn" instead of "next chord."
+
+The monophonic playback path this would ride on already exists too
+(`audio/melody.ts`'s single `Tone.Synth`, same one fixed imported melodies use) —
+the new pieces are the lick bank/generator, the random-or-pattern turn scheduler,
+and the countdown cue.
+
 ## Direction: what this app needs next
 Asked-and-answered product question, worth keeping around since it'll come up again. Given how
 much of the recent work went into looking/feeling like a real fake book (staff notation, key
