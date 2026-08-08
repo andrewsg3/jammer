@@ -12,11 +12,14 @@ actually here now.
 - **Tone.js** for scheduling and playback (Web Audio under the hood). No backend — everything
   runs client-side. No user accounts; song presets persist as downloadable/importable JSON
   files, not localStorage.
-- Instruments are Tone.js synths (`Tone.Synth`, `Tone.MembraneSynth`, `Tone.PolySynth`,
-  `Tone.MonoSynth`, `Tone.FMSynth`, `Tone.MetalSynth`, `Tone.NoiseSynth` — different lanes use
-  whichever fits), not sample libraries — sounds "demo-y" but avoids sourcing/licensing sample
-  content. See "Planned: sample-based drum playback" below for the one place this is actively
-  being moved toward real samples.
+- Instruments are a mix now, not purely Tone.js synths — real samples for the instrument variants
+  where it mattered most (Acoustic Piano keys via `Tone.Sampler`, `data/pianoSamples.ts`; Upright
+  and Electric bass via `Tone.Sampler`, `data/bassSamples.ts`; the Acoustic drum kit via one
+  `Tone.Player` per lane, `data/drumSamples.ts`), `Tone.Synth`/`Tone.MembraneSynth`/
+  `Tone.PolySynth`/`Tone.MonoSynth`/`Tone.FMSynth`/`Tone.MetalSynth`/`Tone.NoiseSynth` patches for
+  everything else (every other keys/bass timbre, the Electronic drum kit). Avoids sourcing/
+  licensing sample content wholesale while still sounding real where it's most noticeable. See
+  "Current shape" below.
 - `midi-file` for parsing imported `.mid` files (drum/bass/melody).
 
 ## Current shape
@@ -39,8 +42,10 @@ actually here now.
 - **Drums/bass/keys** — each has multiple selectable styles (`data/drumLibrary.ts` loads
   `.mid` files from `data/drumPatterns/`; `data/bassLibrary.ts` similarly from
   `data/bassPatterns/`; keys styles are rule-based, defined in `data/instrumentStyles.ts`), each
-  with its own instrument/timbre variant and half/double time-feel option. MIDI files can also
-  be imported live (`components/MidiUpload.tsx` + `data/midi{Drum,Bass}Import.ts`).
+  with its own instrument/timbre variant (some sample-based — Acoustic Piano, Upright/Electric
+  bass, the Acoustic drum kit — most still synths, see "Stack" above) and half/double time-feel
+  option. MIDI files can also be imported live (`components/MidiUpload.tsx` +
+  `data/midi{Drum,Bass}Import.ts`).
 - **Melody** — a MIDI-importable, fixed (not chord-derived) line: `data/melody.ts` (data model +
   pitch→staff-position math), `data/midiMelodyImport.ts` (import), `audio/melody.ts` (playback),
   rendered as noteheads/ledger lines/accidentals directly on the grid's staff. See the "How
@@ -50,9 +55,21 @@ actually here now.
   ("Harmony"), melody, and metronome, plus master. Collapsible sidebar (`layout-sidebar`) so the
   grid can claim more width on smaller screens.
 - **Song presets** — `data/songPresets.ts` + `data/songPresets/*.json`. A preset captures
-  key/scale/tempo/loop range/styles/instruments/placements and optionally an embedded custom
-  drum pattern and/or melody. Loaded eagerly via `import.meta.glob`; adding a new bundled song is
-  just dropping a new JSON file there (must pass `isSongPreset`'s shape check).
+  key/scale/tempo/loop range/styles/instruments/per-track time-feel/placements and optionally an
+  embedded custom drum pattern and/or melody. Loaded eagerly via `import.meta.glob`; adding a new
+  bundled song is just dropping a new JSON file there (must pass `isSongPreset`'s shape check).
+- **Mobile companion view** (`components/MobilePlayer.tsx`) — a separate, playback-only view for
+  phones, picked in `main.tsx` by viewport width/pointer type (`?view=mobile`/`?view=desktop`
+  forces either). Deliberately can't build or edit a progression — only plays a bundled preset:
+  song picker, a minimal beat-grid lead sheet (bars-per-row, blank cells for a held chord's
+  duration, a "%" mark for a bar that repeats the previous one, real-book-style boxed section
+  markers), a full-screen "now playing" mode with a beat countdown next to the current chord and
+  the next chord/duration shown smaller beneath it, and a settings modal (per-track volume,
+  notation style, a user-pickable accent color). Shares the same audio engine as desktop
+  (`audio/engine.ts`) — nothing about playback itself is mobile-specific, only the UI around it.
+  Volume/accent-color/notation-style preferences persist across reloads via `localStorage` — the
+  one deliberate exception to the no-storage stance above, scoped to UI prefs rather than song
+  data (a manual pick, not the app silently remembering unrelated state).
 
 ## Fonts / notation rendering
 - **Architects Daughter** (Google Fonts) — chord symbols and the sheet header text. Chosen over
@@ -92,7 +109,9 @@ real key-signature-aware spelling). Good enough to look like a real book at a gl
 ## Explicit non-goals (still true)
 - No AI/generative anything.
 - No user accounts, no server-side anything.
-- No mobile-specific UI work.
+- No editing on mobile — the mobile view (see "Current shape" above) is playback-only by design,
+  not a scaled-down editor; building/editing a progression stays desktop-only, since the chord
+  grid's drag/resize/select interactions don't translate to touch.
 - No real notation engraving (beaming, rhythm-accurate note shapes, key-aware enharmonic
   spelling) — see "How melody notation works" above.
 - No in-browser MIDI editor yet — melody is import-only. See "Planned" below.
@@ -118,19 +137,25 @@ npm run dev
   similar unreviewed binary assets — see the sample-based drums note below for why that
   directory in particular needs a licensing gut-check before it's ever committed.
 
-## Planned: sample-based drum playback
+## Sample-based drum playback (mostly done)
 The drum engine (`audio/drums.ts`) has one lane per physical sound source — kick, snare, rim,
 hihat (closed/open/foot), ride, ride bell, crash, and three tom pitches (see `DrumVoice` in
-`data/instrumentStyles.ts`) — each currently a placeholder synth. Real samples are the next step
-for these specifically (bass/keys are pitched, multi-sample instruments — a separate, bigger
-undertaking; drums are one-shots, the cheap win). **Not yet wired up** — `audio/drums.ts` still
-has no `Tone.Player` usage, despite converted sample files having existed at points during
-development. Plan, once sample files exist:
+`data/instrumentStyles.ts`). The plan this section used to describe is now implemented for the
+**Acoustic** kit: `ensureSynths()` builds a real `Tone.Player` per lane that has a matching file
+(`data/drumSamples.ts`'s `getSampleUrl(voice, instrument)`, files at `src/data/drumSamples/*.wav`,
+committed and licensing-cleared), preloaded eagerly the same way the bundled `.mid` patterns are;
+any lane without a match falls back to its placeholder synth. The **Electronic** kit is still
+100% synth — no `*-electronic.wav` files have been committed yet.
 
-- **Location/naming:** `src/data/drumSamples/`, one short one-shot per lane per instrument
-  variant (Acoustic/Electronic), filenames matching `DrumVoice` + variant
-  (`kick-acoustic.wav`, `hihat-open-electronic.wav`, etc.). No pitch-mapping needed — unlike
-  bass/keys, each lane is a single unpitched sound.
+`src/data/drumSamples/_incoming/electronic/` currently holds four raw candidate samples (Kick,
+Snare, two Hihats) — not yet converted to WAV (see the format note below), not yet reviewed for
+licensing, and not yet wired into `getSampleUrl`. `_incoming/acoustic/` is empty (that kit's
+samples already made it through this same pipeline and are committed for real). Finishing the
+Electronic kit is: convert the remaining `_incoming/electronic/*.aif` files to WAV, decide on the
+rest of the lanes it's still missing (rim/ride/ride bell/toms have no candidates at all yet), do
+the licensing gut-check, and add them alongside the acoustic ones.
+
+Notes that still apply to any new samples added here:
 - **Format:** short WAV, not MP3 or AIFF — these are all sub-second transients, MP3 compression
   artifacts are most audible on exactly that kind of sharp attack, and note that **Ableton's own
   "compressed" AIFC pack samples use a proprietary codec (`able` fourCC) that only Ableton itself
@@ -139,18 +164,13 @@ development. Plan, once sample files exist:
 - **Licensing gut-check before committing:** sample files sourced from a commercial pack
   (Ableton factory content, etc.) are typically fine to use *in a production*, but redistributing
   the raw sample files themselves in a public repo is a different question the pack's license
-  may not clearly cover — worth resolving explicitly before committing `drumSamples/`, not
-  silently included in a routine commit.
-- **Tone primitive:** `Tone.Player`, not `Tone.Sampler` — Sampler is for pitched, multi-note
-  instruments (the bass/keys case later); one-shot unpitched hits want a plain Player per lane,
-  connected the same way the current synths connect to each lane's `Tone.Volume` node. Velocity
-  becomes a per-trigger volume offset rather than a native velocity-sensitive envelope — fine for
-  v1; per-lane velocity-layered samples (soft/hard variants) would be the natural upgrade later.
-- **Loading:** `Tone.Player` loads its buffer asynchronously, unlike the synths it replaces
-  (ready the instant they're constructed) — preload every drum sample eagerly at module load
-  (mirroring how the bundled `.mid` patterns are already loaded via `import.meta.glob`), and
-  accept that a Play click in the first instant before load completes might land silently.
-  `Tone.loaded()` is the escape hatch for a real "ready" gate if that gap ever actually matters.
+  may not clearly cover — worth resolving explicitly before committing anything out of
+  `_incoming/`, not silently included in a routine commit. This is exactly why `_incoming/` exists
+  as a holding pen rather than samples landing straight in `drumSamples/`.
+
+Velocity is a per-trigger volume offset on the `Tone.Player`, not a native velocity-sensitive
+envelope — fine for now; per-lane velocity-layered samples (soft/hard variants) would be the
+natural upgrade later, for any lane, not just Electronic.
 
 ## Planned: in-browser MIDI editor
 Melody is currently import-only — no way to program a line by hand, only drop in a `.mid` file.
@@ -272,12 +292,21 @@ much of the recent work went into looking/feeling like a real fake book (staff n
 signatures, MIDI melody import) rather than into export/production tooling or pedagogy, **jam/
 practice aid** is the natural next identity to lean into — it's the shortest path from the
 current shape, versus retrofitting this into a demo maker (needs audio export, song-structure/
-arrangement, better instrument quality) or a music theory teacher (needs genuinely new
-pedagogical features — scale/chord-tone highlighting, ear training — that nothing here currently
-hints at).
+arrangement, better instrument quality). The mobile companion view (see "Current shape" above) is
+the first concrete step actually taken in this direction, not just the theory of it.
+
+The "or a music theory teacher" branch this section used to rule out (on the grounds that it
+"needs genuinely new pedagogical features — scale/chord-tone highlighting, ear training — that
+nothing here currently hints at") is worth revisiting in light of the chord-scale
+suggestion/auditioning ideas above — those *are* exactly that kind of pedagogical feature, just
+framed as practice-aid tools rather than a teaching mode. The two directions aren't as separate as
+this file used to assume; scale suggestions/auditioning serve both.
 
 Highest-leverage next pieces, in order:
-1. **Finish sample-based drums** (see above) — the biggest remaining gap between "looks real"
-   (the notation work) and "sounds real" for something you'd actually want to jam along to.
-2. **The in-browser MIDI editor** (see above) — program a head to play/comp against, not just
-   import one.
+1. **Finish the Electronic drum kit's samples** (see above) — most of "sample-based drums" is
+   already done (Acoustic kit, real bass/piano samples); this is now a much smaller remaining
+   task than it used to be, not a from-scratch undertaking.
+2. **Chord-scale suggestions + auditioning** (see above) — both are scoped, build on existing
+   pieces (`ChordPalette.tsx`, `auditionChord`), and land squarely in the practice-aid direction.
+3. **The in-browser MIDI editor** (see above) — program a head to play/comp against, not just
+   import one. Still the biggest single undertaking on this list.
