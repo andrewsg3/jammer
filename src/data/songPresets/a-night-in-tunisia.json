@@ -10,6 +10,12 @@
   "drumStyle": "Songo",
   "bassStyle": "Tunisia Vamp",
   "keysStyle": "Charleston",
+  "chordsInstrument": "Acoustic Piano",
+  "bassInstrument": "Upright",
+  "drumsInstrument": "Acoustic",
+  "drumsTimeFeel": "normal",
+  "bassTimeFeel": "normal",
+  "keysTimeFeel": "normal",
   "sections": [
     { "label": "A", "startBeat": 0, "lengthBeats": 32 },
     { "label": "B", "startBeat": 32, "lengthBeats": 32 }

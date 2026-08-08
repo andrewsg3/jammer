@@ -271,3 +271,30 @@ export function stop(): void {
   disposeMelody();
   disposeMetronome();
 }
+
+const autoStopListeners = new Set<() => void>();
+
+/** Registers a callback fired whenever the engine force-stops itself (see the
+ * visibilitychange handler below), so App.tsx/MobilePlayer.tsx can sync their own
+ * isPlaying state without polling. Returns an unsubscribe function. */
+export function onAutoStop(callback: () => void): () => void {
+  autoStopListeners.add(callback);
+  return () => autoStopListeners.delete(callback);
+}
+
+// Mobile browsers suspend the AudioContext when the page is backgrounded — screen
+// locked, app minimized, even just the notification shade pulled down over it.
+// Transport keeps scheduling into a clock that's about to freeze, and when the
+// context unsuspends there's a backlog of events that fires in one rapid, pitched-
+// up burst (the "sounds insane" bug). There's no reliable way to resync that clock,
+// and this app has no resume-in-place model to begin with — Play always starts
+// fresh via stop() above — so treat backgrounding as an implicit Stop rather than
+// trying to survive it.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && Tone.Transport.state === 'started') {
+      stop();
+      autoStopListeners.forEach((cb) => cb());
+    }
+  });
+}

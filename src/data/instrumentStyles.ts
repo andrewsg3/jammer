@@ -37,6 +37,7 @@ export type DrumPattern = {
 // uniformly to whichever style/rule is selected. Shared by drums, bass, and keys,
 // though each applies it differently — see scheduleDrums/scheduleBass/scheduleKeys.
 export type TimeFeel = 'normal' | 'half' | 'double';
+export const TIME_FEELS: TimeFeel[] = ['normal', 'half', 'double'];
 
 export function timeFeelFactor(feel: TimeFeel): number {
   return feel === 'double' ? 2 : feel === 'half' ? 0.5 : 1;

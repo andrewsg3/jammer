@@ -9,6 +9,12 @@
   "drumStyle": "Purdie Shuffle",
   "bassStyle": "Walk Up & Down",
   "keysStyle": "Blues Shuffle (Swing)",
+  "chordsInstrument": "Acoustic Piano",
+  "bassInstrument": "Upright",
+  "drumsInstrument": "Acoustic",
+  "drumsTimeFeel": "normal",
+  "bassTimeFeel": "normal",
+  "keysTimeFeel": "normal",
   "placements": [
     { "selection": { "type": "chromatic", "offset": 0, "quality": "dom7" }, "lengthBeats": 8 },
     { "selection": { "type": "chromatic", "offset": 5, "quality": "dom7" }, "lengthBeats": 8 },

@@ -10,6 +10,12 @@
   "drumStyle": "Half-Time",
   "bassStyle": "Walk Up & Down",
   "keysStyle": "Sustained 7ths",
+  "chordsInstrument": "Acoustic Piano",
+  "bassInstrument": "Upright",
+  "drumsInstrument": "Acoustic",
+  "drumsTimeFeel": "normal",
+  "bassTimeFeel": "normal",
+  "keysTimeFeel": "normal",
   "placements": [
     { "selection": { "type": "diatonic", "degree": 1 }, "startBeat": 0, "lengthBeats": 4 },
     { "selection": { "type": "diatonic", "degree": 4 }, "startBeat": 4, "lengthBeats": 4 },

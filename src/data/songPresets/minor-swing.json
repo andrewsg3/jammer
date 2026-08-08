@@ -11,6 +11,12 @@
   "drumStyle": "None",
   "bassStyle": "Smart Walking",
   "keysStyle": "La Pompe",
+  "chordsInstrument": "Acoustic Piano",
+  "bassInstrument": "Upright",
+  "drumsInstrument": "Acoustic",
+  "drumsTimeFeel": "normal",
+  "bassTimeFeel": "normal",
+  "keysTimeFeel": "normal",
   "placements": [
     { "selection": { "type": "diatonic", "degree": 0 }, "startBeat": 0, "lengthBeats": 8 },
     { "selection": { "type": "diatonic", "degree": 3 }, "startBeat": 8, "lengthBeats": 8 },

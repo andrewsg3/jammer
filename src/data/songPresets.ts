@@ -1,6 +1,6 @@
 import { CHORD_QUALITIES, SCALE_NAMES } from './progressions';
 import type { ChordSelection, ScaleName } from './progressions';
-import type { DrumPattern } from './instrumentStyles';
+import { TIME_FEELS, type DrumPattern, type TimeFeel } from './instrumentStyles';
 import type { MelodyNote } from './melody';
 import type { SectionMarker } from './sections';
 
@@ -41,6 +41,13 @@ export type SongPreset = {
   chordsInstrument?: string;
   bassInstrument?: string;
   drumsInstrument?: string;
+  // The half/double time-feel each track's Feel picker is set to — a song written
+  // to feel like a half-time ballad or a double-time shuffle should reopen that
+  // way, not silently reset to normal. Optional so presets written before this
+  // existed still load fine (falls back to 'normal', same as today's fixed default).
+  drumsTimeFeel?: TimeFeel;
+  bassTimeFeel?: TimeFeel;
+  keysTimeFeel?: TimeFeel;
   // Optional so presets written before this existed still load fine (App.tsx falls
   // back to an empty melody, same as a song with nothing imported).
   melody?: MelodyNote[];
@@ -150,6 +157,9 @@ export function isSongPreset(value: unknown): value is SongPreset {
     typeof v.drumStyle === 'string' &&
     typeof v.bassStyle === 'string' &&
     typeof v.keysStyle === 'string' &&
+    (v.drumsTimeFeel === undefined || TIME_FEELS.includes(v.drumsTimeFeel as TimeFeel)) &&
+    (v.bassTimeFeel === undefined || TIME_FEELS.includes(v.bassTimeFeel as TimeFeel)) &&
+    (v.keysTimeFeel === undefined || TIME_FEELS.includes(v.keysTimeFeel as TimeFeel)) &&
     (v.melody === undefined || (Array.isArray(v.melody) && v.melody.every(isMelodyNote))) &&
     (v.sections === undefined || (Array.isArray(v.sections) && v.sections.every(isSongPresetSection))) &&
     Array.isArray(v.placements) &&

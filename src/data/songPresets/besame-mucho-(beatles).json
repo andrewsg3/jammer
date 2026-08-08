@@ -10,6 +10,12 @@
   "drumStyle": "Bossa Nova",
   "bassStyle": "Root-Fifth Pump",
   "keysStyle": "Bossa Nova",
+  "chordsInstrument": "Acoustic Piano",
+  "bassInstrument": "Upright",
+  "drumsInstrument": "Acoustic",
+  "drumsTimeFeel": "normal",
+  "bassTimeFeel": "normal",
+  "keysTimeFeel": "normal",
   "placements": [
     { "selection": { "type": "chromatic", "offset": 0, "quality": "m6" }, "lengthBeats": 8 },
     { "selection": { "type": "chromatic", "offset": 5, "quality": "m6" }, "lengthBeats": 8 },

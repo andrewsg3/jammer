@@ -11,6 +11,12 @@
   "drumStyle": "Bossa Nova",
   "bassStyle": "Tumbao",
   "keysStyle": "Arpeggiated (7ths)",
+  "chordsInstrument": "Acoustic Piano",
+  "bassInstrument": "Upright",
+  "drumsInstrument": "Acoustic",
+  "drumsTimeFeel": "normal",
+  "bassTimeFeel": "normal",
+  "keysTimeFeel": "normal",
   "placements": [
     { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 4 },
     { "selection": { "type": "chromatic", "offset": 2, "quality": "dom7sharp9" }, "lengthBeats": 4 },

@@ -68,6 +68,7 @@ import {
   setMelodyMuted,
   isKeysInstrumentLoaded,
   isBassInstrumentLoaded,
+  onAutoStop,
 } from './audio/engine';
 
 // Fallback only — used if bundledSongPresets is somehow empty (e.g. all preset
@@ -123,18 +124,24 @@ function App() {
   const [tempo, setTempo] = useState(DEFAULT_SONG_PRESET?.tempo ?? 124);
   const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
   const [drumStyle, setDrumStyle] = useState<DrumStyle>(baseDrumStyles[0]);
-  const [drumsTimeFeel, setDrumsTimeFeel] = useState<TimeFeelOption>(TIME_FEEL_OPTIONS[0]);
+  const [drumsTimeFeel, setDrumsTimeFeel] = useState<TimeFeelOption>(
+    TIME_FEEL_OPTIONS.find((o) => o.value === DEFAULT_SONG_PRESET?.drumsTimeFeel) ?? TIME_FEEL_OPTIONS[0],
+  );
   const [bassStyles, setBassStyles] = useState<BassStyle[]>(baseBassStyles);
   const [bassStyle, setBassStyle] = useState(
     baseBassStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.bassStyle) ??
       baseBassStyles.find((s) => s.name === 'Walking')!,
   );
-  const [bassTimeFeel, setBassTimeFeel] = useState<TimeFeelOption>(TIME_FEEL_OPTIONS[0]);
+  const [bassTimeFeel, setBassTimeFeel] = useState<TimeFeelOption>(
+    TIME_FEEL_OPTIONS.find((o) => o.value === DEFAULT_SONG_PRESET?.bassTimeFeel) ?? TIME_FEEL_OPTIONS[0],
+  );
   const [keysStyle, setKeysStyle] = useState(
     keysStyles.find((s) => s.name === DEFAULT_SONG_PRESET?.keysStyle) ??
       keysStyles.find((s) => s.name === 'Sustained 7ths')!,
   );
-  const [keysTimeFeel, setKeysTimeFeel] = useState<TimeFeelOption>(TIME_FEEL_OPTIONS[0]);
+  const [keysTimeFeel, setKeysTimeFeel] = useState<TimeFeelOption>(
+    TIME_FEEL_OPTIONS.find((o) => o.value === DEFAULT_SONG_PRESET?.keysTimeFeel) ?? TIME_FEEL_OPTIONS[0],
+  );
   const [metronomeMuted, setMetronomeMutedState] = useState(!(DEFAULT_SONG_PRESET?.metronome ?? false));
   const [chordsMuted, setChordsMutedState] = useState(false);
   const [chordsChorusEnabled, setChordsChorusEnabledState] = useState(false);
@@ -299,6 +306,14 @@ function App() {
     return () => cancelAnimationFrame(frameId);
   }, [isPlaying]);
 
+  // Backgrounding the tab (or, on mobile, locking the screen) can force the engine
+  // to stop itself — see onAutoStop's doc comment in audio/engine.ts. Sync the UI
+  // rather than leaving Play showing "Pause" over silence.
+  useEffect(() => onAutoStop(() => {
+    setIsPlaying(false);
+    setPlayheadBeat(0);
+  }), []);
+
   const handleAudition = (chord: Chord) => {
     auditionChord(chord);
   };
@@ -390,6 +405,11 @@ function App() {
     }
     setBassStyle(bassStyles.find((s) => s.name === preset.bassStyle) ?? bassStyles[0]);
     setKeysStyle(keysStyles.find((s) => s.name === preset.keysStyle) ?? keysStyles[0]);
+    setDrumsTimeFeel(
+      TIME_FEEL_OPTIONS.find((o) => o.value === preset.drumsTimeFeel) ?? TIME_FEEL_OPTIONS[0],
+    );
+    setBassTimeFeel(TIME_FEEL_OPTIONS.find((o) => o.value === preset.bassTimeFeel) ?? TIME_FEEL_OPTIONS[0]);
+    setKeysTimeFeel(TIME_FEEL_OPTIONS.find((o) => o.value === preset.keysTimeFeel) ?? TIME_FEEL_OPTIONS[0]);
     setChordsInstrumentState(
       keysInstruments.find((i) => i.name === preset.chordsInstrument) ?? keysInstruments[0],
     );
@@ -416,6 +436,9 @@ function App() {
       drumStyle: drumStyle.name,
       bassStyle: bassStyle.name,
       keysStyle: keysStyle.name,
+      drumsTimeFeel: drumsTimeFeel.value,
+      bassTimeFeel: bassTimeFeel.value,
+      keysTimeFeel: keysTimeFeel.value,
       chordsInstrument: chordsInstrument.name,
       bassInstrument: bassInstrument.name,
       drumsInstrument: drumsInstrument.name,
