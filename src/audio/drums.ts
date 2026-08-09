@@ -1,8 +1,37 @@
 import * as Tone from 'tone';
-import { STEPS_PER_BAR } from '../data/instrumentStyles';
+import { STEPS_PER_BAR, STEPS_PER_BEAT } from '../data/instrumentStyles';
 import type { DrumPattern, DrumVoice, TimeFeel } from '../data/instrumentStyles';
 import { getSampleUrl } from '../data/drumSamples';
+import { loadBundledDrumFills, type DrumFill } from '../data/drumFills';
 import type { SectionMarker } from '../data/sections';
+
+// Loaded once at module scope, same as the sample maps below — fills are an
+// internal implementation detail of scheduleDrums, not a user-selectable style,
+// so there's no need to thread this through engine.ts/App.tsx/MobilePlayer.tsx
+// the way drum/bass *styles* are. If Play happens to fire before this resolves,
+// that one playback just uses FALLBACK_FILL below instead — no gate needed.
+let bundledFills: DrumFill[] = [];
+loadBundledDrumFills().then((fills) => {
+  bundledFills = fills;
+});
+
+// Used whenever no real fill files are bundled yet (see data/drumFills/ — empty
+// today) — the same one-bar-ending tom run this app shipped with before real
+// fills existed, just re-expressed in the same DrumFill shape so the rest of the
+// mechanism below doesn't need to know the difference.
+const FALLBACK_FILL: DrumFill = {
+  name: 'Fallback tom run',
+  lengthBeats: 1,
+  pattern: {
+    bars: 1,
+    steps: [
+      { time: 0, note: 'tomHigh', velocity: 0.6 },
+      { time: 3, note: 'tomHigh', velocity: 0.6 },
+      { time: 6, note: 'tomMid', velocity: 0.6 },
+      { time: 9, note: 'tomLow', velocity: 0.75 },
+    ],
+  },
+};
 
 // Bus glue: gentle compression evens out how punchy each lane feels relative to the
 // others — the sample lanes are pulled from unrelated takes/mics with inherently
@@ -63,7 +92,17 @@ let crash: Tone.MetalSynth | null = null;
 let toms: Tone.MembraneSynth | null = null;
 let loop: Tone.Loop | null = null;
 let sectionCrashPart: Tone.Part<{ time: string }> | null = null;
-let sectionFillPart: Tone.Part<{ time: string; voice: 'tomHigh' | 'tomMid' | 'tomLow' }> | null = null;
+let sectionFillPart: Tone.Part<{ time: string; note: DrumVoice; velocity: number }> | null = null;
+// Absolute-beat ranges the main Loop below should go quiet for — rebuilt fresh
+// each scheduleDrums() call, one entry per section that got a fill. Checked via
+// Transport.getTicksAtTime(time) (the audio-clock time Tone actually schedules
+// each tick for, converted back to a transport beat) rather than a plain mutable
+// "are we in a fill right now" flag flipped inside the fill Part's own callback:
+// Tone.Part/Loop callbacks fire up to its lookahead window *before* the audio
+// time they're scheduled for, so a flag set inside the fill's callback would
+// have wrongly suppressed some of the main Loop's ticks that were actually
+// scheduled to sound *earlier* than the fill's real start.
+let fillWindows: { start: number; end: number }[] = [];
 let currentInstrument = 'Acoustic';
 
 // Which lane's Volume node a given DrumVoice's sample player should feed into —
@@ -362,12 +401,59 @@ function beatTime(beat: number): string {
   return `0:${wholeBeat}:${(beat - wholeBeat) * 4}`;
 }
 
-const TOM_NOTE: Record<'tomHigh' | 'tomMid' | 'tomLow', string> = { tomHigh: 'G3', tomMid: 'D3', tomLow: 'A2' };
+/** Triggers one voice's sample-or-synth fallback — shared by the main pattern
+ * Loop and the section-fill Part below, so a fill hitting any lane sounds
+ * exactly like that same lane hit by the regular groove. */
+function triggerVoice(note: DrumVoice, time: number, velocity: number): void {
+  if (triggerSample(note, time, velocity)) return;
+  switch (note) {
+    case 'kick':
+      kick!.triggerAttackRelease('C1', '8n', time, velocity);
+      break;
+    case 'snare':
+      snare!.triggerAttackRelease('8n', time, velocity);
+      break;
+    case 'rim':
+      rim!.triggerAttackRelease('32n', time, velocity);
+      break;
+    // MetalSynth is pitched (Monophonic) unlike NoiseSynth, so it needs a frequency
+    // first — the exact pitch barely matters, harmonicity/modulationIndex/resonance
+    // do the actual metallic shaping; it's just a carrier.
+    case 'hihat':
+      hihat!.triggerAttackRelease(200, '32n', time, velocity);
+      break;
+    case 'hihatOpen':
+      hihatOpen!.triggerAttackRelease(200, '4n', time, velocity);
+      break;
+    case 'hihatFoot':
+      hihatFoot!.triggerAttackRelease(150, '32n', time, velocity);
+      break;
+    case 'ride':
+      ride!.triggerAttackRelease(300, '2n', time, velocity);
+      break;
+    case 'rideBell':
+      rideBell!.triggerAttackRelease(600, '8n', time, velocity);
+      break;
+    case 'crash':
+      crash!.triggerAttackRelease(250, '1n', time, velocity);
+      break;
+    case 'tomHigh':
+      toms!.triggerAttackRelease('G3', '8n', time, velocity);
+      break;
+    case 'tomMid':
+      toms!.triggerAttackRelease('D3', '8n', time, velocity);
+      break;
+    case 'tomLow':
+      toms!.triggerAttackRelease('A2', '8n', time, velocity);
+      break;
+  }
+}
 
 export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal', sections: SectionMarker[] = []): void {
   ensureSynths();
   const totalSteps = pattern.bars * STEPS_PER_BAR;
   let step = 0;
+  fillWindows = [];
 
   // '32t' (32nd-note triplet) = 1/12 of a beat — the same grid patterns are
   // quantized to on import, so both straight 16th-note and 8th-note-triplet
@@ -382,35 +468,16 @@ export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal
     // re-hits the same voice at the same instant) — otherwise it wedges on this step
     // forever, re-triggering whatever's here on every future tick.
     try {
-      for (const hit of pattern.steps) {
-        if (hit.time !== step) continue;
-        if (hit.note === 'kick' && !triggerSample('kick', time, hit.velocity))
-          kick!.triggerAttackRelease('C1', '8n', time, hit.velocity);
-        if (hit.note === 'snare' && !triggerSample('snare', time, hit.velocity))
-          snare!.triggerAttackRelease('8n', time, hit.velocity);
-        if (hit.note === 'rim' && !triggerSample('rim', time, hit.velocity))
-          rim!.triggerAttackRelease('32n', time, hit.velocity);
-        // MetalSynth is pitched (Monophonic) unlike NoiseSynth, so it needs a frequency
-        // first — the exact pitch barely matters, harmonicity/modulationIndex/resonance
-        // do the actual metallic shaping; it's just a carrier.
-        if (hit.note === 'hihat' && !triggerSample('hihat', time, hit.velocity))
-          hihat!.triggerAttackRelease(200, '32n', time, hit.velocity);
-        if (hit.note === 'hihatOpen' && !triggerSample('hihatOpen', time, hit.velocity))
-          hihatOpen!.triggerAttackRelease(200, '4n', time, hit.velocity);
-        if (hit.note === 'hihatFoot' && !triggerSample('hihatFoot', time, hit.velocity))
-          hihatFoot!.triggerAttackRelease(150, '32n', time, hit.velocity);
-        if (hit.note === 'ride' && !triggerSample('ride', time, hit.velocity))
-          ride!.triggerAttackRelease(300, '2n', time, hit.velocity);
-        if (hit.note === 'rideBell' && !triggerSample('rideBell', time, hit.velocity))
-          rideBell!.triggerAttackRelease(600, '8n', time, hit.velocity);
-        if (hit.note === 'crash' && !triggerSample('crash', time, hit.velocity))
-          crash!.triggerAttackRelease(250, '1n', time, hit.velocity);
-        if (hit.note === 'tomHigh' && !triggerSample('tomHigh', time, hit.velocity))
-          toms!.triggerAttackRelease('G3', '8n', time, hit.velocity);
-        if (hit.note === 'tomMid' && !triggerSample('tomMid', time, hit.velocity))
-          toms!.triggerAttackRelease('D3', '8n', time, hit.velocity);
-        if (hit.note === 'tomLow' && !triggerSample('tomLow', time, hit.velocity))
-          toms!.triggerAttackRelease('A2', '8n', time, hit.velocity);
+      // Silences the regular pattern while a section fill (below) is taking over —
+      // see fillWindows' own comment for why this has to be computed from the
+      // actual scheduled audio time rather than a plain flag.
+      const absoluteBeat = Tone.Transport.getTicksAtTime(time) / Tone.Transport.PPQ;
+      const inFill = fillWindows.some((w) => absoluteBeat >= w.start && absoluteBeat < w.end);
+      if (!inFill) {
+        for (const hit of pattern.steps) {
+          if (hit.time !== step) continue;
+          triggerVoice(hit.note, time, hit.velocity);
+        }
       }
     } finally {
       step = (step + 1) % totalSteps;
@@ -428,26 +495,34 @@ export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal
     }, crashEvents).start(0);
   }
 
-  // Fill leading into each section change — one fixed, hand-authored placeholder
-  // (a short descending tom run into the crash above), not an attempt at a real
-  // fill "engine": there's no fill concept anywhere in the pattern data, and a
-  // genuinely good-sounding fill isn't something worth trying to generate
-  // algorithmically. Same layered-Part-on-absolute-position mechanism as the
-  // crash cue; skips any section that starts inside the first bar (nothing to
-  // fill before beat 0).
+  // Fill leading into each section change — a real fill, not just extra hits
+  // layered over the groove: the main Loop above actually goes quiet for the
+  // fill's own window (via fillWindows), same as a drummer stopping the beat to
+  // play a fill and picking it back up after. Picked at random per section from
+  // data/drumFills/'s bundled .mid files (drop one in, no code change needed —
+  // same convention as data/drumPatterns/); falls back to FALLBACK_FILL if none
+  // are bundled yet. Skips any section that starts inside the first bar (nothing
+  // to fill before beat 0).
   const sectionsWithRoom = sections.filter((s) => s.startBeat >= 1);
   if (sectionsWithRoom.length > 0) {
-    const fillEvents = sectionsWithRoom.flatMap((s) =>
-      (['tomHigh', 'tomHigh', 'tomMid', 'tomLow'] as const).map((voice, i) => ({
-        time: beatTime(s.startBeat - 1 + i * 0.25),
-        voice,
-      })),
-    );
-    sectionFillPart = new Tone.Part<{ time: string; voice: 'tomHigh' | 'tomMid' | 'tomLow' }>((time, event) => {
-      const velocity = 0.6 + (event.voice === 'tomLow' ? 0.15 : 0);
-      if (!triggerSample(event.voice, time, velocity)) {
-        toms!.triggerAttackRelease(TOM_NOTE[event.voice], '16n', time, velocity);
+    const availableFills = bundledFills.length > 0 ? bundledFills : [FALLBACK_FILL];
+    const fillEvents: { time: string; note: DrumVoice; velocity: number }[] = [];
+    for (const section of sectionsWithRoom) {
+      const fill = availableFills[Math.floor(Math.random() * availableFills.length)];
+      // Clipped so a fill longer than the room available before this section
+      // (e.g. a full-bar fill landing right after beat 0) can't start before
+      // beat 0 itself — whatever doesn't fit is dropped, not shifted earlier.
+      const windowLength = Math.min(fill.lengthBeats, section.startBeat);
+      const windowStart = section.startBeat - windowLength;
+      fillWindows.push({ start: windowStart, end: section.startBeat });
+      for (const hit of fill.pattern.steps) {
+        const hitBeat = windowStart + hit.time / STEPS_PER_BEAT;
+        if (hitBeat >= section.startBeat) continue;
+        fillEvents.push({ time: beatTime(hitBeat), note: hit.note, velocity: hit.velocity });
       }
+    }
+    sectionFillPart = new Tone.Part<{ time: string; note: DrumVoice; velocity: number }>((time, event) => {
+      triggerVoice(event.note, time, event.velocity);
     }, fillEvents).start(0);
   }
 }
@@ -459,6 +534,7 @@ export function disposeDrums(): void {
   sectionCrashPart = null;
   sectionFillPart?.dispose();
   sectionFillPart = null;
+  fillWindows = [];
   // See keys.ts's disposeKeys comment — force-release every voice so a long-tailed
   // hit (crash, ride) doesn't keep ringing after stop.
   kick?.triggerRelease();

@@ -702,9 +702,11 @@ button:hover {
 }
 
 .scale-suggestions-chord {
-  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
-  font-size: 16px;
-  font-weight: 700;
+  /* Same plain UI font as .chord-palette-button .chord-name, not Architects
+     Daughter — that handwritten font is for chord symbols sitting on the actual
+     manuscript-paper sheet, not for palette/UI text like this. */
+  font-size: 15px;
+  font-weight: 600;
   margin-right: 2px;
 }
 
@@ -751,6 +753,7 @@ button:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 0 0 8px;
 }

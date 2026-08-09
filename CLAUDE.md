@@ -126,6 +126,9 @@ npm run dev
 - Adding a drum/bass style: drop a new `.mid` file in `data/drumPatterns/` or
   `data/bassPatterns/` — no code change needed. A leading underscore (`_name.mid`) makes it
   loadable by name (for a song preset to reference) without cluttering the style picker.
+- Adding a drum fill: drop a new short (one or half-bar) `.mid` file in `data/drumFills/` — same
+  no-code-change convention, see "Drum fills into section starts" below. `data/drumFills/` is empty
+  today, so every fill currently played is the one hardcoded `FALLBACK_FILL` in `audio/drums.ts`.
 - Adding a keys style: add an entry to `keysStyles` in `data/instrumentStyles.ts` (voicing +
   rhythm combination).
 - Adding a bundled song: drop a new `.json` file in `data/songPresets/` matching `SongPreset`'s
@@ -182,21 +185,41 @@ add a note needs both a beat position (already solved, see `clientPosToGlobalBea
 Worth treating as its own scoped effort, not bundled into a smaller task.
 
 ## Drum fills into section starts (done)
-Every section marker (see `data/sections.ts`) gets a crash on its downbeat *and* a short lead-in
-fill in the bar before — `audio/drums.ts`'s `scheduleDrums` takes an optional `sections` param and
-layers two `Tone.Part`s of one-off hits (`sectionCrashPart`, `sectionFillPart`, each scheduled
-against sections' absolute `startBeat`) on top of the main repeating pattern `Tone.Loop`, the same
-"events scheduled against absolute song position" mechanism bass/keys already use per-chord. The
-main Loop itself has no concept of song position at all (just its own step counter modulo the
-pattern length), which is why this needed independent Parts rather than a tweak to the loop.
+Every section marker (see `data/sections.ts`) gets a crash on its downbeat *and* a real lead-in
+fill in the bar before — not just extra hits layered over the groove, an actual interrupt: the main
+pattern goes quiet for the fill's own window, the same way a drummer stops the beat to play a fill
+and picks it back up after.
 
-The fill is one fixed, hand-authored placeholder (four sixteenth notes across the last beat before
-the section — tom-high, tom-high, tom-mid, tom-low, landing right as the crash hits — via
-`beatTime()`'s fractional-beat-to-Bars:Beats:Sixteenths conversion, same convention as keys.ts's
-`offsetTime`), not a fill "engine": there's no "fill" concept anywhere in the pattern data, and a
-genuinely good-sounding fill isn't something worth trying to generate algorithmically. Consistent
-with this file's placeholder-first philosophy elsewhere (see the synth voices note above). Sections
-starting inside the first bar (`startBeat < 1`) skip the fill — nothing to fill before beat 0.
+**Fill source** (`data/drumFills.ts`): bundled `.mid` files in `src/data/drumFills/` (empty today —
+same "drop a file, no code change" convention as `data/drumPatterns/`, reusing
+`midiDrumImport.ts`'s existing `parseMidiDrumBytes`). Each fill's `lengthBeats` is derived from its
+own last hit rounded up to the nearest *beat*, not `parseMidiDrumBytes`' usual "rounded up to a full
+*bar*" (right for a looping groove, wrong for a genuinely half-bar fill — that rounding would pad it
+with dead space). No bundled fills exist yet, so every fill today is `drums.ts`'s `FALLBACK_FILL` —
+the same one-bar tom run this app shipped with before real fills existed, just expressed in the same
+`DrumFill` shape as a real one so the rest of the mechanism can't tell the difference. Loaded once at
+module scope in `drums.ts` (like the sample maps) rather than threaded through
+`engine.ts`/`App.tsx`/`MobilePlayer.tsx` — fills are an internal implementation detail, not a
+user-selectable style.
+
+**Scheduling** (`audio/drums.ts`'s `scheduleDrums`): per section (skipping any that start inside the
+first bar — nothing to fill before beat 0), picks a random fill from whatever's bundled, computes its
+window (`[section.startBeat - fill.lengthBeats, section.startBeat)`, clipped so it can't start before
+beat 0), and schedules that fill's own hits via a `Tone.Part` (`sectionFillPart`) — same
+"events scheduled against absolute song position" mechanism the crash cue (`sectionCrashPart`) and
+bass/keys already use per-chord, since the main pattern `Tone.Loop` has no concept of song position
+at all (just its own step counter modulo the pattern length).
+
+**The actual interrupt**: the main Loop's callback checks a module-level `fillWindows` array (one
+`{start, end}` range per section, rebuilt each `scheduleDrums()` call) before triggering its normal
+pattern hits, converting its own `time` parameter to an absolute transport beat via
+`Tone.Transport.getTicksAtTime(time) / Tone.Transport.PPQ` first. That conversion matters — a plain
+mutable "is a fill playing right now" flag, flipped inside the fill Part's own callback, would have
+been wrong: `Tone.Part`/`Tone.Loop` callbacks fire up to their lookahead window *before* the actual
+audio-clock time they're scheduled for, so setting a flag synchronously inside the fill's callback
+would have suppressed some of the main Loop's ticks that were genuinely scheduled to sound *earlier*
+than the fill's real start. Comparing precomputed absolute-beat ranges against the *converted*
+schedule time sidesteps that race entirely.
 
 ## Planned: sections + arrangement in song presets
 Song presets currently store one flat `placements` array covering the whole timeline. When a
