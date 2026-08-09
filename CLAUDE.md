@@ -139,6 +139,14 @@ npm run dev
 - Before committing/pushing: check `git status` for anything under `data/drumSamples/` or
   similar unreviewed binary assets — see the sample-based drums note below for why that
   directory in particular needs a licensing gut-check before it's ever committed.
+- **Attempted and reverted:** rhythmic variation for the "Smart Walking" bass style
+  (`audio/bass.ts`'s `smartWalkBarEvents`) — beats 2/3 of each bar occasionally breaking from a
+  plain quarter note into an eighth-note leading pair or an eighth-note triplet run, rolled
+  randomly per bar, both still resolving onto the same harmonic target the straight quarter
+  would have. Reverted after listening — didn't sound right, not narrowed down further (the
+  probabilities/note choices were a first guess, never tuned by ear). If retried, worth trying a
+  lower probability and/or restricting the triplet case to specific bars (e.g. only right before
+  a chord change) rather than any bar 2/3, rather than assuming the mechanism itself was wrong.
 
 ## Sample-based drum playback (mostly done)
 The drum engine (`audio/drums.ts`) has one lane per physical sound source — kick, snare, rim,
@@ -341,6 +349,22 @@ The monophonic playback path this would ride on already exists too
 (`audio/melody.ts`'s single `Tone.Synth`, same one fixed imported melodies use) —
 the new pieces are the lick bank/generator, the random-or-pattern turn scheduler,
 and the countdown cue.
+
+**Attempted and reverted: a pure algorithmic-generation version ("Jazzbot").**
+Built and briefly shipped a scoped-down cut of the above — no lick bank, no
+turn-taking cue, just an always-on "Jazzbot" toggle on the Melody track
+(`data/jazzbot.ts`) that replaced the fixed/imported melody with an
+algorithmically-generated line: alternating fixed 4-bar solo/rest blocks, notes
+picked via a small-step random walk across each chord's `SCALE_SUGGESTIONS`
+pool (or a `chordTones` arpeggio fallback). Pulled back out after listening to
+it — it didn't sound right, and wasn't refined further to find out exactly why
+(candidates, untested: the random walk has no phrasing/motif sense so it reads
+as aimless rather than "soloing"; no rhythmic contour beyond
+quarter/eighth-note coin-flips; landing on scale tones with no resolution logic
+around chord changes). If this gets picked back up, the lick-bank approach
+above (real short phrases, not generated-from-scratch notes) is probably the
+one worth trying first — pure algorithmic generation is exactly the part that
+didn't hold up.
 
 ## Direction: what this app needs next
 Asked-and-answered product question, worth keeping around since it'll come up again. Given how
