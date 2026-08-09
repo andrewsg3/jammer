@@ -364,6 +364,18 @@ select option {
   padding-bottom: 6px;
 }
 
+/* Master lives outside .channel-strip-rail on purpose: that rail's flex-wrap packs
+   strips two-or-three per row depending on available width, so Master's horizontal
+   position (and whether it lines up under any particular strip above it) shifted
+   with wrap parity instead of staying put. Its own row/border keeps it in a fixed,
+   predictable spot regardless of how the rail above it wraps. */
+.channel-strip-master-row {
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
 .panel-title {
   margin: 0;
   font-size: 12px;

@@ -784,7 +784,14 @@ function App() {
               muted={metronomeMuted}
               onToggleMuted={() => setMetronomeMutedState((v) => !v)}
             />
-            <ChannelStrip label="Master" accent="master" volume={masterVolume} onVolumeChange={setMasterVolumeState} />
+            </div>
+            <div className="channel-strip-master-row">
+              <ChannelStrip
+                label="Master"
+                accent="master"
+                volume={masterVolume}
+                onVolumeChange={setMasterVolumeState}
+              />
             </div>
           </div>
         </div>
