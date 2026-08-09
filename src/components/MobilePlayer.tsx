@@ -78,7 +78,7 @@ type Track = 'drums' | 'bass' | 'keys';
 // Same starting points as the desktop mixer (App.tsx) — tracks at 70% for
 // headroom, master/metronome at 100% — except drums, which start quieter here:
 // on a phone's small speaker the drum samples otherwise dominate the mix.
-const DEFAULT_VOLUMES = { master: 100, drums: 20, bass: 70, keys: 70, metronome: 100 };
+const DEFAULT_VOLUMES = { master: 100, drums: 30, bass: 80, keys: 60, metronome: 100 };
 
 // UI-only preferences (not song data — those still stay JSON-file-only, per
 // CLAUDE.md's no-accounts/no-server-side stance). Small enough, and unrelated
@@ -120,6 +120,25 @@ function ChordLabel({ chord, notation }: { chord: Chord; notation: NotationStyle
   );
 }
 
+// The URL's ?song= name wins over the first bundled preset, so a refresh (or a
+// shared link) reopens whatever song was actually loaded rather than always the
+// alphabetically-first one — same convention App.tsx already uses on desktop.
+const urlSongName = new URLSearchParams(window.location.search).get('song');
+const DEFAULT_MOBILE_PRESET =
+  bundledSongPresets.find((p) => p.name === urlSongName) ?? bundledSongPresets[0] ?? null;
+
+/** Keeps ?song= in sync with whatever's actually loaded, without adding a
+ * back-button stop per song switch — a plain refresh should reopen the same
+ * song, not navigate. Same idea as App.tsx's own setSongInUrl; kept as a
+ * separate copy here since the two views share no common "app shell" module to
+ * hang one shared helper off of. */
+function setSongInUrl(name: string | null): void {
+  const url = new URL(window.location.href);
+  if (name) url.searchParams.set('song', name);
+  else url.searchParams.delete('song');
+  window.history.replaceState(null, '', url);
+}
+
 /**
  * Playback-only companion view for phones — a bundled song, a scrolling chord
  * chart, and transport/key/tempo controls. Deliberately can't build or edit a
@@ -127,7 +146,7 @@ function ChordLabel({ chord, notation }: { chord: Chord; notation: NotationStyle
  * don't translate to touch); see the "Direction" notes in CLAUDE.md.
  */
 export function MobilePlayer() {
-  const [preset, setPreset] = useState<SongPreset | null>(bundledSongPresets[0] ?? null);
+  const [preset, setPreset] = useState<SongPreset | null>(DEFAULT_MOBILE_PRESET);
   const [musicalKey, setMusicalKey] = useState(preset?.key ?? 'C');
   const [scale, setScale] = useState<ScaleName>(preset?.scale ?? 'major');
   const [tempo, setTempoState] = useState(preset?.tempo ?? 120);
@@ -323,6 +342,7 @@ export function MobilePlayer() {
     stop();
     setIsPlaying(false);
     setPlayheadBeat(0);
+    setSongInUrl(preset?.name ?? null);
     if (preset) {
       setMusicalKey(preset.key);
       setScale(preset.scale);
