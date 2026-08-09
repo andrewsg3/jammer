@@ -148,7 +148,7 @@ const players: Partial<Record<DrumVoice, Tone.Player>> = {};
 // the shared mixer fader should have to compensate for on every song). 0dB
 // (untouched) for any voice not listed here.
 const SAMPLE_TRIM_DB: Partial<Record<DrumVoice, number>> = {
-  hihatFoot: 8, // the foot-chick sample is recorded much quieter than the rest of the kit
+  hihatFoot: 14, // the foot-chick sample is recorded much quieter than the rest of the kit
 };
 
 // Placeholder synth voices — quick, plausible approximations rather than deeply
