@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  chordName,
   chordNameParts,
   diatonicOptions,
   diatonicSeventhOptions,
@@ -14,11 +15,17 @@ import {
 } from '../data/progressions';
 import type { Chord, ChordOption, ChordQuality, NotationStyle, ScaleName } from '../data/progressions';
 import { SCALE_SUGGESTIONS } from '../data/scaleSuggestions';
+import { EXOTIC_SCALE_GROUPS } from '../data/exoticScales';
 
 // Same 12 chromatic roots as the main quality picker's row, for the "/bass" dropdown
 // — offsets, not absolute note names, so the picked bass note transposes correctly
 // if the song's key changes (see ChordSelection's chromatic.bassOffset).
 const BASS_NOTE_OFFSETS = Array.from({ length: 12 }, (_, offset) => offset);
+
+// Absolute root names, independent of the song's own key — "audition any scale
+// over any chord" means any chord, not just ones diatonic to whatever key the
+// song's currently in.
+const ALL_ROOTS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 type Props = {
   musicalKey: string;
@@ -26,6 +33,7 @@ type Props = {
   notationStyle: NotationStyle;
   onAudition: (chord: Chord) => void;
   onAuditionScale: (chord: Chord, scale: ScaleName) => void;
+  onAuditionExoticScale: (chord: Chord, scaleRoot: string, intervals: number[]) => void;
 };
 
 function PaletteRow({
@@ -137,11 +145,130 @@ function ChromaticSection({
   );
 }
 
-export function ChordPalette({ musicalKey, scale, notationStyle, onAudition, onAuditionScale }: Props) {
+const ALL_EXOTIC_SCALES = EXOTIC_SCALE_GROUPS.flatMap((g) => g.scales);
+
+/** "Audition any scale, including exotic ones, over any chord" — a free-form
+ * companion to the scale-suggestions panel above, which only offers this app's
+ * own curated per-quality picks. Root/quality here default to whatever chord was
+ * selected in the palette, but aren't tied to it — both are freely changeable,
+ * so this covers a chord that was never clicked in the palette at all. Two
+ * sections (Chord, Scale) rather than one long form — picking a chord and
+ * picking a scale are separate decisions, and the scale list alone (19 options
+ * across 5 groups) is enough to want its own clearly labeled block. */
+function ExoticScaleModal({
+  initialChord,
+  notationStyle,
+  onAuditionExoticScale,
+  onClose,
+}: {
+  initialChord: Chord;
+  notationStyle: NotationStyle;
+  onAuditionExoticScale: Props['onAuditionExoticScale'];
+  onClose: () => void;
+}) {
+  const [root, setRoot] = useState(initialChord.root);
+  const [quality, setQuality] = useState<ChordQuality>(initialChord.quality);
+  // Defaults to the chord's own root (the common case — "what scale fits this
+  // chord") but is independently changeable, for the uncommon-but-real case of
+  // wanting a *different*-rooted scale over a chord, e.g. "E minor over Cmaj7."
+  const [scaleRoot, setScaleRoot] = useState(initialChord.root);
+  const [scaleName, setScaleName] = useState(ALL_EXOTIC_SCALES[0].name);
+  const chord: Chord = { root, quality };
+  const scale = ALL_EXOTIC_SCALES.find((s) => s.name === scaleName) ?? ALL_EXOTIC_SCALES[0];
+
+  return (
+    <div className="exotic-scale-backdrop" role="dialog" aria-modal="true" aria-label="Audition any scale" onClick={onClose}>
+      <div className="exotic-scale-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="exotic-scale-header">
+          <h2>Audition any scale</h2>
+          <button type="button" className="exotic-scale-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        <div className="exotic-scale-section">
+          <h3 className="exotic-scale-section-title">Chord</h3>
+          <div className="exotic-scale-chord-picker">
+            <select value={root} onChange={(e) => setRoot(e.target.value)} aria-label="Chord root">
+              {ALL_ROOTS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <select
+              className="quality-select"
+              value={quality}
+              onChange={(e) => setQuality(e.target.value as ChordQuality)}
+              aria-label="Chord quality"
+            >
+              {QUALITY_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.qualities.map((q) => (
+                    <option key={q} value={q}>
+                      {QUALITY_LABELS[q]}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <span className="exotic-scale-chord-name">{chordName(chord, notationStyle)}</span>
+          </div>
+        </div>
+
+        <div className="exotic-scale-section">
+          <h3 className="exotic-scale-section-title">Scale</h3>
+          <div className="exotic-scale-scale-picker">
+            <select value={scaleRoot} onChange={(e) => setScaleRoot(e.target.value)} aria-label="Scale root">
+              {ALL_ROOTS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <select
+              className="exotic-scale-select"
+              value={scaleName}
+              onChange={(e) => setScaleName(e.target.value)}
+              aria-label="Scale"
+            >
+              {EXOTIC_SCALE_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.scales.map((s) => (
+                    <option key={s.name} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            className="exotic-scale-audition-button"
+            onClick={() => onAuditionExoticScale(chord, scaleRoot, scale.intervals)}
+          >
+            ▶ Audition {scaleRoot} {scale.name} over {chordName(chord, notationStyle)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ChordPalette({
+  musicalKey,
+  scale,
+  notationStyle,
+  onAudition,
+  onAuditionScale,
+  onAuditionExoticScale,
+}: Props) {
   // Whichever chord was last clicked/dragged — drives the scale-suggestions panel
   // below. Not the same thing as a chord already placed on the grid; this is
   // purely "the last one you were just looking at in the palette."
   const [selectedChord, setSelectedChord] = useState<Chord | null>(null);
+  const [exoticModalOpen, setExoticModalOpen] = useState(false);
   const handleAudition = (chord: Chord) => {
     setSelectedChord(chord);
     onAudition(chord);
@@ -181,6 +308,22 @@ export function ChordPalette({ musicalKey, scale, notationStyle, onAudition, onA
             <span className="scale-suggestions-none">no clean fit in this app's scales</span>
           )}
         </div>
+      )}
+      <button
+        type="button"
+        className="exotic-scale-open-button"
+        onClick={() => setExoticModalOpen(true)}
+        title="Audition any scale, including exotic ones, over any chord"
+      >
+        🎵 Audition any scale…
+      </button>
+      {exoticModalOpen && (
+        <ExoticScaleModal
+          initialChord={selectedChord ?? { root: 'C', quality: 'maj7' }}
+          notationStyle={notationStyle}
+          onAuditionExoticScale={onAuditionExoticScale}
+          onClose={() => setExoticModalOpen(false)}
+        />
       )}
       <PaletteRow
         title="Diatonic"

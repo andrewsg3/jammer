@@ -380,8 +380,18 @@ export function chordTones(chord: Chord, baseOctave: number): string[] {
  * of the song's own key/scale — a chord-scale pairing is always rooted on the
  * chord's own root, not wherever the song happens to be. */
 export function scaleTones(root: string, scale: ScaleName, baseOctave: number): string[] {
+  return notesFromIntervals(root, SCALE_INTERVALS[scale], baseOctave);
+}
+
+/** Note names (at the given octave) for an arbitrary set of semitone intervals
+ * from a root — the shared machinery behind scaleTones above, generalized so
+ * scales outside this app's own ScaleName vocabulary (whole-tone, diminished,
+ * altered, ... — see data/exoticScales.ts) can be voiced the same way without
+ * needing to exist as a real ScaleName themselves (that type is tied to key
+ * signatures/diatonic chord-building elsewhere; these aren't). */
+export function notesFromIntervals(root: string, intervals: number[], baseOctave: number): string[] {
   const rootSt = rootSemitone(root);
-  return SCALE_INTERVALS[scale].map((interval) => {
+  return intervals.map((interval) => {
     const absolute = rootSt + interval;
     const octaveOffset = Math.floor(absolute / 12);
     const pitchClass = ((absolute % 12) + 12) % 12;

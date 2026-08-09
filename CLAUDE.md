@@ -289,6 +289,32 @@ new scale audition releases whatever pad is still ringing from a previous one
 first, so rapid clicking doesn't pile up sustained pads. Wired to each suggestion
 pill button in the panel described above.
 
+**"Audition any scale" modal (done).** The suggestions panel above is
+deliberately narrow — only this app's own 7-mode `ScaleName` vocabulary, only the
+qualities `SCALE_SUGGESTIONS` has a real answer for. The "🎵 Audition any
+scale…" button (`ChordPalette.tsx`) opens a free-form companion: any of 12 roots
+× all `ChordQuality` values for the chord, any of 19 scales from
+`data/exoticScales.ts`'s `EXOTIC_SCALE_GROUPS` (grouped the same way
+`QUALITY_GROUPS` groups chord qualities, into `<optgroup>`s — Diatonic Modes,
+Minor & Major Variants, Symmetric & Altered, Pentatonic & Blues, Bebop) for the
+scale, *and* an independently-pickable root for the scale itself — the chord and
+the scale don't have to share a root (e.g. "E minor over Cmaj7"). Two labeled
+sections (Chord, Scale) rather than one form, plus a single "▶ Audition (root)
+(scale) over (chord)" button, not one button per scale — 19 always-visible pill
+buttons was the first version, but doesn't scale (heh) now that the scale root
+is independent too (19 scales × 12 roots = 228 combinations).
+
+Audio-side, `audio/engine.ts`'s `auditionExoticScale(chord, scaleRoot,
+intervals)` and `progressions.ts`'s new `notesFromIntervals(root, intervals,
+octave)` generalize `auditionScale`/`scaleTones` to accept a raw semitone-interval
+set and an independent root instead of one of this app's own `ScaleName`s — the
+actual sustained-pad-plus-run playback mechanism (`runScaleAudition`, shared by
+both `auditionScale` and `auditionExoticScale`) didn't need to change at all.
+`EXOTIC_SCALES`/`ScaleName` are deliberately two separate, unrelated vocabularies
+— `ScaleName` stays tied to key signatures/diatonic chord-building, so scales that
+don't fit that model (whole-tone, both diminished scales, altered, pentatonics)
+were never forced into it.
+
 **Trading fours with an "AI" improviser using a predefined scale/style.** The most
 ambitious of the three. Confirmed scope: no audio input at all — the bot doesn't
 listen to what the human plays, it just alternates N-bar blocks on a fixed or

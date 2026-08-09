@@ -735,6 +735,132 @@ button:hover {
   font-style: italic;
 }
 
+.exotic-scale-open-button {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  padding: 2px 0 8px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.exotic-scale-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.exotic-scale-modal {
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  box-sizing: border-box;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.exotic-scale-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.exotic-scale-header h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.exotic-scale-close {
+  font-size: 16px;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 5px 8px;
+}
+
+.exotic-scale-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.exotic-scale-section:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.exotic-scale-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.55;
+}
+
+.exotic-scale-chord-picker,
+.exotic-scale-scale-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.exotic-scale-chord-picker select,
+.exotic-scale-scale-picker select {
+  font-size: 13px;
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+
+.exotic-scale-select {
+  flex: 1;
+  min-width: 160px;
+}
+
+.exotic-scale-chord-name {
+  font-size: 16px;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+.exotic-scale-audition-button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+.exotic-scale-audition-button:hover {
+  filter: brightness(1.08);
+}
+
 .palette-section {
   padding: 10px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);

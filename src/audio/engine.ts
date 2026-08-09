@@ -1,5 +1,12 @@
 import * as Tone from 'tone';
-import { chordTones, scaleTones, type Chord, type ChordPlacement, type ScaleName } from '../data/progressions';
+import {
+  chordTones,
+  scaleTones,
+  notesFromIntervals,
+  type Chord,
+  type ChordPlacement,
+  type ScaleName,
+} from '../data/progressions';
 import { PIANO_SAMPLE_URLS } from '../data/pianoSamples';
 import type { DrumPattern, TimeFeel, BassRule, BassPattern, KeysRule } from '../data/instrumentStyles';
 import type { MelodyNote } from '../data/melody';
@@ -73,21 +80,21 @@ export async function auditionChord(chord: Chord): Promise<void> {
 // whatever pad is still ringing from a previous one rather than piling up.
 let stopCurrentScaleAuditionPad: (() => void) | null = null;
 
-/** Loops a sustained voicing of the chord (one octave down, so it doesn't clash
- * with the run above it) while running the given scale's notes up and back down
- * over it — "does this scale actually sound right against this chord," not just
- * a name to read. Same as auditionChord, this is a standalone one-shot gesture
- * scheduled via Tone.now(), independent of the Transport/song playback. */
-export async function auditionScale(chord: Chord, scale: ScaleName): Promise<void> {
-  await Tone.start();
+/** Shared core behind auditionScale and auditionExoticScale below: loops a
+ * sustained voicing of the chord (one octave down, so it doesn't clash with the
+ * run above it) while running the given scale notes (already resolved to actual
+ * pitches at AUDITION_OCTAVE, rooted whichever note the caller wants — not
+ * necessarily the chord's own root, e.g. "E minor over Cmaj7") up and back down
+ * over it. Standalone one-shot gesture scheduled via Tone.now(), independent of
+ * the Transport/song playback, same as auditionChord. */
+function runScaleAudition(chord: Chord, scaleRoot: string, scale7: string[]): void {
   stopCurrentScaleAuditionPad?.();
 
   const pad = chordTones(chord, AUDITION_OCTAVE - 1);
   auditionSynth.triggerAttack(pad);
   stopCurrentScaleAuditionPad = () => auditionSynth.triggerRelease(pad);
 
-  const scale7 = scaleTones(chord.root, scale, AUDITION_OCTAVE);
-  const octaveUp = `${chord.root}${AUDITION_OCTAVE + 1}`;
+  const octaveUp = `${scaleRoot}${AUDITION_OCTAVE + 1}`;
   const run = [...scale7, octaveUp, ...[...scale7].reverse()];
   const secondsPerNote = 0.16;
   const now = Tone.now();
@@ -106,6 +113,23 @@ export async function auditionScale(chord: Chord, scale: ScaleName): Promise<voi
     },
     (run.length * secondsPerNote + 0.3) * 1000,
   );
+}
+
+/** Auditions one of this app's own ScaleName modes (the chord-scale suggestions
+ * panel's pills) over the chord, rooted on the chord's own root — see
+ * runScaleAudition above. */
+export async function auditionScale(chord: Chord, scale: ScaleName): Promise<void> {
+  await Tone.start();
+  runScaleAudition(chord, chord.root, scaleTones(chord.root, scale, AUDITION_OCTAVE));
+}
+
+/** Same idea as auditionScale, but for the "any scale, including exotic ones"
+ * modal — takes a raw semitone-interval set (data/exoticScales.ts) rather than
+ * one of this app's own ScaleName modes, and a scale root that's independently
+ * chosen rather than always the chord's own root (e.g. "E minor over Cmaj7"). */
+export async function auditionExoticScale(chord: Chord, scaleRoot: string, intervals: number[]): Promise<void> {
+  await Tone.start();
+  runScaleAudition(chord, scaleRoot, notesFromIntervals(scaleRoot, intervals, AUDITION_OCTAVE));
 }
 
 export type PlaybackParams = {
