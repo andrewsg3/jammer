@@ -229,43 +229,53 @@ would have suppressed some of the main Loop's ticks that were genuinely schedule
 than the fill's real start. Comparing precomputed absolute-beat ranges against the *converted*
 schedule time sidesteps that race entirely.
 
-## Planned: sections + arrangement in song presets
-Song presets currently store one flat `placements` array covering the whole timeline. When a
+## Sections + arrangement in song presets (done)
+Song presets used to only store one flat `placements` array covering the whole timeline. When a
 section repeats verbatim (e.g. Autumn Leaves' AABC form, where the two "A" sections are
-identical chords), it has to be typed out twice in the JSON. The idea: a preset instead defines
+identical chords), it had to be typed out twice in the JSON. Now a preset can instead define
 each section once — a self-contained chord progression, no start/length stored on it at all,
 since both are derivable (length from its own chords, start from its position in the play
 order) — plus a separate `arrangement: string[]` listing what order the named sections play in,
 repeats allowed.
 
-**Scope, decided in advance:** file-format-only. The live chord grid, its drag/resize/move
-editing, and `SectionMarker` rendering (`data/sections.ts`, `ChordGrid.tsx`) stay exactly as they
-are — on load, sections+arrangement just expands into today's flat, independently-editable
-placements, the same shape `resolvePlacementStarts` already produces. No live-linked/shared
-section editing (editing one occurrence of a repeated section never touches another once
-loaded), no new arrangement-reordering UI (hand-authored in the JSON for now, like sections
-markers already are). Both explicitly ruled out to keep this a load/save-layer change rather
-than a rebuild of the editor's core interaction model.
+**Scope, as built:** file-format-only, exactly as originally planned. The live chord grid, its
+drag/resize/move editing, and `SectionMarker` rendering (`data/sections.ts`, `ChordGrid.tsx`)
+are untouched — on load, sections+arrangement just expands into the same flat,
+independently-editable placements shape `resolvePlacementStarts` always produced. No
+live-linked/shared section editing (editing one occurrence of a repeated section never touches
+another once loaded), no arrangement-reordering UI (hand-authored in the JSON, like section
+markers already are).
 
-Sketch of the actual mechanism (`data/songPresets.ts`):
-- New `SongPresetSectionDef = { label: string; placements: SongPresetPlacement[] }` — same
-  placement shape/rules as today (`startBeat` optional, relative to that section's own start).
-- `resolveArrangement(sections, arrangement)` (load-side): for each label in `arrangement`,
-  resolve that section's own placements via the *existing* `resolvePlacementStarts` to get its
-  local (0-based) chords + total length, then place that sequence at the running global cursor
-  and advance it — producing both the flat placements and a derived `SectionMarker[]` in exactly
-  the shape everything downstream already consumes.
-- `deriveSectionsAndArrangement(placements, sections)` (save-side, the reverse): slice
-  placements by each `SectionMarker`'s range, rebase to relative-startBeat, and dedupe
+The actual mechanism (`data/songPresets.ts`):
+- `SongPresetSectionDef = { label: string; placements: SongPresetPlacement[] }` — same
+  placement shape/rules as the flat shape (`startBeat` optional, relative to that section's own
+  start).
+- `resolveArrangement(sectionDefs, arrangement)` (load-side): for each label in `arrangement`,
+  resolves that section's own placements via the existing `resolvePlacementStarts` to get its
+  local (0-based) chords + total length, then places that sequence at the running global cursor
+  and advances it — producing both the flat placements and a derived `SectionMarker[]`-shaped
+  `sections` array in exactly the shape everything downstream already consumes. An arrangement
+  entry naming an unknown section is skipped with a console warning, not a crash.
+- `deriveSectionsAndArrangement(placements, sections)` (save-side, the reverse): slices
+  placements by each section marker's range, rebases to a relative startBeat, and dedupes
   identical `{label, placements}` containers across markers so a preset that already has
   repeated sections doesn't re-duplicate them on save — this is what actually delivers "don't
-  retype A twice."
-- `SongPreset`/`isSongPreset` accept **either** shape (new `sections`+`arrangement`, or today's
-  flat `placements` + optional flat-marker `sections`) — existing bundled presets and anything
-  already hand-authored keep loading unchanged indefinitely; only `handleSaveSongPreset` would
-  start writing the new shape going forward.
+  retype A twice." Two sections sharing a label but with *different* chords get disambiguated
+  (`"A (2)"`) rather than merged. Only returns the arrangement shape when it can represent the
+  chart losslessly — sections must tile the whole progression contiguously with no gaps/overlaps,
+  and every placement must fit entirely within exactly one section; anything else returns `null`
+  so the caller falls back to the flat shape rather than risk dropping or misplacing chords.
+- `resolveSongPreset(preset)` is the one shared entry point both `App.tsx` and
+  `MobilePlayer.tsx` use instead of reading `preset.placements`/`preset.sections` directly — it
+  picks whichever shape a given preset actually stores.
+- `SongPreset`/`isSongPreset` accept **either** shape (new `sectionDefs`+`arrangement`, or the
+  original flat `placements` + optional flat-marker `sections`) — every existing bundled preset
+  and anything hand-authored keeps loading unchanged indefinitely. `handleSaveSongPreset`
+  (`App.tsx`) is the only place that started writing the new shape, and only when it applies
+  (falls back to flat when there are no sections, or they don't cleanly tile the chart).
 
-Not started — shelved for now, no bundled presets migrated.
+No bundled presets have been manually migrated to the new shape — they'll pick it up naturally
+the next time each is re-saved through the app.
 
 ## Chord-scale suggestions and auditioning (done); AI trading-fours (planned)
 
