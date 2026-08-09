@@ -14,7 +14,7 @@ import {
 import { loadBundledDrumStyles } from '../data/drumLibrary';
 import { loadBundledBassStyles } from '../data/bassLibrary';
 import type { SectionMarker } from '../data/sections';
-import { bundledSongPresets, resolveLoopRange, resolvePlacementStarts, type SongPreset } from '../data/songPresets';
+import { bundledSongPresets, resolveLoopRange, resolveSongPreset, type SongPreset } from '../data/songPresets';
 import {
   getCurrentBeat,
   isBassInstrumentLoaded,
@@ -209,10 +209,11 @@ export function MobilePlayer() {
     };
   }, []);
 
-  const resolvedPlacements = useMemo(
-    () => (preset ? resolvePlacementStarts(preset.placements) : []),
+  const resolved = useMemo(
+    () => (preset ? resolveSongPreset(preset) : { placements: [], sections: [] }),
     [preset],
   );
+  const resolvedPlacements = resolved.placements;
   const loopRange = useMemo(
     () => (preset ? resolveLoopRange(preset, resolvedPlacements) : { loopStart: 0, loopEnd: 0 }),
     [preset, resolvedPlacements],
@@ -222,8 +223,8 @@ export function MobilePlayer() {
     [resolvedPlacements],
   );
   const sections: SectionMarker[] = useMemo(
-    () => (preset?.sections ?? []).map((s, i) => ({ id: `mobile-section-${i}`, ...s })),
-    [preset],
+    () => resolved.sections.map((s, i) => ({ id: `mobile-section-${i}`, ...s })),
+    [resolved],
   );
 
   // A flat list of beat cells — CSS grid auto-flow wraps every BEATS_PER_ROW (four

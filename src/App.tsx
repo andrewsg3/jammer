@@ -27,7 +27,8 @@ import {
   bundledSongPresets,
   downloadSongPreset,
   parseSongPresetFile,
-  resolvePlacementStarts,
+  resolveSongPreset,
+  deriveSectionsAndArrangement,
   resolveLoopRange,
   type SongPreset,
 } from './data/songPresets';
@@ -96,9 +97,10 @@ const DEFAULT_SONG_PRESET =
   bundledSongPresets.find((p) => p.name === urlSongName) ??
   bundledSongPresets.find((p) => p.name === 'Autumn Leaves') ??
   null;
-const DEFAULT_RESOLVED_PLACEMENTS = DEFAULT_SONG_PRESET
-  ? resolvePlacementStarts(DEFAULT_SONG_PRESET.placements)
-  : [];
+const DEFAULT_RESOLVED = DEFAULT_SONG_PRESET
+  ? resolveSongPreset(DEFAULT_SONG_PRESET)
+  : { placements: [], sections: [] };
+const DEFAULT_RESOLVED_PLACEMENTS = DEFAULT_RESOLVED.placements;
 const DEFAULT_LOOP_RANGE = DEFAULT_SONG_PRESET
   ? resolveLoopRange(DEFAULT_SONG_PRESET, DEFAULT_RESOLVED_PLACEMENTS)
   : { loopStart: 0, loopEnd: 16 };
@@ -159,7 +161,7 @@ function App() {
   const [melody, setMelody] = useState<MelodyNote[]>(DEFAULT_SONG_PRESET?.melody ?? []);
   const [melodyError, setMelodyError] = useState<string | null>(null);
   const [sections, setSections] = useState<SectionMarker[]>(
-    (DEFAULT_SONG_PRESET?.sections ?? []).map((s) => ({ id: crypto.randomUUID(), ...s })),
+    DEFAULT_RESOLVED.sections.map((s) => ({ id: crypto.randomUUID(), ...s })),
   );
   const [melodyMuted, setMelodyMutedState] = useState(false);
   const [songPresetError, setSongPresetError] = useState<string | null>(null);
@@ -399,7 +401,8 @@ function App() {
     setScale(preset.scale);
     setTempo(preset.tempo);
     setMetronomeMutedState(!preset.metronome);
-    const resolvedPlacements = resolvePlacementStarts(preset.placements);
+    const resolved = resolveSongPreset(preset);
+    const resolvedPlacements = resolved.placements;
     const loopRange = resolveLoopRange(preset, resolvedPlacements);
     setLoopStart(loopRange.loopStart);
     setLoopEnd(loopRange.loopEnd);
@@ -428,11 +431,22 @@ function App() {
       drumsInstruments.find((i) => i.name === preset.drumsInstrument) ?? drumsInstruments[0],
     );
     setMelody(preset.melody ?? []);
-    setSections((preset.sections ?? []).map((s) => ({ id: crypto.randomUUID(), ...s })));
+    setSections(resolved.sections.map((s) => ({ id: crypto.randomUUID(), ...s })));
     setSongPresetError(null);
   };
 
   const handleSaveSongPreset = () => {
+    const flatPlacements = placements.map(({ selection, startBeat, lengthBeats }) => ({
+      selection,
+      startBeat,
+      lengthBeats,
+    }));
+    const flatSections = sections.map(({ label, startBeat, lengthBeats }) => ({ label, startBeat, lengthBeats }));
+    // Prefer the sections+arrangement shape whenever it can represent the current
+    // chart losslessly (see deriveSectionsAndArrangement) -- that's what actually
+    // avoids retyping a repeated section. Falls back to the flat shape when there
+    // are no sections, or the sections don't cleanly tile the chart.
+    const derived = deriveSectionsAndArrangement(flatPlacements, flatSections);
     const preset: SongPreset = {
       version: 1,
       name: songTitle,
@@ -455,15 +469,9 @@ function App() {
       customDrumPattern:
         customDrumStyle && drumStyle.name === customDrumStyle.name ? customDrumStyle.pattern : null,
       melody: melody.length > 0 ? melody : undefined,
-      sections:
-        sections.length > 0
-          ? sections.map(({ label, startBeat, lengthBeats }) => ({ label, startBeat, lengthBeats }))
-          : undefined,
-      placements: placements.map(({ selection, startBeat, lengthBeats }) => ({
-        selection,
-        startBeat,
-        lengthBeats,
-      })),
+      ...(derived
+        ? { sectionDefs: derived.sectionDefs, arrangement: derived.arrangement }
+        : { sections: flatSections.length > 0 ? flatSections : undefined, placements: flatPlacements }),
     };
     downloadSongPreset(preset);
   };
