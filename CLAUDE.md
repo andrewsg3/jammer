@@ -236,29 +236,35 @@ Sketch of the actual mechanism (`data/songPresets.ts`):
 
 Not started — shelved for now, no bundled presets migrated.
 
-## Planned: chord-scale suggestions, scale auditioning, and AI trading-fours
+## Chord-scale suggestions and auditioning (done); AI trading-fours (planned)
 
-Three related practice-aid ideas, in increasing order of scope — the first two are
-natural extensions of pieces that already exist; the third is a much bigger, and
-partly non-goal-conflicting, undertaking.
+Three related practice-aid ideas. The first two are done; the third is a much
+bigger, and partly non-goal-conflicting, undertaking — see below.
 
-**Suggest scales over chords.** For the currently selected/hovered chord, show
-which scale(s) are the standard jazz-theory fit for its quality and role — e.g.
-Mixolydian over a dominant 7th, Dorian over a min7 functioning as ii, Lydian over
-a major 7th borrowed from a parallel key. The data's mostly already here:
-`ChordQuality` (`progressions.ts`) and the existing `ScaleName`/`SCALE_INTERVALS`
-table just need a new lookup mapping quality (and maybe scale-degree context,
-since the "right" scale for a ii-7 differs from the same min7 quality used
-elsewhere) to a short list of candidate scale names. Natural home:
-`ChordPalette.tsx`, next to where a chord's already selected.
+**Suggest scales over chords (done).** `data/scaleSuggestions.ts`'s
+`SCALE_SUGGESTIONS: Record<ChordQuality, ScaleName[]>` maps each chord quality to
+the jazz-theory-standard scale(s) that fit it — e.g. Mixolydian for `dom7`, Dorian
+for `min7`/`m6`, Lydian for `maj7sharp11`. Real constraint worth knowing: this
+app's `ScaleName` only has the 7 diatonic modes of the major scale (see "Current
+shape" above) — no melodic/harmonic minor, whole-tone, or diminished/octatonic
+scales, which several qualities' actual textbook answer needs (altered dominants,
+`aug`, `minMaj7`). Rather than force a wrong single-mode answer onto those, their
+entry is an empty array — `ChordPalette.tsx`'s suggestions panel shows "no clean
+fit in this app's scales" for those rather than a fabricated-sounding one. UI:
+clicking/dragging any palette chord sets it as ChordPalette's own
+`selectedChord` state, which drives a small panel above the palette rows
+showing that chord's name plus a pill button per suggested scale.
 
-**Audition different scales over chords.** Builds directly on `auditionChord` in
-`audio/engine.ts` — today that just plays the chord's tones once (`chordTones`).
-This wants a sibling playback path: given a chord and a chosen scale, loop a
-sustained voicing of the chord while running the scale's notes over it (ascending/
-descending), so the ear can actually hear the fit rather than just reading a
-suggested name. Needs new scheduling, not just a reuse of `auditionChord` — that
-one is a single one-shot trigger; this wants a loop.
+**Audition different scales over chords (done).** `audio/engine.ts`'s
+`auditionScale(chord, scale)`, a sibling to `auditionChord` — triggers a sustained
+chord pad (one octave down, via `Tone.Sampler.triggerAttack`, no release) then
+runs the scale's own notes (rooted on the chord's root, not the song's key —
+`progressions.ts`'s new `scaleTones()`, same interval-table approach as
+`chordTones`) up and back down over it via `Tone.now()`-relative one-shot
+scheduling, independent of Transport/song playback, same as `auditionChord`. A
+new scale audition releases whatever pad is still ringing from a previous one
+first, so rapid clicking doesn't pile up sustained pads. Wired to each suggestion
+pill button in the panel described above.
 
 **Trading fours with an "AI" improviser using a predefined scale/style.** The most
 ambitious of the three. Confirmed scope: no audio input at all — the bot doesn't
@@ -298,16 +304,16 @@ the first concrete step actually taken in this direction, not just the theory of
 
 The "or a music theory teacher" branch this section used to rule out (on the grounds that it
 "needs genuinely new pedagogical features — scale/chord-tone highlighting, ear training — that
-nothing here currently hints at") is worth revisiting in light of the chord-scale
-suggestion/auditioning ideas above — those *are* exactly that kind of pedagogical feature, just
-framed as practice-aid tools rather than a teaching mode. The two directions aren't as separate as
-this file used to assume; scale suggestions/auditioning serve both.
+nothing here currently hints at") turned out to not hold — the chord-scale suggestion/auditioning
+feature above *is* exactly that kind of pedagogical feature, just framed as a practice-aid tool
+rather than a teaching mode. The two directions aren't as separate as this file used to assume.
 
 Highest-leverage next pieces, in order:
 1. **Finish the Electronic drum kit's samples** (see above) — most of "sample-based drums" is
    already done (Acoustic kit, real bass/piano samples); this is now a much smaller remaining
    task than it used to be, not a from-scratch undertaking.
-2. **Chord-scale suggestions + auditioning** (see above) — both are scoped, build on existing
-   pieces (`ChordPalette.tsx`, `auditionChord`), and land squarely in the practice-aid direction.
-3. **The in-browser MIDI editor** (see above) — program a head to play/comp against, not just
-   import one. Still the biggest single undertaking on this list.
+2. **The in-browser MIDI editor** (see above) — program a head to play/comp against, not just
+   import one. The biggest single undertaking on this list.
+3. **AI trading-fours** (see above) — the scoping questions are answered; building it is a genuinely
+   large effort (lick bank/generator, turn scheduler) on top of pieces that now all actually exist
+   (monophonic playback, the countdown-cue pattern, scale-rooted note generation).

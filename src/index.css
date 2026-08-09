@@ -687,6 +687,52 @@ button:hover {
   gap: 4px;
 }
 
+/* Shows for whichever chord was last clicked/dragged in the palette below —
+   suggested chord-scale pairings, each auditionable on its own. */
+.scale-suggestions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+}
+
+.scale-suggestions-chord {
+  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+.scale-suggestion-button {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  color: var(--accent);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.scale-suggestion-button:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.scale-suggestions-none {
+  font-size: 11px;
+  opacity: 0.55;
+  font-style: italic;
+}
+
 .palette-section {
   padding: 10px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);

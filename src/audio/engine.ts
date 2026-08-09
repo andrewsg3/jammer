@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { chordTones, type Chord, type ChordPlacement, type ScaleName } from '../data/progressions';
+import { chordTones, scaleTones, type Chord, type ChordPlacement, type ScaleName } from '../data/progressions';
 import { PIANO_SAMPLE_URLS } from '../data/pianoSamples';
 import type { DrumPattern, TimeFeel, BassRule, BassPattern, KeysRule } from '../data/instrumentStyles';
 import type { MelodyNote } from '../data/melody';
@@ -67,6 +67,45 @@ const auditionSynth = new Tone.Sampler({ urls: PIANO_SAMPLE_URLS, release: 1 }).
 export async function auditionChord(chord: Chord): Promise<void> {
   await Tone.start();
   auditionSynth.triggerAttackRelease(chordTones(chord, AUDITION_OCTAVE), '4n');
+}
+
+// Holds the sustained chord pad's release, so a new scale audition can cut off
+// whatever pad is still ringing from a previous one rather than piling up.
+let stopCurrentScaleAuditionPad: (() => void) | null = null;
+
+/** Loops a sustained voicing of the chord (one octave down, so it doesn't clash
+ * with the run above it) while running the given scale's notes up and back down
+ * over it — "does this scale actually sound right against this chord," not just
+ * a name to read. Same as auditionChord, this is a standalone one-shot gesture
+ * scheduled via Tone.now(), independent of the Transport/song playback. */
+export async function auditionScale(chord: Chord, scale: ScaleName): Promise<void> {
+  await Tone.start();
+  stopCurrentScaleAuditionPad?.();
+
+  const pad = chordTones(chord, AUDITION_OCTAVE - 1);
+  auditionSynth.triggerAttack(pad);
+  stopCurrentScaleAuditionPad = () => auditionSynth.triggerRelease(pad);
+
+  const scale7 = scaleTones(chord.root, scale, AUDITION_OCTAVE);
+  const octaveUp = `${chord.root}${AUDITION_OCTAVE + 1}`;
+  const run = [...scale7, octaveUp, ...[...scale7].reverse()];
+  const secondsPerNote = 0.16;
+  const now = Tone.now();
+  run.forEach((note, i) => {
+    auditionSynth.triggerAttackRelease(note, secondsPerNote * 0.85, now + i * secondsPerNote);
+  });
+
+  const stopPadAfterRun = stopCurrentScaleAuditionPad;
+  window.setTimeout(
+    () => {
+      // Only release if nothing newer has already taken over the pad.
+      if (stopCurrentScaleAuditionPad === stopPadAfterRun) {
+        stopPadAfterRun();
+        stopCurrentScaleAuditionPad = null;
+      }
+    },
+    (run.length * secondsPerNote + 0.3) * 1000,
+  );
 }
 
 export type PlaybackParams = {

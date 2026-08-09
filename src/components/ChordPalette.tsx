@@ -10,8 +10,10 @@ import {
   shiftRootFlat,
   QUALITY_GROUPS,
   QUALITY_LABELS,
+  SCALE_LABELS,
 } from '../data/progressions';
 import type { Chord, ChordOption, ChordQuality, NotationStyle, ScaleName } from '../data/progressions';
+import { SCALE_SUGGESTIONS } from '../data/scaleSuggestions';
 
 // Same 12 chromatic roots as the main quality picker's row, for the "/bass" dropdown
 // — offsets, not absolute note names, so the picked bass note transposes correctly
@@ -23,6 +25,7 @@ type Props = {
   scale: ScaleName;
   notationStyle: NotationStyle;
   onAudition: (chord: Chord) => void;
+  onAuditionScale: (chord: Chord, scale: ScaleName) => void;
 };
 
 function PaletteRow({
@@ -79,7 +82,11 @@ function PaletteRow({
   );
 }
 
-function ChromaticSection({ musicalKey, notationStyle, onAudition }: Props) {
+function ChromaticSection({
+  musicalKey,
+  notationStyle,
+  onAudition,
+}: Pick<Props, 'musicalKey' | 'notationStyle' | 'onAudition'>) {
   const [quality, setQuality] = useState<ChordQuality>('dom7');
   // undefined = no slash bass — every row below is a plain chord, same as before
   // this existed. Applies the same picked bass note to all 12 roots at once
@@ -130,34 +137,76 @@ function ChromaticSection({ musicalKey, notationStyle, onAudition }: Props) {
   );
 }
 
-export function ChordPalette({ musicalKey, scale, notationStyle, onAudition }: Props) {
+export function ChordPalette({ musicalKey, scale, notationStyle, onAudition, onAuditionScale }: Props) {
+  // Whichever chord was last clicked/dragged — drives the scale-suggestions panel
+  // below. Not the same thing as a chord already placed on the grid; this is
+  // purely "the last one you were just looking at in the palette."
+  const [selectedChord, setSelectedChord] = useState<Chord | null>(null);
+  const handleAudition = (chord: Chord) => {
+    setSelectedChord(chord);
+    onAudition(chord);
+  };
+  const suggestions = selectedChord ? SCALE_SUGGESTIONS[selectedChord.quality] : [];
+
   return (
     <div className="chord-palette">
+      {selectedChord && (
+        <div className="scale-suggestions">
+          <span className="scale-suggestions-chord">
+            {(() => {
+              const { root, core, ext, bass } = chordNameParts(selectedChord, notationStyle);
+              return (
+                <>
+                  {root}
+                  {core}
+                  {ext && <sup className="chord-ext">{ext}</sup>}
+                  {bass}
+                </>
+              );
+            })()}
+          </span>
+          {suggestions.length > 0 ? (
+            suggestions.map((suggestedScale) => (
+              <button
+                key={suggestedScale}
+                type="button"
+                className="scale-suggestion-button"
+                onClick={() => onAuditionScale(selectedChord, suggestedScale)}
+                title={`Audition ${SCALE_LABELS[suggestedScale]} over this chord`}
+              >
+                {SCALE_LABELS[suggestedScale]}
+              </button>
+            ))
+          ) : (
+            <span className="scale-suggestions-none">no clean fit in this app's scales</span>
+          )}
+        </div>
+      )}
       <PaletteRow
         title="Diatonic"
         options={diatonicOptions(musicalKey, scale)}
         notationStyle={notationStyle}
-        onAudition={onAudition}
+        onAudition={handleAudition}
       />
       <PaletteRow
         title="Diatonic 7ths"
         options={diatonicSeventhOptions(musicalKey, scale)}
         notationStyle={notationStyle}
-        onAudition={onAudition}
+        onAudition={handleAudition}
       />
       <PaletteRow
         title="Borrowed"
         options={borrowedOptions(musicalKey, scale)}
         notationStyle={notationStyle}
-        onAudition={onAudition}
+        onAudition={handleAudition}
       />
       <PaletteRow
         title="Secondary Dominants"
         options={secondaryDominantOptions(musicalKey, scale)}
         notationStyle={notationStyle}
-        onAudition={onAudition}
+        onAudition={handleAudition}
       />
-      <ChromaticSection musicalKey={musicalKey} scale={scale} notationStyle={notationStyle} onAudition={onAudition} />
+      <ChromaticSection musicalKey={musicalKey} notationStyle={notationStyle} onAudition={handleAudition} />
     </div>
   );
 }

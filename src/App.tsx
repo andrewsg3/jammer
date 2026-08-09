@@ -35,6 +35,7 @@ import {
   play,
   stop,
   auditionChord,
+  auditionScale,
   setTempo as setTransportTempo,
   getCurrentBeat,
   setChordsVolume,
@@ -318,6 +319,10 @@ function App() {
     auditionChord(chord);
   };
 
+  const handleAuditionScale = (chord: Chord, scaleName: ScaleName) => {
+    auditionScale(chord, scaleName);
+  };
+
   const handleDropChord = (selection: ChordSelection, startBeat: number, lengthBeats: number) => {
     setPlacements((prev) => [...prev, { id: crypto.randomUUID(), selection, startBeat, lengthBeats }]);
   };
@@ -598,6 +603,7 @@ function App() {
               scale={scale}
               notationStyle={notationStyle}
               onAudition={handleAudition}
+              onAuditionScale={handleAuditionScale}
             />
           </div>
           <div className="layout-grid">

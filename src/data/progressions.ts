@@ -374,6 +374,21 @@ export function chordTones(chord: Chord, baseOctave: number): string[] {
   });
 }
 
+/** The scale's own 7 notes (root up to, not including, the octave) as note names at
+ * the given octave, rooted at the given note — e.g. scaleTones('G', 'mixolydian', 4)
+ * for "G Mixolydian," the chord-scale suggested for a G7. Deliberately independent
+ * of the song's own key/scale — a chord-scale pairing is always rooted on the
+ * chord's own root, not wherever the song happens to be. */
+export function scaleTones(root: string, scale: ScaleName, baseOctave: number): string[] {
+  const rootSt = rootSemitone(root);
+  return SCALE_INTERVALS[scale].map((interval) => {
+    const absolute = rootSt + interval;
+    const octaveOffset = Math.floor(absolute / 12);
+    const pitchClass = ((absolute % 12) + 12) % 12;
+    return `${SEMITONE_TO_NOTE[pitchClass]}${baseOctave + octaveOffset}`;
+  });
+}
+
 /** e.g. "D-", "G7", "B°" (symbol style) or "Dm", "G7", "Bdim" (written style). A
  * slash chord appends "/<bass>" at full size, same in both notation styles — real
  * books never shrink or superscript the bass note. */
