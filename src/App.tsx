@@ -386,6 +386,21 @@ function App() {
     setSections((prev) => prev.filter((s) => s.id !== section.id));
   };
 
+  // Melody editing (see ChordGrid.tsx's "Edit Melody" mode) -- indexes into the
+  // melody array are used as note identity, same as ChordGrid's own comment on
+  // this explains (MelodyNote has no persisted id).
+  const handleAddMelodyNote = (note: MelodyNote) => {
+    setMelody((prev) => [...prev, note]);
+  };
+
+  const handleUpdateMelodyNote = (index: number, patch: Partial<MelodyNote>) => {
+    setMelody((prev) => prev.map((n, i) => (i === index ? { ...n, ...patch } : n)));
+  };
+
+  const handleRemoveMelodyNote = (index: number) => {
+    setMelody((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleLoadSongPreset = (preset: SongPreset) => {
     if (isPlaying) {
       stop();
@@ -646,6 +661,9 @@ function App() {
               onRenameSection={handleRenameSection}
               onMoveSection={handleMoveSection}
               onRemoveSection={handleRemoveSection}
+              onAddMelodyNote={handleAddMelodyNote}
+              onUpdateMelodyNote={handleUpdateMelodyNote}
+              onRemoveMelodyNote={handleRemoveMelodyNote}
               title={songTitle}
               onTitleChange={setSongTitle}
               author={songAuthor}

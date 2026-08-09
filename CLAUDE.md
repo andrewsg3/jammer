@@ -114,7 +114,6 @@ real key-signature-aware spelling). Good enough to look like a real book at a gl
   grid's drag/resize/select interactions don't translate to touch.
 - No real notation engraving (beaming, rhythm-accurate note shapes, key-aware enharmonic
   spelling) — see "How melody notation works" above.
-- No in-browser MIDI editor yet — melody is import-only. See "Planned" below.
 
 ## How to run
 ```
@@ -183,14 +182,45 @@ Velocity is a per-trigger volume offset on the `Tone.Player`, not a native veloc
 envelope — fine for now; per-lane velocity-layered samples (soft/hard variants) would be the
 natural upgrade later, for any lane, not just Electronic.
 
-## Planned: in-browser MIDI editor
-Melody is currently import-only — no way to program a line by hand, only drop in a `.mid` file.
-A real editor is a genuinely bigger job than it sounds: comparable in scope to what
-`ChordGrid.tsx` itself already is (400+ lines of drag/resize/move/select/clipboard logic), just
-extended to a 2D pitch-and-time surface instead of chords' 1D time-only placement — clicking to
-add a note needs both a beat position (already solved, see `clientPosToGlobalBeat`) and a pitch
-(new: inverse of `staffStepsAboveBottomLine`, mapping a Y coordinate back to a MIDI pitch).
-Worth treating as its own scoped effort, not bundled into a smaller task.
+## In-browser MIDI editor (done, v1)
+Melody used to be import-only — no way to program a line by hand, only drop in a `.mid` file.
+`ChordGrid.tsx` now has an "Edit Melody" toggle (`melodyEditMode`, in the section toolbar next to
+"+ Section") that turns the staff itself into a note editor, editing whatever's currently in the
+`melody` array in place — imported, hand-drawn, or empty, all the same underlying data, no
+separate "imported vs. drawn" concept.
+
+**Interaction model, as built:**
+- **Click empty staff space** to add a note at the nearest eighth note / staff line-or-space.
+  Snaps to a half-beat grid (`MELODY_SNAP_BEATS`) — finer than chord placements' whole-beat
+  snapping (real melodic rhythm needs it), coarser than free placement (stays clickable with a
+  mouse). New notes default to that same half-beat length.
+- **Click a natural** to place one; **Shift+click** raises it a semitone (sharp) — a plain click
+  alone can only reach the naturals, since a Y position alone only encodes the diatonic staff
+  step, not an accidental (see `midiFromStaffSteps` in `data/melody.ts`, the inverse of the
+  existing `staffStepsAboveBottomLine`). Same "natural below, sharp" spelling convention the
+  rendering already used, just inverted.
+- **Drag an existing note** to move it in time and pitch together; **held Shift while dragging**
+  reaches the sharps the same way. A plain click with no drag just selects it.
+- **Delete/Backspace** removes the selected note; **Escape** deselects. Single-note selection
+  only (an index into `melody`, not a `Set` like chord placements use) — no multi-select, no
+  copy/paste, no undo, in this v1.
+- **Off by default**: while `melodyEditMode` is off (the normal state), the staff behaves exactly
+  as it always did — clicking it scrubs the playhead. Turning editing on is what hands staff
+  clicks to note placement/selection instead (`handlePlayheadScrubStart` explicitly excludes
+  `.staff` while editing is on, mirroring how it already excludes chord labels/loop handles/
+  section markers).
+
+**Explicitly not in v1** (all real gaps, not deliberate non-goals — just cut for scope): no
+note-duration/resize dragging (every new note is a fixed half-beat; existing notes' `lengthBeats`
+can only change by deleting and re-adding); no multi-select or copy/paste for notes (chord
+placements have both); no undo/redo; no velocity editing (every new note gets a fixed default);
+no visual indication of a note's actual duration on the staff (rendering only ever drew a
+notehead at `startBeat`, never a length, before or after this).
+
+**Identity note:** `MelodyNote` has no persisted id (same as `SongPresetPlacement` before
+`App.tsx` mints a runtime one) — editing uses the note's index in the `melody` array as its
+identity for the duration of a drag/selection. Safe because nothing else mutates `melody`
+concurrently; would need real ids if that stopped being true (e.g. notes gained multi-select).
 
 ## Drum fills into section starts (done)
 Every section marker (see `data/sections.ts`) gets a crash on its downbeat *and* a real lead-in
@@ -395,8 +425,11 @@ Highest-leverage next pieces, in order:
 1. **Finish the Electronic drum kit's samples** (see above) — most of "sample-based drums" is
    already done (Acoustic kit, real bass/piano samples); this is now a much smaller remaining
    task than it used to be, not a from-scratch undertaking.
-2. **The in-browser MIDI editor** (see above) — program a head to play/comp against, not just
-   import one. The biggest single undertaking on this list.
-3. **AI trading-fours** (see above) — the scoping questions are answered; building it is a genuinely
+2. **AI trading-fours** (see above) — the scoping questions are answered; building it is a genuinely
    large effort (lick bank/generator, turn scheduler) on top of pieces that now all actually exist
-   (monophonic playback, the countdown-cue pattern, scale-rooted note generation).
+   (monophonic playback, the countdown-cue pattern, scale-rooted note generation, and now a real
+   melody editor to build/audition licks against).
+
+The in-browser MIDI editor that used to top this list shipped (v1) — see "In-browser MIDI editor"
+above for what's covered and what's still cut for scope (note resize, multi-select, undo,
+velocity editing).

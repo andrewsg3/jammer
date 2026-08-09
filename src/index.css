@@ -1219,6 +1219,13 @@ button:hover {
   right: 0;
 }
 
+/* Edit Melody mode (ChordGrid.tsx's melodyEditMode) — the staff itself becomes
+   clickable (handleStaffMouseDown adds a note at the click position) instead of
+   just scrubbing the playhead like it does normally. */
+.staff-editable {
+  cursor: crosshair;
+}
+
 .staff-line {
   position: absolute;
   left: 0;
@@ -1303,6 +1310,30 @@ button:hover {
   background: #1a1a1a;
   transform: translate(-50%, -50%) rotate(-18deg);
   pointer-events: none;
+}
+
+/* Edit Melody mode: notes become draggable, and get an invisible enlarged hit
+   target (::before, inset beyond the visible 9x7 dot) since the real notehead is
+   too small to reliably grab with a mouse on its own. */
+.melody-note-editable {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.melody-note-editable::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+.melody-note-editable:active {
+  cursor: grabbing;
+}
+
+.melody-note-selected {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent);
+  opacity: 0.85;
 }
 
 .melody-ledger-line {
@@ -1502,10 +1533,12 @@ button:hover {
 .section-toolbar {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   padding: 0 4px 4px;
 }
 
-.section-add-button {
+.section-add-button,
+.melody-edit-toggle {
   font-size: 11px;
   padding: 3px 8px;
   border-radius: 4px;
@@ -1515,7 +1548,14 @@ button:hover {
   cursor: pointer;
 }
 
-.section-add-button:hover {
+.section-add-button:hover,
+.melody-edit-toggle:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.melody-edit-toggle[aria-pressed='true'] {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;

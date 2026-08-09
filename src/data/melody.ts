@@ -35,6 +35,9 @@ export function spellPitch(midi: number): { absoluteStep: number; sharp: boolean
 // measured against.
 const BOTTOM_LINE_REFERENCE = spellPitch(MIDDLE_C + 4).absoluteStep;
 
+// Reverse of NATURAL_STEP_BY_PITCH_CLASS: diatonic step (0=C..6=B) -> pitch class.
+const PITCH_CLASS_BY_NATURAL_STEP = [0, 2, 4, 5, 7, 9, 11];
+
 /**
  * Diatonic steps above the staff's bottom line (negative = below it), plus whether
  * the note needs a sharp. Each step is half a staff line-gap vertically — a line
@@ -44,4 +47,20 @@ const BOTTOM_LINE_REFERENCE = spellPitch(MIDDLE_C + 4).absoluteStep;
 export function staffStepsAboveBottomLine(midi: number): { steps: number; sharp: boolean } {
   const { absoluteStep, sharp } = spellPitch(midi);
   return { steps: absoluteStep - BOTTOM_LINE_REFERENCE, sharp };
+}
+
+/**
+ * Inverse of staffStepsAboveBottomLine: given a diatonic staff step (same units as
+ * its `steps` output) and whether to spell it sharp, returns the MIDI pitch that
+ * lands exactly there. Used by the melody editor to turn a clicked Y position back
+ * into a note — every step maps to exactly one natural; `sharp` raises it a
+ * semitone, same "natural below, sharp" convention spellPitch uses elsewhere (so a
+ * click alone reaches every natural; a modifier key reaches the sharps in between).
+ */
+export function midiFromStaffSteps(steps: number, sharp: boolean): number {
+  const absoluteStep = steps + BOTTOM_LINE_REFERENCE;
+  const octave = Math.floor(absoluteStep / 7);
+  const naturalStep = absoluteStep - octave * 7;
+  const midi = octave * 12 + PITCH_CLASS_BY_NATURAL_STEP[naturalStep];
+  return sharp ? midi + 1 : midi;
 }

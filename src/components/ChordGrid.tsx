@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { chordNameParts, deserializeSelection, resolveSelection, keySignatureAccidentals } from '../data/progressions';
 import type { Chord, ChordPlacement, ChordSelection, NotationStyle, ScaleName } from '../data/progressions';
-import { staffStepsAboveBottomLine } from '../data/melody';
+import { staffStepsAboveBottomLine, midiFromStaffSteps } from '../data/melody';
 import type { MelodyNote } from '../data/melody';
 import type { SectionMarker } from '../data/sections';
 import { SheetMusicHeader } from './SheetMusicHeader';
@@ -52,6 +52,14 @@ type Props = {
   onRenameSection: (section: SectionMarker, label: string) => void;
   onMoveSection: (section: SectionMarker, newStartBeat: number) => void;
   onRemoveSection: (section: SectionMarker) => void;
+  // Melody editing (click-to-place, drag, delete) -- see the "in-browser MIDI
+  // editor" section of CLAUDE.md. Indexes into the `melody` array are used as note
+  // identity rather than a stable id (MelodyNote has none, same as a
+  // SongPresetPlacement before App.tsx mints one) -- safe here because nothing
+  // else mutates `melody` mid-drag.
+  onAddMelodyNote: (note: MelodyNote) => void;
+  onUpdateMelodyNote: (index: number, patch: Partial<MelodyNote>) => void;
+  onRemoveMelodyNote: (index: number) => void;
   title: string;
   onTitleChange: (title: string) => void;
   author: string;
@@ -152,6 +160,31 @@ function clientPosToGlobalBeat(wrapperRect: DOMRect, clientX: number, clientY: n
   return row * BEATS_PER_ROW + beatInRow;
 }
 
+// Melody notes snap to the eighth note (half-beat) rather than the whole beat
+// chord placements use — coarse enough to click accurately, fine enough for real
+// melodic rhythm (an imported melody already renders at arbitrary positions; this
+// is only how far a *click* can place one).
+const MELODY_SNAP_BEATS = 0.5;
+
+/** Same idea as clientPosToGlobalBeat, but eighth-note resolution — for the melody editor. */
+function clientPosToFineBeat(wrapperRect: DOMRect, clientX: number, clientY: number): number {
+  const beatWidth = wrapperRect.width / BEATS_PER_ROW;
+  const row = clamp(Math.floor((clientY - wrapperRect.top) / ROW_HEIGHT), 0, ROWS - 1);
+  const rawBeatInRow = (clientX - wrapperRect.left) / beatWidth;
+  const snapped = Math.round(rawBeatInRow / MELODY_SNAP_BEATS) * MELODY_SNAP_BEATS;
+  const beatInRow = clamp(snapped, 0, BEATS_PER_ROW - MELODY_SNAP_BEATS);
+  return row * BEATS_PER_ROW + beatInRow;
+}
+
+/** Inverse of the melody-note render math (see the melody-note render block below) —
+ * turns a click's Y position into the nearest staff step, for midiFromStaffSteps. */
+function clientPosToStaffSteps(wrapperRect: DOMRect, clientY: number): number {
+  const row = clamp(Math.floor((clientY - wrapperRect.top) / ROW_HEIGHT), 0, ROWS - 1);
+  const staffTop = wrapperRect.top + row * ROW_HEIGHT + SECTION_HEIGHT + RULER_HEIGHT + CHORD_LABEL_HEIGHT;
+  const y = clientY - staffTop;
+  return Math.round((STAFF_HEIGHT - y) / (STAFF_LINE_GAP / 2));
+}
+
 export function ChordGrid({
   placements,
   melody,
@@ -177,6 +210,9 @@ export function ChordGrid({
   onRenameSection,
   onMoveSection,
   onRemoveSection,
+  onAddMelodyNote,
+  onUpdateMelodyNote,
+  onRemoveMelodyNote,
   title,
   onTitleChange,
   author,
@@ -185,6 +221,13 @@ export function ChordGrid({
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Melody editing is opt-in (see clientPosToFineBeat/clientPosToStaffSteps above)
+  // — off by default so a staff click still scrubs the playhead exactly like today;
+  // toggling this on hands staff clicks to note placement/selection instead.
+  // selectedMelodyIndex is a single index (not a Set like selectedIds) -- v1 scope
+  // is one note at a time, no multi-select/copy-paste for notes yet.
+  const [melodyEditMode, setMelodyEditMode] = useState(false);
+  const [selectedMelodyIndex, setSelectedMelodyIndex] = useState<number | null>(null);
   // The last plain- or ctrl-clicked block — shift-click ranges are measured from here.
   const [anchorId, setAnchorId] = useState<string | null>(null);
   const clipboardRef = useRef<{ selection: ChordSelection; relativeStart: number; lengthBeats: number }[]>(
@@ -217,6 +260,13 @@ export function ChordGrid({
       return next.size === prev.size ? prev : next;
     });
   }, [placements]);
+
+  // Same idea for the melody note selection — an index can go stale (or just out of
+  // range) the moment the melody array changes underneath it (a preset load, a MIDI
+  // import, another note added/removed).
+  useEffect(() => {
+    setSelectedMelodyIndex((prev) => (prev !== null && prev < melody.length ? prev : null));
+  }, [melody]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -260,6 +310,17 @@ export function ChordGrid({
         return;
       }
 
+      if (selectedMelodyIndex !== null && (e.key === 'Delete' || e.key === 'Backspace')) {
+        e.preventDefault();
+        onRemoveMelodyNote(selectedMelodyIndex);
+        setSelectedMelodyIndex(null);
+        return;
+      }
+      if (selectedMelodyIndex !== null && e.key === 'Escape') {
+        setSelectedMelodyIndex(null);
+        return;
+      }
+
       if (selectedIds.size === 0) return;
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
@@ -273,7 +334,7 @@ export function ChordGrid({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, placements, onRemove, onPastePlacements]);
+  }, [selectedIds, placements, onRemove, onPastePlacements, selectedMelodyIndex, onRemoveMelodyNote]);
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -281,10 +342,12 @@ export function ChordGrid({
 
   // Clicking anywhere in the grid that isn't a chord block clears the selection.
   const handleWrapperClickCapture = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (!(e.target as HTMLElement).closest('.chord-label')) {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.chord-label')) {
       setSelectedIds(new Set());
       setAnchorId(null);
     }
+    if (!target.closest('.melody-note')) setSelectedMelodyIndex(null);
   };
 
   const handleChordClick = (placement: ChordPlacement, chord: Chord) => (e: ReactMouseEvent) => {
@@ -337,6 +400,54 @@ export function ChordGrid({
     if (!canPlace(placements, null, dropBeat, defaultLength)) return; // reject overlapping/off-grid drops
 
     onDropChord(selection, dropBeat, defaultLength);
+  };
+
+  // Melody editing — click empty staff space (only while melodyEditMode is on) to
+  // add a note at the nearest eighth note / staff line-or-space; Shift raises it a
+  // semitone (sharp), the same "natural below, sharp" spelling convention the rest
+  // of melody.ts uses, since a plain click alone can only reach the naturals.
+  const handleStaffMouseDown = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!melodyEditMode) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('.melody-note')) return; // handleNoteMouseDown owns existing notes
+    if (!wrapperRef.current) return;
+    e.preventDefault();
+    e.stopPropagation(); // don't also let this scrub the playhead
+    const wrapperRect = wrapperRef.current.getBoundingClientRect();
+    const startBeat = clientPosToFineBeat(wrapperRect, e.clientX, e.clientY);
+    const steps = clientPosToStaffSteps(wrapperRect, e.clientY);
+    const midi = midiFromStaffSteps(steps, e.shiftKey);
+    onAddMelodyNote({ startBeat, midi, lengthBeats: MELODY_SNAP_BEATS, velocity: 0.8 });
+  };
+
+  // Click-and-drag an existing note to reposition it in both time and pitch; a
+  // plain click with no movement still selects it (for Delete/Backspace below).
+  // Held Shift (checked live on each move, not just at mousedown) reaches the
+  // sharps, same as adding a note.
+  const handleNoteMouseDown = (index: number, note: MelodyNote) => (e: ReactMouseEvent) => {
+    if (!melodyEditMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!wrapperRef.current) return;
+    const wrapperRect = wrapperRef.current.getBoundingClientRect();
+    setSelectedMelodyIndex(index);
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const startBeat = clamp(
+        clientPosToFineBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY),
+        0,
+        TOTAL_BEATS - note.lengthBeats,
+      );
+      const steps = clientPosToStaffSteps(wrapperRect, moveEvent.clientY);
+      const midi = midiFromStaffSteps(steps, moveEvent.shiftKey);
+      onUpdateMelodyNote(index, { startBeat, midi });
+    };
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   };
 
   // Resize/move both use clientPosToGlobalBeat (2D — row-aware) rather than a
@@ -477,12 +588,14 @@ export function ChordGrid({
   // Tone.Transport is a different, riskier operation than just choosing a start point).
   // Chord blocks, loop handles, and section markers opt out since they already have
   // their own mousedown behavior (move/resize a chord, drag a loop boundary, move/
-  // resize/rename a section).
+  // resize/rename a section). The staff opts out too, but only while melodyEditMode
+  // is on — handleStaffMouseDown/handleNoteMouseDown own clicks there instead.
   const handlePlayheadScrubStart = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (isPlaying) return;
     const target = e.target as HTMLElement;
     if (target.closest('.chord-label') || target.closest('.loop-handle') || target.closest('.section-marker'))
       return;
+    if (melodyEditMode && target.closest('.staff')) return;
     if (!wrapperRef.current) return;
     const wrapperRect = wrapperRef.current.getBoundingClientRect();
 
@@ -522,6 +635,22 @@ export function ChordGrid({
         <div className="section-toolbar">
           <button type="button" className="section-add-button" onClick={handleAddSectionClick}>
             + Section
+          </button>
+          <button
+            type="button"
+            className="melody-edit-toggle"
+            aria-pressed={melodyEditMode}
+            onClick={() => {
+              setMelodyEditMode((v) => !v);
+              setSelectedMelodyIndex(null);
+            }}
+            title={
+              melodyEditMode
+                ? 'Done editing melody — staff clicks will scrub the playhead again'
+                : 'Click the staff to add notes; drag to move, Delete to remove, Shift for a sharp'
+            }
+          >
+            {melodyEditMode ? '✓ Done Editing' : '✎ Edit Melody'}
           </button>
         </div>
         <div
@@ -624,7 +753,11 @@ export function ChordGrid({
                     notes, positioned by simple fractions/pixel offsets of the row rather
                     than CSS Grid (see staffStepsAboveBottomLine in data/melody.ts for the
                     pitch → y math). */}
-                <div className="staff" style={{ top: CHORD_LABEL_HEIGHT, height: STAFF_HEIGHT }}>
+                <div
+                  className={`staff${melodyEditMode ? ' staff-editable' : ''}`}
+                  style={{ top: CHORD_LABEL_HEIGHT, height: STAFF_HEIGHT }}
+                  onMouseDown={handleStaffMouseDown}
+                >
                   {row === 0 &&
                     (() => {
                       const { sign, letters } = keySignatureAccidentals(musicalKey, scale);
@@ -669,8 +802,10 @@ export function ChordGrid({
                     />
                   ))}
                   {melody
-                    .filter((note) => note.startBeat >= rowStart && note.startBeat < rowEnd)
-                    .flatMap((note, i) => {
+                    .map((note, originalIndex) => ({ note, originalIndex }))
+                    .filter(({ note }) => note.startBeat >= rowStart && note.startBeat < rowEnd)
+                    .flatMap(({ note, originalIndex }) => {
+                      const i = originalIndex;
                       const { steps, sharp } = staffStepsAboveBottomLine(note.midi);
                       const y = STAFF_HEIGHT - steps * (STAFF_LINE_GAP / 2);
                       const left = `${((note.startBeat - rowStart) / BEATS_PER_ROW) * 100}%`;
@@ -680,8 +815,16 @@ export function ChordGrid({
                       // plan; middle C (one line below the staff) is the reference case.
                       const linesBelow = steps < 0 ? Math.floor(-steps / 2) : 0;
                       const linesAbove = steps > 8 ? Math.floor((steps - 8) / 2) : 0;
+                      const noteClass = `melody-note${
+                        melodyEditMode ? ' melody-note-editable' : ''
+                      }${originalIndex === selectedMelodyIndex ? ' melody-note-selected' : ''}`;
                       const elements = [
-                        <div key={`note-${row}-${i}`} className="melody-note" style={{ left, top: y }} />,
+                        <div
+                          key={`note-${row}-${i}`}
+                          className={noteClass}
+                          style={{ left, top: y }}
+                          onMouseDown={handleNoteMouseDown(originalIndex, note)}
+                        />,
                       ];
                       if (sharp) {
                         elements.push(
