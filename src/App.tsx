@@ -22,7 +22,6 @@ import { loadBundledBassStyles } from './data/bassLibrary';
 import { parseMidiDrumPattern } from './data/midiDrumImport';
 import { parseMidiMelodyFile } from './data/midiMelodyImport';
 import type { MelodyNote } from './data/melody';
-import { generateJazzbotLine } from './data/jazzbot';
 import type { SectionMarker } from './data/sections';
 import {
   bundledSongPresets,
@@ -163,10 +162,6 @@ function App() {
     (DEFAULT_SONG_PRESET?.sections ?? []).map((s) => ({ id: crypto.randomUUID(), ...s })),
   );
   const [melodyMuted, setMelodyMutedState] = useState(false);
-  // When on, the imported/fixed melody is replaced at playback time by a freshly
-  // generated improvised line (see data/jazzbot.ts) instead of being scheduled
-  // alongside it -- one monophonic line at a time, same synth either way.
-  const [melodyJazzbotEnabled, setMelodyJazzbotEnabled] = useState(false);
   const [songPresetError, setSongPresetError] = useState<string | null>(null);
   const [loopStart, setLoopStart] = useState(DEFAULT_LOOP_RANGE.loopStart);
   const [loopEnd, setLoopEnd] = useState(DEFAULT_LOOP_RANGE.loopEnd);
@@ -529,10 +524,7 @@ function App() {
       bassTimeFeel: bassTimeFeel.value,
       keys: keysStyle.rule,
       keysTimeFeel: keysTimeFeel.value,
-      // Jazzbot replaces the fixed melody rather than layering on top of it -- one
-      // monophonic line at a time. Generated fresh here rather than memoized in
-      // state, so it improvises a different line every time Play is pressed.
-      melody: melodyJazzbotEnabled ? generateJazzbotLine(placements, musicalKey, scale) : melody,
+      melody,
       sections,
     });
     setIsPlaying(true);
@@ -552,7 +544,6 @@ function App() {
     keysStyle,
     keysTimeFeel,
     melody,
-    melodyJazzbotEnabled,
     sections,
     instrumentsLoading,
   ]);
@@ -784,14 +775,6 @@ function App() {
               muted={melodyMuted}
               onToggleMuted={() => setMelodyMutedState((v) => !v)}
               midiImport={{ label: 'Import melody MIDI', onFile: handleMelodyMidiUpload, error: melodyError }}
-              effects={[
-                {
-                  key: 'jazzbot',
-                  label: 'Jazzbot',
-                  enabled: melodyJazzbotEnabled,
-                  onToggle: () => setMelodyJazzbotEnabled((v) => !v),
-                },
-              ]}
             />
             <ChannelStrip
               label="Metronome"

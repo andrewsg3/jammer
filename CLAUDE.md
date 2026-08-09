@@ -259,10 +259,10 @@ Sketch of the actual mechanism (`data/songPresets.ts`):
 
 Not started — shelved for now, no bundled presets migrated.
 
-## Chord-scale suggestions and auditioning (done); Jazzbot (done, scoped down)
+## Chord-scale suggestions and auditioning (done); AI trading-fours (planned)
 
-Three related practice-aid ideas, all shipped now — the third in a smaller form
-than originally scoped, see below.
+Three related practice-aid ideas. The first two are done; the third is a much
+bigger, and partly non-goal-conflicting, undertaking — see below.
 
 **Suggest scales over chords (done).** `data/scaleSuggestions.ts`'s
 `SCALE_SUGGESTIONS: Record<ChordQuality, ScaleName[]>` maps each chord quality to
@@ -315,38 +315,32 @@ both `auditionScale` and `auditionExoticScale`) didn't need to change at all.
 don't fit that model (whole-tone, both diminished scales, altered, pentatonics)
 were never forced into it.
 
-**Jazzbot — an algorithmic improviser on the Melody track (done, scoped down).**
-Shipped as the cheapest honest version of the "trading fours" idea below, not the
-full design — no lick bank, no turn-taking countdown cue, both still open if this
-gets picked back up. `data/jazzbot.ts`'s `generateJazzbotLine(placements, key,
-scale)` alternates fixed 4-bar blocks — even-numbered blocks the bot solos, odd
-ones it stays silent (the "trading" part, sized down to a fixed pattern rather
-than a configurable one) — and within a bot-on block, walks a small-step random
-walk (-1/0/+1 index) across a per-chord note pool: `scaleSuggestions.ts`'s
-existing `SCALE_SUGGESTIONS[chord.quality]` (same table the chord-scale
-suggestion panel above uses) if that quality has a real answer, else the chord's
-own `chordTones` arpeggio as a fallback for qualities that don't (same
-empty-array convention as that table). Mixed quarter/eighth rhythm with
-occasional rests, not a fixed pattern. No audio input, no listening to what's
-played — algorithmic generation constrained to a scale, not a trained model (see
-this file's "No AI/generative anything" non-goal — "Jazzbot" is shorthand for
-"bot soloist," not actual AI). Toggled via a "Jazzbot" button in Melody's
-channel-strip effects row (`App.tsx`'s `melodyJazzbotEnabled`); when on, it
-*replaces* the fixed/imported melody at play time rather than layering on top of
-it — one monophonic line at a time, same `audio/melody.ts` synth either way.
-Regenerated fresh on every Play press (not memoized) so it solos differently each
-time, the same way a real player never plays a chorus identically twice.
+**Trading fours with an "AI" improviser using a predefined scale/style.** The most
+ambitious of the three. Confirmed scope: no audio input at all — the bot doesn't
+listen to what the human plays, it just alternates N-bar blocks on a fixed or
+randomized pattern, going quiet (or leaving the backing track running solo) for
+the human's blocks. Two design points from there:
 
-**Trading fours with a lick bank + turn-taking cue (still planned).** What
-Jazzbot above doesn't have yet: a bank of short pre-written licks (small fixed
-melodic phrases, plausibly authored the same way fixed imported melody data
-already works — see `data/melody.ts`'s `MelodyNote[]`) transposed/fit to
-whatever chords are under a block, picked from at random or by pattern, as a
-richer alternative to pure algorithmic generation for at least some blocks; and
-a real turn-taking cue reusing the beat-countdown pattern already built for
-`MobilePlayer.tsx`'s now-playing modal (`beatsUntilNextChord` et al.) — same
-mechanism, just counting down to "your turn" instead of "next chord," rather than
-Jazzbot's current fixed silent-every-other-block with no on-screen cue at all.
+- **Where the bot's notes come from**: a bank of short pre-written licks (small
+  fixed melodic phrases, plausibly authored the same way fixed imported melody
+  data already works — see `data/melody.ts`'s `MelodyNote[]`) transposed/fit to
+  whatever chords are under that block, picked from at random or by pattern —
+  plus, as a supplement or fallback where no lick fits, algorithmic generation
+  constrained to a scale (same idea as the existing `BassRule`/`KeysRule`
+  pattern-based accompaniment engines in `instrumentStyles.ts`, just producing a
+  monophonic solo line instead of comping). Either way this stays "picks from
+  pre-written phrases / picks notes algorithmically from a scale," not a trained
+  model — worth keeping explicit given this file's "No AI/generative anything"
+  non-goal above; "AI improviser" is really shorthand for "bot soloist," not
+  actual AI.
+- **Turn-taking cue**: reuse the beat-countdown pattern already built for
+  `MobilePlayer.tsx`'s now-playing modal (`beatsUntilNextChord` et al.) — same
+  mechanism, just counting down to "your turn" instead of "next chord."
+
+The monophonic playback path this would ride on already exists too
+(`audio/melody.ts`'s single `Tone.Synth`, same one fixed imported melodies use) —
+the new pieces are the lick bank/generator, the random-or-pattern turn scheduler,
+and the countdown cue.
 
 ## Direction: what this app needs next
 Asked-and-answered product question, worth keeping around since it'll come up again. Given how
@@ -369,7 +363,6 @@ Highest-leverage next pieces, in order:
    task than it used to be, not a from-scratch undertaking.
 2. **The in-browser MIDI editor** (see above) — program a head to play/comp against, not just
    import one. The biggest single undertaking on this list.
-3. **Trading fours' lick bank + turn-taking cue** (see above) — Jazzbot's algorithmic soloing
-   already shipped; what's left is the richer lick-bank alternative and a real countdown cue,
-   on top of pieces that now all actually exist (monophonic playback, the countdown-cue pattern
-   from `MobilePlayer.tsx`, scale-rooted note generation).
+3. **AI trading-fours** (see above) — the scoping questions are answered; building it is a genuinely
+   large effort (lick bank/generator, turn scheduler) on top of pieces that now all actually exist
+   (monophonic playback, the countdown-cue pattern, scale-rooted note generation).
