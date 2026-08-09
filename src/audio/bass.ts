@@ -433,14 +433,14 @@ function smartWalkBarEvents(
   pointer: { midi: number },
 ): BassEvent[] {
   const events: BassEvent[] = [];
-  const push = (offset: number, midi: number, velocity: number) => {
+  const push = (offset: number, midi: number, velocity: number, duration: string = '4n') => {
     if (offset >= totalSixteenths) return;
     const beat = placement.startBeat + Math.floor(offset / 4);
     const sixteenths = offset % 4;
     events.push({
       time: `0:${beat}:${sixteenths}`,
       note: Tone.Frequency(midi, 'midi').toNote(),
-      duration: '4n',
+      duration,
       velocity,
     });
   };
@@ -470,9 +470,42 @@ function smartWalkBarEvents(
     return best;
   };
 
-  push(cellStart + 4, pickMid(1 / 3), 0.7); // beat 2
-  push(cellStart + 8, pickMid(2 / 3), 0.7); // beat 3
-  push(cellStart + 12, approachMidi, 0.75); // beat 4: chromatic approach
+  const mid1 = pickMid(1 / 3); // beat 2's "straight" target
+  const mid2 = pickMid(2 / 3); // beat 3's "straight" target
+
+  // Beats 2 and 3 are the line's filler, not its anchors (beat 1 is always the bar's
+  // real root, beat 4 the chromatic approach into the next chord) — so they're the
+  // ones allowed to occasionally break from a plain quarter note into a bebop-style
+  // eighth-note leading pair or an eighth-note triplet run, both resolving toward the
+  // same harmonic target the straight quarter would have landed on (`resolveTo`), just
+  // dressed up with a chromatic leading tone or an extra passing tone on the way in.
+  // Rolled per bar rather than always-on so it reads as a real bassist occasionally
+  // varying the line, not a fixed pattern.
+  const emitFillerBeat = (offset: number, targetMidiHere: number, resolveTo: number, velocity: number) => {
+    const roll = Math.random();
+    if (roll < 0.6) {
+      push(offset, targetMidiHere, velocity);
+      return;
+    }
+    const leadTone = resolveTo > targetMidiHere ? resolveTo - 1 : resolveTo + 1;
+    if (roll < 0.8) {
+      // Eighth-note leading pair: the chord tone, then a chromatic pickup into
+      // whatever plays next.
+      push(offset, targetMidiHere, velocity, '8n');
+      push(offset + 2, leadTone, velocity * 0.9, '8n');
+      return;
+    }
+    // Eighth-note triplet: chord tone, a passing tone roughly halfway across, then
+    // the same chromatic pickup — three notes filling the same quarter-beat slot.
+    const passing = Math.round((targetMidiHere + resolveTo) / 2);
+    push(offset, targetMidiHere, velocity, '8t');
+    push(offset + 4 / 3, passing, velocity * 0.85, '8t');
+    push(offset + 8 / 3, leadTone, velocity * 0.9, '8t');
+  };
+
+  emitFillerBeat(cellStart + 4, mid1, mid2, 0.7); // beat 2, resolving toward beat 3
+  emitFillerBeat(cellStart + 8, mid2, approachMidi, 0.7); // beat 3, resolving toward beat 4
+  push(cellStart + 12, approachMidi, 0.75); // beat 4: chromatic approach, always straight
 
   pointer.midi = approachMidi;
   return events;
