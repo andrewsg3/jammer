@@ -349,31 +349,29 @@ select option {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  /* Wrapped rows (see .channel-strip-rail) can end up taller than the layout row
-     has room for — scroll vertically rather than overflow the page, same
+  /* The rail's 3 fixed-width columns (see .channel-strip-rail) don't shrink below
+     their own intrinsic width, and its two rows can run taller than the layout row
+     has room for — scroll both axes rather than overflow the page, same
      per-pane-scrolls-itself approach .layout-sidebar/.layout-grid already use. */
   max-height: 100%;
-  overflow-y: auto;
+  overflow: auto;
 }
 
+/* A fixed 3-column grid rather than flex-wrap -- flex-wrap packs strips
+   two-or-three per row depending on available width, so a strip's row/column
+   (and what it lines up under) shifted with the container's width instead of
+   staying put. A fixed column count keeps every strip's position deterministic:
+   Drums/Bass/Harmony then Melody/Metronome/Master, always in the same two rows. */
 .channel-strip-rail {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  /* auto, not a hardcoded px value -- .channel-strip is content-box with its own
+     padding/border, so its real rendered width is wider than its declared
+     width:100px. Sizing columns from content keeps them matched to the strip's
+     actual box instead of drifting out of sync with it. */
+  grid-template-columns: repeat(3, auto);
   gap: 8px;
   /* Room for the scrollbar so it doesn't sit flush against (or clip) the last fader. */
   padding-bottom: 6px;
-}
-
-/* Master lives outside .channel-strip-rail on purpose: that rail's flex-wrap packs
-   strips two-or-three per row depending on available width, so Master's horizontal
-   position (and whether it lines up under any particular strip above it) shifted
-   with wrap parity instead of staying put. Its own row/border keeps it in a fixed,
-   predictable spot regardless of how the rail above it wraps. */
-.channel-strip-master-row {
-  display: flex;
-  justify-content: center;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
 }
 
 .panel-title {
