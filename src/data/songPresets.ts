@@ -32,7 +32,19 @@ export type SongPresetSectionDef = {
 export type SongPreset = {
   version: 1;
   name: string;
+  // Real-book convention: a smaller line under the main title — "(from Black
+  // Orpheus)", "aka ...", a dedication, whatever the original sheet music
+  // carried that isn't really part of the title itself. Optional, same
+  // reasoning as author/playStyle below — presets written before this existed
+  // just load with none.
+  subtitle?: string;
   author?: string;
+  // Free text, not a closed enum — real fake books use varied phrasing ("Medium
+  // Swing", "Ballad", "Latin", "Up Tempo") rather than one fixed taxonomy, and
+  // forcing a set list would misdescribe anything that doesn't fit it cleanly.
+  // Optional, same reasoning as author — presets written before this existed just
+  // load with none.
+  playStyle?: string;
   key: string;
   scale: ScaleName;
   tempo: number;
@@ -313,6 +325,8 @@ export function isSongPreset(value: unknown): value is SongPreset {
   return (
     v.version === 1 &&
     typeof v.name === 'string' &&
+    (v.subtitle === undefined || typeof v.subtitle === 'string') &&
+    (v.playStyle === undefined || typeof v.playStyle === 'string') &&
     typeof v.key === 'string' &&
     SCALE_NAMES.includes(v.scale as ScaleName) &&
     typeof v.tempo === 'number' &&

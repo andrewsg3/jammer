@@ -52,6 +52,7 @@ import {
 import {
   scheduleMetronome,
   disposeMetronome,
+  playCountIn,
   setVolume as setMetronomeOutputVolume,
   setMuted as setMetronomeOutputMuted,
 } from './metronome';
@@ -132,6 +133,10 @@ export async function auditionExoticScale(chord: Chord, scaleRoot: string, inter
   runScaleAudition(chord, scaleRoot, notesFromIntervals(scaleRoot, intervals, AUDITION_OCTAVE));
 }
 
+// 0 = no count-in, 4 = one bar, 8 = two bars (both in 4/4, this app's only time signature).
+export type CountInBeats = 0 | 4 | 8;
+export const COUNT_IN_OPTIONS: CountInBeats[] = [0, 4, 8];
+
 export type PlaybackParams = {
   key: string;
   scale: ScaleName;
@@ -149,6 +154,7 @@ export type PlaybackParams = {
   melody: MelodyNote[];
   sections: SectionMarker[];
   tempo: number;
+  countInBeats: CountInBeats;
 };
 
 export function setTempo(bpm: number): void {
@@ -320,9 +326,20 @@ export async function play(params: PlaybackParams): Promise<void> {
   // other now), not by whether it's running at all.
   scheduleMetronome();
 
+  // Count-in clicks happen before the Transport's own clock starts ticking at all,
+  // so they're scheduled independently (Tone.now()-relative, same as the chord/scale
+  // auditions above) rather than through the Transport-driven loop scheduleMetronome
+  // just set up. The Transport's actual start is then pushed back by that same
+  // duration, in real time — its internal position still begins exactly at
+  // params.startBeat, unaffected by the count-in, so the playhead/loop/section math
+  // downstream never needs to know a count-in happened at all.
+  const secondsPerBeat = 60 / params.tempo;
+  const countInSeconds = params.countInBeats * secondsPerBeat;
+  if (params.countInBeats > 0) playCountIn(params.countInBeats, params.tempo);
+
   // The offset (2nd arg) is where the transport's internal clock begins — lets
   // playback start from wherever the playhead was dragged to, not always bar 1.
-  Tone.Transport.start(Tone.now(), `0:${params.startBeat}:0`);
+  Tone.Transport.start(Tone.now() + countInSeconds, `0:${params.startBeat}:0`);
 }
 
 export function stop(): void {

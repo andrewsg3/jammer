@@ -36,6 +36,10 @@ function beatToTime(beat: number): string {
 }
 
 const BASS_OCTAVE = 2;
+// Lowest note a real 4-string bass guitar can reach (E1) — same floor
+// smartWalkBarEvents' own SMART_WALK_LOW uses, for the same reason: below this
+// isn't a real bass part any more, whatever the pattern math would otherwise ask for.
+const BASS_LOW_FLOOR_MIDI = 28;
 
 // Toggleable compressor — always in the chain (like keys.ts's chorus/reverb),
 // off by default via ratio:1 (mathematically zero gain reduction, a real bypass
@@ -61,7 +65,19 @@ let currentInstrument = 'Upright';
 type BassEvent = { time: string; note: string; duration: string; velocity: number };
 let part: Tone.Part<BassEvent> | null = null;
 
-function buildSynth() {
+// A uniform lead-trim was tried here (fetch + decode + slice a fixed amount off
+// every buffer's front before handing it to Tone.Sampler) and reverted — the
+// actual pre-transient silence varies file to file, so one flat cut either left
+// some notes with residual latency or clipped into others' real attack,
+// audible as a wrong-sounding pluck either way. Fixing each file's own
+// transient by ear (Ableton) is the real fix; this just plays whatever's in
+// data/bassSamples.ts as-is, same as every other sampled instrument here.
+//
+// Upright is temporarily back on the single-anchor UPRIGHT_SAMPLE_URLS instead
+// of the real per-note UPRIGHT_MULTISAMPLE_URLS — see bassSamples.ts's own
+// comment on UPRIGHT_SAMPLE_URLS for why, and swap this back once the
+// multisample's transients are properly trimmed.
+function buildSynth(): Tone.MonoSynth | Tone.PluckSynth | Tone.Sampler {
   // Checked by key count, not a specific hardcoded note like "C2"/"G#2" — which
   // note ends up as the anchor depends entirely on whatever data/bassSamples.ts
   // parses the bundled file's name as, and a hardcoded check silently (no error,
@@ -179,10 +195,17 @@ function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null 
   const beatInBar = beat % 4;
 
   switch (rule.style) {
-    case 'root-fifth':
+    case 'root-fifth': {
       if (beatInBar === 0) return root;
-      if (beatInBar === 2) return fifth;
-      return null;
+      if (beatInBar !== 2) return null;
+      // Prefers the fifth *below* the root (one octave down from the fifth
+      // above it that chordTones' own ascending voicing gives) — smoother than
+      // leaping up to it, and how a real bassist plays this pattern by default.
+      // Falls back to the upper fifth only when the lower one would dip below a
+      // real bass guitar's lowest string.
+      const fifthBelow = rootTones(chord, BASS_OCTAVE - 1)[2] ?? fifth;
+      return Tone.Frequency(fifthBelow).toMidi() >= BASS_LOW_FLOOR_MIDI ? fifthBelow : fifth;
+    }
     case 'walking':
       return tones[beatInBar % tones.length];
     case 'syncopated':
@@ -405,6 +428,31 @@ function nearestMidi(reference: number, pitchClass: number): number {
   return best;
 }
 
+// Applied only to each bar's beat-1 root (see smartWalkBarEvents) — the rest of
+// the bar (beats 2-4) is built relative to that root, so leaning just the root
+// choice downward is enough to pull the whole line's register with it, without
+// touching nearestMidi's other callers (direction-finding, beat 2/3 chord-tone
+// choice) and their own voice-leading logic.
+const SMART_WALK_LOW_BIAS = 4; // semitones — how much closer the higher octave has to be before it wins anyway
+
+/** Same idea as nearestMidi, but tilted toward the lower octave candidate: a
+ * higher one only wins if it's more than `biasSemitones` closer to `reference`.
+ * Without this, walking bass drifts and settles wherever the previous bar's
+ * pointer happened to land, with no pull back toward the bottom of the range. */
+function nearestMidiLowBiased(reference: number, pitchClass: number, biasSemitones: number): number {
+  const base = reference - (((reference % 12) + 12) % 12) + (((pitchClass % 12) + 12) % 12);
+  let best = base;
+  let bestScore = Infinity;
+  for (const candidate of [base - 12, base, base + 12]) {
+    const score = Math.abs(candidate - reference) + (candidate > reference ? biasSemitones : 0);
+    if (score < bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 function clampToBassRange(midi: number): number {
   while (midi < SMART_WALK_LOW) midi += 12;
   while (midi > SMART_WALK_HIGH) midi -= 12;
@@ -447,7 +495,7 @@ function smartWalkBarEvents(
 
   const rootPc = rootSemitone(bassRootNote(chord));
   const targetPc = rootSemitone(bassRootNote(targetChord));
-  const rootMidi = clampToBassRange(nearestMidi(pointer.midi, rootPc));
+  const rootMidi = clampToBassRange(nearestMidiLowBiased(pointer.midi, rootPc, SMART_WALK_LOW_BIAS));
   push(cellStart, rootMidi, 0.85);
 
   const sameTarget = targetPc === rootPc;

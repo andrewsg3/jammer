@@ -32,6 +32,21 @@ const GM_TO_DRUM_NOTE: Record<number, DrumStep['note']> = {
   55: 'crash', // splash — closest fallback
 };
 
+// GrooveScribe's own non-GM extension for a snare buzz/press roll (its
+// OUR_MIDI_SNARE_BUZZ constant) — not a real GM percussion note (GM tops out at
+// 87), so it can't go in GM_TO_DRUM_NOTE's plain lookup. No dedicated roll lane/
+// sample exists in this app yet, so it's approximated as a fast run of ordinary
+// 'snare' hits on the finest step grid available, swelling up to the note's own
+// velocity — a cheap first pass to judge by ear before investing in a real
+// buzz-roll sample and a dedicated lane.
+const BUZZ_ROLL_GM_NOTE = 104;
+const BUZZ_ROLL_LENGTH_STEPS = STEPS_PER_BEAT / 2; // half a beat flourish
+// Repeated hits read louder than a single hit at the same velocity (more transients
+// per second), so the roll is scaled down from the note's own velocity rather than
+// reproduced at full strength. Pushed as low as it goes while still being audible —
+// 0 would be silent, defeating the point of having a roll there at all.
+const BUZZ_ROLL_VELOCITY_SCALE = 0.1;
+
 /** Parses raw MIDI bytes into a drum pattern, plus the file's track name if it has one. */
 export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; pattern: DrumPattern } {
   const midi = parseMidi(new Uint8Array(buffer));
@@ -53,6 +68,20 @@ export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; 
       // ignore noteOff entirely. Some exporters (e.g. GrooveScribe) never
       // emit a matching noteOff for percussion hits at all.
       if (event.type !== 'noteOn' || event.channel !== PERCUSSION_CHANNEL || event.velocity === 0) {
+        continue;
+      }
+      if (event.noteNumber === BUZZ_ROLL_GM_NOTE) {
+        const startStep = Math.round(ticks / ticksPerStep);
+        const peakVelocity = event.velocity / 127;
+        for (let i = 0; i < BUZZ_ROLL_LENGTH_STEPS; i++) {
+          const step = startStep + i;
+          maxStep = Math.max(maxStep, step);
+          // Swell from 40% up to the note's own velocity, rather than every hit
+          // at full strength — closer to how a real buzz roll builds into the
+          // beat it's leading into than a flat run of identical hits would be.
+          const t = BUZZ_ROLL_LENGTH_STEPS === 1 ? 1 : i / (BUZZ_ROLL_LENGTH_STEPS - 1);
+          rawSteps.push({ step, note: 'snare', velocity: peakVelocity * (0.4 + 0.6 * t) * BUZZ_ROLL_VELOCITY_SCALE });
+        }
         continue;
       }
       const drumNote = GM_TO_DRUM_NOTE[event.noteNumber];

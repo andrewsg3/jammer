@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Chord, ChordPlacement, NotationStyle, ScaleName } from '../data/progressions';
-import { chordName, chordNameParts, resolveSelection } from '../data/progressions';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ChordPlacement, NotationStyle, ScaleName } from '../data/progressions';
+import { resolveSelection } from '../data/progressions';
+import { BeatGridSheet, ChordLabel } from './BeatGridSheet';
 import {
   baseBassStyles,
   baseDrumStyles,
@@ -35,41 +36,11 @@ import {
   setTempo as setTransportTempo,
   onAutoStop,
   stop,
+  COUNT_IN_OPTIONS,
+  type CountInBeats,
 } from '../audio/engine';
 
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-// Four 4/4 bars per line — the minimal "chord + blanks for its held duration" chart
-// shape the user described, not real rhythm notation (see CLAUDE.md's melody
-// notation section for why this codebase doesn't attempt that).
-const BEATS_PER_BAR = 4;
-const BARS_PER_ROW = 4;
-const BEATS_PER_ROW = BEATS_PER_BAR * BARS_PER_ROW;
-
-type BeatCell = {
-  beat: number;
-  placement: ChordPlacement | null;
-  // What this cell shows: 'name' for a chord's actual label (whether it starts
-  // exactly here — anywhere within a bar — or this bar simply hasn't matched the
-  // previous one yet), 'repeat' for the "%" same-as-last-bar mark, or null (blank,
-  // either mid-bar hold or silence). A chord held across a bar line is *not* the
-  // same as the mark being blank there — e.g. one chord spanning bars 1-2 should
-  // read "name" then "%", not "name" then nothing, so it stays visibly "the same
-  // chord, still sounding" rather than looking unmarked.
-  mark: 'name' | 'repeat' | null;
-};
-
-// A run of consecutive beat cells rendered as one grid item (via CSS grid-column
-// spanning) rather than one item per beat — lets a "%" or chord name center itself
-// against its actual visual width (a whole bar, half a bar, whatever it really
-// spans) instead of always centering within a single 1-beat-wide cell. A run never
-// crosses a bar line: every bar boundary always carries its own mark (see
-// beatCells above), which is exactly what ends the previous run.
-type BeatRun = {
-  startBeat: number;
-  length: number;
-  placement: ChordPlacement | null;
-  mark: 'name' | 'repeat' | null;
-};
 const DEFAULT_KEYS_STYLE = keysStyles.find((s) => s.name === 'Sustained 7ths')!;
 const DEFAULT_BASS_STYLE = baseBassStyles.find((s) => s.name === 'Walking')!;
 
@@ -84,8 +55,15 @@ const DEFAULT_VOLUMES = { master: 100, drums: 30, bass: 80, keys: 60, metronome:
 // CLAUDE.md's no-accounts/no-server-side stance). Small enough, and unrelated
 // enough to that constraint's actual reasoning, to justify the one
 // localStorage exception in an otherwise storage-free app.
-const PREFS_STORAGE_KEY = 'jammer-mobile-prefs';
-type StoredPrefs = { volumes?: typeof DEFAULT_VOLUMES; accentColor?: string; notationStyle?: NotationStyle };
+const PREFS_STORAGE_KEY = 'jazzmate-mobile-prefs';
+type NowPlayingStyle = 'countdown' | 'grid';
+type StoredPrefs = {
+  volumes?: typeof DEFAULT_VOLUMES;
+  accentColor?: string;
+  notationStyle?: NotationStyle;
+  countInBeats?: CountInBeats;
+  nowPlayingStyle?: NowPlayingStyle;
+};
 
 function loadStoredPrefs(): StoredPrefs {
   try {
@@ -103,21 +81,6 @@ function saveStoredPrefs(prefs: StoredPrefs): void {
     // Private browsing, storage disabled/full, etc. — preferences just won't
     // persist this session, not worth surfacing as an error.
   }
-}
-
-/** Same real-book convention as ChordGrid's chord labels: the -/°/+/^ triad-quality
- * marker sets full size next to the root, 7ths/9ths/alterations set smaller and
- * raised (.chord-ext, shared with desktop). */
-function ChordLabel({ chord, notation }: { chord: Chord; notation: NotationStyle }) {
-  const { root, core, ext, bass } = chordNameParts(chord, notation);
-  return (
-    <>
-      {root}
-      {core}
-      {ext && <sup className="chord-ext">{ext}</sup>}
-      {bass}
-    </>
-  );
 }
 
 // The URL's ?song= name wins over the first bundled preset, so a refresh (or a
@@ -153,6 +116,12 @@ export function MobilePlayer() {
   const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
   const [bassStyles, setBassStyles] = useState<BassStyle[]>(baseBassStyles);
   const [isPlaying, setIsPlaying] = useState(false);
+  // Same reasoning as App.tsx's own countInActive — the engine delays the
+  // Transport's actual start by the count-in's real duration, but isPlaying
+  // goes true immediately, so without this the beat-grid chart's active-chord
+  // highlight would jump onto the first chord during the count-in clicks.
+  const [countInActive, setCountInActive] = useState(false);
+  const countInTimeoutRef = useRef<number | null>(null);
   const [playheadBeat, setPlayheadBeat] = useState(0);
   // true = audible — the button lights up when a track is ON, same convention as
   // the metronome button, rather than lighting up when muted (which read backwards:
@@ -163,11 +132,21 @@ export function MobilePlayer() {
     bass: true,
     keys: true,
   });
-  const [metronomeOn, setMetronomeOn] = useState(preset?.metronome ?? false);
+  // Defaults on regardless of the preset's own saved `metronome` value (many
+  // bundled presets save it off) — a practice companion wants the click track
+  // audible by default, even if desktop respects each song's own saved choice.
+  const [metronomeOn, setMetronomeOn] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [volumes, setVolumes] = useState(() => loadStoredPrefs().volumes ?? DEFAULT_VOLUMES);
   const [notationStyle, setNotationStyle] = useState<NotationStyle>(
     () => loadStoredPrefs().notationStyle ?? 'symbol',
+  );
+  const [countInBeats, setCountInBeats] = useState<CountInBeats>(() => loadStoredPrefs().countInBeats ?? 0);
+  // 'countdown': the existing Current + Next chord readout. 'grid': the same
+  // BeatGridSheet chart the scrolling chart above already uses, fullscreen —
+  // closer to what the desktop compact grid view looks like during playback.
+  const [nowPlayingStyle, setNowPlayingStyle] = useState<NowPlayingStyle>(
+    () => loadStoredPrefs().nowPlayingStyle ?? 'countdown',
   );
   // Falls back to whatever --accent already resolved to (light/dark default) if
   // nothing's stored yet — a manual pick simply overrides that CSS variable at
@@ -181,8 +160,8 @@ export function MobilePlayer() {
   }, [accentColor]);
 
   useEffect(() => {
-    saveStoredPrefs({ volumes, notationStyle, accentColor });
-  }, [volumes, notationStyle, accentColor]);
+    saveStoredPrefs({ volumes, notationStyle, accentColor, countInBeats, nowPlayingStyle });
+  }, [volumes, notationStyle, accentColor, countInBeats, nowPlayingStyle]);
 
   const handleResetAccent = () => {
     document.documentElement.style.removeProperty('--accent');
@@ -226,68 +205,6 @@ export function MobilePlayer() {
     () => resolved.sections.map((s, i) => ({ id: `mobile-section-${i}`, ...s })),
     [resolved],
   );
-
-  // A flat list of beat cells — CSS grid auto-flow wraps every BEATS_PER_ROW (four
-  // bars) into a new visual row, so the whole chart is one grid rather than a stack
-  // of independently-bordered row boxes (the previous per-row version could show a
-  // hairline seam between rows where two adjacent boxes' borders didn't quite meet).
-  // A chord's first beat always carries a label — mid-bar beats are otherwise blank,
-  // same convention as a hand-written lead sheet ("F", three blank beats, "Bb",
-  // three blank beats) — except every bar boundary itself gets a mark, either the
-  // chord's name (first bar it's heard) or "%" (still the same chord as last bar,
-  // whether that's a held chord carrying across the line or a fresh repeat).
-  const beatCells = useMemo(() => {
-    // Not rounded up to a full row — a song that ends mid-row (e.g. 12 Bar Blues'
-    // 10 bars, not a multiple of the 4-bars-per-row width) should just stop there,
-    // not trail off into empty bars with nothing in them.
-    const totalBeats = placements.reduce((max, p) => Math.max(max, p.startBeat + p.lengthBeats), 0);
-    // The chord that was sounding at the previous bar's own boundary — compared
-    // against each new bar boundary to decide "name" vs "%".
-    let previousBarChordName: string | null = null;
-    return Array.from({ length: totalBeats }, (_, beat): BeatCell => {
-      const placement = placements.find((p) => beat >= p.startBeat && beat < p.startBeat + p.lengthBeats) ?? null;
-      const isChordStart = placement?.startBeat === beat;
-      let mark: BeatCell['mark'] = isChordStart ? 'name' : null;
-      if (beat % BEATS_PER_BAR === 0) {
-        const chordNameHere = placement
-          ? chordName(resolveSelection(musicalKey, scale, placement.selection), notationStyle)
-          : null;
-        if (!placement) {
-          mark = null;
-        } else if (isChordStart) {
-          // A fresh attack lands exactly on this bar boundary — the only case that
-          // actually needs comparing against the previous bar, to catch two
-          // adjacent placements that happen to share a chord.
-          mark = chordNameHere === previousBarChordName ? 'repeat' : 'name';
-        } else {
-          // This boundary falls inside a placement that already started earlier —
-          // whether at the previous bar's own boundary or mid-bar — so it's always
-          // a continuation, already labeled at its true start beat. Comparing
-          // against previousBarChordName here would wrongly re-show the name if
-          // that start beat wasn't itself a bar boundary.
-          mark = 'repeat';
-        }
-        previousBarChordName = chordNameHere;
-      }
-      return { beat, placement, mark };
-    });
-  }, [placements, musicalKey, scale, notationStyle]);
-
-  const beatRuns = useMemo(() => {
-    const runs: BeatRun[] = [];
-    for (const cell of beatCells) {
-      const last = runs[runs.length - 1];
-      // A cell continues the previous run only when it's unmarked (a mid-bar hold)
-      // and still the same placement — anything else (its own mark, a different
-      // placement, entering/leaving a gap) starts a new run.
-      if (last && cell.mark === null && cell.placement === last.placement) {
-        last.length += 1;
-      } else {
-        runs.push({ startBeat: cell.beat, length: 1, placement: cell.placement, mark: cell.mark });
-      }
-    }
-    return runs;
-  }, [beatCells]);
 
   const drumStyle = useMemo(
     () => (preset?.customDrumPattern
@@ -348,7 +265,9 @@ export function MobilePlayer() {
       setMusicalKey(preset.key);
       setScale(preset.scale);
       setTempoState(preset.tempo);
-      setMetronomeOn(preset.metronome);
+      // Not preset.metronome — see metronomeOn's own doc comment for why mobile
+      // always starts a freshly loaded song with the click track on.
+      setMetronomeOn(true);
     }
   }, [preset]);
 
@@ -393,18 +312,35 @@ export function MobilePlayer() {
   // doc comment in audio/engine.ts. Sync the UI rather than leaving the now-playing
   // modal up over silence.
   useEffect(() => onAutoStop(() => {
+    if (countInTimeoutRef.current !== null) {
+      window.clearTimeout(countInTimeoutRef.current);
+      countInTimeoutRef.current = null;
+    }
     setIsPlaying(false);
+    setCountInActive(false);
     setPlayheadBeat(0);
   }), []);
 
   const handleTogglePlay = useCallback(async () => {
+    if (countInTimeoutRef.current !== null) {
+      window.clearTimeout(countInTimeoutRef.current);
+      countInTimeoutRef.current = null;
+    }
     if (isPlaying) {
       stop();
       setIsPlaying(false);
+      setCountInActive(false);
       setPlayheadBeat(0);
       return;
     }
     if (!preset || placements.length === 0 || instrumentsLoading) return;
+    if (countInBeats > 0) {
+      setCountInActive(true);
+      countInTimeoutRef.current = window.setTimeout(() => {
+        setCountInActive(false);
+        countInTimeoutRef.current = null;
+      }, (countInBeats * 60 * 1000) / tempo);
+    }
     await play({
       key: musicalKey,
       scale,
@@ -422,6 +358,7 @@ export function MobilePlayer() {
       keysTimeFeel: preset.keysTimeFeel ?? 'normal',
       melody: preset.melody ?? [],
       sections,
+      countInBeats,
     });
     setIsPlaying(true);
   }, [
@@ -436,6 +373,7 @@ export function MobilePlayer() {
     bassStyle,
     keysStyle,
     sections,
+    countInBeats,
     instrumentsLoading,
   ]);
 
@@ -473,7 +411,7 @@ export function MobilePlayer() {
   return (
     <div className="mobile-player">
       <div className="mobile-player__topbar">
-        <h1 className="app-title">jammer v0</h1>
+        <h1 className="app-title">JazzMate v0.1</h1>
         <button
           className="mobile-player__settings-button"
           onClick={() => setSettingsOpen(true)}
@@ -497,40 +435,19 @@ export function MobilePlayer() {
           ))}
         </select>
         {preset.author && <div className="mobile-player__author">{preset.author}</div>}
+        {preset.playStyle && <div className="mobile-player__play-style">{preset.playStyle}</div>}
       </header>
 
       <div className="mobile-player__paper">
-        <div className="mobile-player__paper-grid">
-          {beatRuns.map((run) => (
-            <div
-              key={run.startBeat}
-              style={{ gridColumn: `span ${run.length}` }}
-              className={
-                'mobile-player__paper-cell' +
-                (run.startBeat % BEATS_PER_ROW === 0 ? ' mobile-player__paper-cell--row-start' : '') +
-                ((run.startBeat + run.length) % BEATS_PER_BAR === 0 ? ' mobile-player__paper-cell--bar-end' : '') +
-                (run.placement && run.placement === currentPlacement ? ' mobile-player__paper-cell--active' : '')
-              }
-            >
-              {run.mark === 'repeat' && run.placement && (
-                <span
-                  className="mobile-player__paper-repeat"
-                  aria-label={`Same as previous bar: ${chordName(resolveSelection(musicalKey, scale, run.placement.selection), notationStyle)}`}
-                >
-                  %
-                </span>
-              )}
-              {run.mark === 'name' && run.placement && (
-                <span className="mobile-player__paper-chord">
-                  <ChordLabel
-                    chord={resolveSelection(musicalKey, scale, run.placement.selection)}
-                    notation={notationStyle}
-                  />
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+        <BeatGridSheet
+          placements={placements}
+          musicalKey={musicalKey}
+          scale={scale}
+          notationStyle={notationStyle}
+          playheadBeat={playheadBeat}
+          isPlaying={isPlaying && !countInActive}
+          sections={sections}
+        />
       </div>
 
       <div className="mobile-player__controls">
@@ -637,6 +554,35 @@ export function MobilePlayer() {
               </button>
             </label>
 
+            <h3 className="mobile-player__settings-subheading">Playback</h3>
+            <label className="mobile-player__settings-row">
+              <span>Count-in</span>
+              <select
+                className="mobile-player__settings-select"
+                value={countInBeats}
+                onChange={(e) => setCountInBeats(Number(e.target.value) as CountInBeats)}
+                aria-label="Count-in before play starts"
+              >
+                {COUNT_IN_OPTIONS.map((beats) => (
+                  <option key={beats} value={beats}>
+                    {beats === 0 ? 'Off' : `${beats} beats (${beats / 4} bar${beats === 4 ? '' : 's'})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="mobile-player__settings-row">
+              <span>Now Playing</span>
+              <select
+                className="mobile-player__settings-select"
+                value={nowPlayingStyle}
+                onChange={(e) => setNowPlayingStyle(e.target.value as NowPlayingStyle)}
+                aria-label="Now-playing display style"
+              >
+                <option value="countdown">Current + Next</option>
+                <option value="grid">Grid</option>
+              </select>
+            </label>
+
             <h3 className="mobile-player__settings-subheading">Volume</h3>
             {(
               [
@@ -666,13 +612,13 @@ export function MobilePlayer() {
               rel="noopener noreferrer"
               className="mobile-player__settings-coffee-link"
             >
-              ☕ Buy me a coffee :)
+              ☕ Support Jazzmate
             </a>
           </div>
         </div>
       )}
 
-      {isPlaying && currentPlacement && (
+      {isPlaying && currentPlacement && nowPlayingStyle === 'countdown' && (
         <div className="mobile-player__now-playing" role="dialog" aria-modal="true" aria-label="Now playing">
           {currentSection && (
             <div className="mobile-player__now-playing-section">{currentSection.label}</div>
@@ -697,6 +643,38 @@ export function MobilePlayer() {
               <span className="mobile-player__now-playing-next-duration">{nextPlacement.lengthBeats}</span>
             </div>
           )}
+          <button className="mobile-player__now-playing-stop" onClick={handleTogglePlay}>
+            ■ Stop
+          </button>
+        </div>
+      )}
+
+      {/* Same idea as the countdown modal above, styled like the desktop compact
+          grid view instead — the full chart with the current bar highlighted,
+          rather than a big current/next readout. Picked in Settings
+          (nowPlayingStyle), not a separate button — it replaces the countdown
+          modal rather than adding a third always-visible view. */}
+      {isPlaying && currentPlacement && nowPlayingStyle === 'grid' && (
+        <div
+          className="mobile-player__now-playing mobile-player__now-playing--grid"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Now playing"
+        >
+          {currentSection && (
+            <div className="mobile-player__now-playing-section">{currentSection.label}</div>
+          )}
+          <div className="mobile-player__now-playing-grid-chart beat-grid-sheet-page">
+            <BeatGridSheet
+              placements={placements}
+              musicalKey={musicalKey}
+              scale={scale}
+              notationStyle={notationStyle}
+              playheadBeat={playheadBeat}
+              isPlaying={isPlaying && !countInActive}
+              sections={sections}
+            />
+          </div>
           <button className="mobile-player__now-playing-stop" onClick={handleTogglePlay}>
             ■ Stop
           </button>

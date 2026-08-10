@@ -4,10 +4,21 @@ import { STAFF_HEIGHT, STAFF_LINE_GAP } from './staffLayout';
 type Props = {
   title: string;
   onTitleChange: (title: string) => void;
+  subtitle: string;
+  onSubtitleChange: (subtitle: string) => void;
   author: string;
   onAuthorChange: (author: string) => void;
+  playStyle: string;
+  onPlayStyleChange: (playStyle: string) => void;
   tempo: number;
   onClear: () => void;
+  // The decorative blank staff exists to read as a continuation of ChordGrid's
+  // own staff below it (see the comment on .sheet-header-band's children) — true
+  // there since the two share left/right insets. The beat-grid compact view has
+  // no staff of its own for this to continue, so App.tsx passes false there.
+  // Defaults true so every existing caller (ChordGrid.tsx) keeps its staff
+  // without having to pass this explicitly.
+  showStaff?: boolean;
 };
 
 // Auto-widening text input — sizes to its content like a title on an actual
@@ -81,7 +92,19 @@ function AutoGrowTextarea({
   );
 }
 
-export function SheetMusicHeader({ title, onTitleChange, author, onAuthorChange, tempo, onClear }: Props) {
+export function SheetMusicHeader({
+  title,
+  onTitleChange,
+  subtitle,
+  onSubtitleChange,
+  author,
+  onAuthorChange,
+  playStyle,
+  onPlayStyleChange,
+  tempo,
+  onClear,
+  showStaff = true,
+}: Props) {
   return (
     <div className="sheet-header">
       <button type="button" className="clear-button sheet-clear-button" onClick={onClear}>
@@ -94,13 +117,24 @@ export function SheetMusicHeader({ title, onTitleChange, author, onAuthorChange,
           render on the grid's own first staff instead (ChordGrid.tsx) — tempo only
           lives here, not duplicated there. */}
       <div className="sheet-header-band" style={{ minHeight: STAFF_HEIGHT }}>
-        <div className="sheet-header-staff" aria-hidden="true">
-          {Array.from({ length: 5 }, (_, i) => (
-            <div key={i} className="sheet-header-staff-line" style={{ top: i * STAFF_LINE_GAP }} />
-          ))}
-        </div>
+        {showStaff && (
+          <div className="sheet-header-staff" aria-hidden="true">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className="sheet-header-staff-line" style={{ top: i * STAFF_LINE_GAP }} />
+            ))}
+          </div>
+        )}
         <div className="sheet-header-text">
-          <span className="sheet-header-tempo">♩ = {tempo}</span>
+          <div className="sheet-header-tempo-block">
+            <AutoWidthInput
+              className="sheet-play-style"
+              value={playStyle}
+              onChange={onPlayStyleChange}
+              placeholder="Style"
+              ariaLabel="Play style (e.g. Medium Swing, Ballad, Bossa Nova)"
+            />
+            <span className="sheet-header-tempo">♩ = {tempo}</span>
+          </div>
           <div className="sheet-header-title-block">
             <AutoWidthInput
               className="sheet-title"
@@ -108,6 +142,13 @@ export function SheetMusicHeader({ title, onTitleChange, author, onAuthorChange,
               onChange={onTitleChange}
               placeholder="Untitled"
               ariaLabel="Song title"
+            />
+            <AutoWidthInput
+              className="sheet-subtitle"
+              value={subtitle}
+              onChange={onSubtitleChange}
+              placeholder="Subtitle"
+              ariaLabel="Subtitle (e.g. 'from Black Orpheus')"
             />
           </div>
           <div className="sheet-author-line">

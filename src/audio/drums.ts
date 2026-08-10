@@ -9,29 +9,13 @@ import type { SectionMarker } from '../data/sections';
 // internal implementation detail of scheduleDrums, not a user-selectable style,
 // so there's no need to thread this through engine.ts/App.tsx/MobilePlayer.tsx
 // the way drum/bass *styles* are. If Play happens to fire before this resolves,
-// that one playback just uses FALLBACK_FILL below instead — no gate needed.
+// or no fills are bundled at all, that section just plays with no fill (see the
+// empty-check where sectionsWithRoom is scheduled below) rather than falling
+// back to a placeholder — no gate needed either way.
 let bundledFills: DrumFill[] = [];
 loadBundledDrumFills().then((fills) => {
   bundledFills = fills;
 });
-
-// Used whenever no real fill files are bundled yet (see data/drumFills/ — empty
-// today) — the same one-bar-ending tom run this app shipped with before real
-// fills existed, just re-expressed in the same DrumFill shape so the rest of the
-// mechanism below doesn't need to know the difference.
-const FALLBACK_FILL: DrumFill = {
-  name: 'Fallback tom run',
-  lengthBeats: 1,
-  pattern: {
-    bars: 1,
-    steps: [
-      { time: 0, note: 'tomHigh', velocity: 0.6 },
-      { time: 3, note: 'tomHigh', velocity: 0.6 },
-      { time: 6, note: 'tomMid', velocity: 0.6 },
-      { time: 9, note: 'tomLow', velocity: 0.75 },
-    ],
-  },
-};
 
 // Bus glue: gentle compression evens out how punchy each lane feels relative to the
 // others — the sample lanes are pulled from unrelated takes/mics with inherently
@@ -500,15 +484,15 @@ export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal
   // fill's own window (via fillWindows), same as a drummer stopping the beat to
   // play a fill and picking it back up after. Picked at random per section from
   // data/drumFills/'s bundled .mid files (drop one in, no code change needed —
-  // same convention as data/drumPatterns/); falls back to FALLBACK_FILL if none
-  // are bundled yet. Skips any section that starts inside the first bar (nothing
-  // to fill before beat 0).
+  // same convention as data/drumPatterns/). No fallback placeholder if none are
+  // bundled (or haven't loaded yet) — that section's fill window is simply
+  // skipped, same as any other section once fills exist but happen to run out of
+  // room (see the clipped-window comment below).
   const sectionsWithRoom = sections.filter((s) => s.startBeat >= 1);
-  if (sectionsWithRoom.length > 0) {
-    const availableFills = bundledFills.length > 0 ? bundledFills : [FALLBACK_FILL];
+  if (sectionsWithRoom.length > 0 && bundledFills.length > 0) {
     const fillEvents: { time: string; note: DrumVoice; velocity: number }[] = [];
     for (const section of sectionsWithRoom) {
-      const fill = availableFills[Math.floor(Math.random() * availableFills.length)];
+      const fill = bundledFills[Math.floor(Math.random() * bundledFills.length)];
       // Clipped so a fill longer than the room available before this section
       // (e.g. a full-bar fill landing right after beat 0) can't start before
       // beat 0 itself — whatever doesn't fit is dropped, not shifted earlier.

@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import type { MelodyNote } from '../data/melody';
+import { PIANO_SAMPLE_URLS } from '../data/pianoSamples';
 
 // A fixed, imported line, not chord-derived — much simpler than bass/keys, no
 // per-chord regeneration needed, just schedule the notes verbatim.
@@ -12,15 +13,12 @@ const output = new Tone.Volume(0).toDestination();
 
 type MelodyEvent = MelodyNote & { time: string };
 
-let synth: Tone.Synth | null = null;
+let synth: Tone.Sampler | null = null;
 let part: Tone.Part<MelodyEvent> | null = null;
 
 function ensureSynth() {
   if (!synth) {
-    synth = new Tone.Synth({
-      oscillator: { type: 'triangle' },
-      envelope: { attack: 0.01, decay: 0.15, sustain: 0.5, release: 0.25 },
-    }).connect(output);
+    synth = new Tone.Sampler({ urls: PIANO_SAMPLE_URLS, release: 1 }).connect(output);
   }
 }
 
@@ -53,7 +51,7 @@ export function scheduleMelody(notes: MelodyNote[]): void {
 export function disposeMelody(): void {
   part?.dispose();
   part = null;
-  // See disposeKeys/disposeBass's comment — force-release the in-flight voice so a
-  // long note doesn't keep ringing after stop.
-  synth?.triggerRelease();
+  // See disposeBass's comment — Sampler's triggerRelease needs to know which
+  // note(s) to release; releaseAll sidesteps tracking that for a monophonic line.
+  synth?.releaseAll();
 }

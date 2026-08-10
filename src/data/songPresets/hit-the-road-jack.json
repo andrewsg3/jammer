@@ -2,6 +2,7 @@
   "version": 1,
   "name": "Hit the Road Jack",
   "author": "Percy Mayfield",
+  "playStyle": "Medium Shuffle",
   "key": "A",
   "scale": "minor",
   "tempo": 140,

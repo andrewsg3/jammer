@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { SCALE_NAMES, SCALE_LABELS } from '../data/progressions';
-import type { NotationStyle, ScaleName } from '../data/progressions';
+import type { ScaleName } from '../data/progressions';
 import type { SongPreset } from '../data/songPresets';
 import { SongPresetFileControls } from './SongPresetFileControls';
 
@@ -19,8 +19,6 @@ type Props = {
   onKeyChange: (key: string) => void;
   scale: ScaleName;
   onScaleChange: (scale: ScaleName) => void;
-  notationStyle: NotationStyle;
-  onNotationStyleChange: (notation: NotationStyle) => void;
   tempo: number;
   onTempoChange: (tempo: number) => void;
   isPlaying: boolean;
@@ -29,6 +27,7 @@ type Props = {
   onSaveSongPreset: () => void;
   onImportSongPresetFile: (file: File) => void;
   songPresetError?: string | null;
+  onOpenSettings: () => void;
 };
 
 function TopBarField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -48,8 +47,6 @@ export function TopBar({
   onKeyChange,
   scale,
   onScaleChange,
-  notationStyle,
-  onNotationStyleChange,
   tempo,
   onTempoChange,
   isPlaying,
@@ -58,6 +55,7 @@ export function TopBar({
   onSaveSongPreset,
   onImportSongPresetFile,
   songPresetError,
+  onOpenSettings,
 }: Props) {
   const tapTimesRef = useRef<number[]>([]);
 
@@ -82,14 +80,14 @@ export function TopBar({
     <header className="top-bar">
       <div className="top-bar-inner">
         <div className="top-bar-brand">
-          <h1 className="app-title">jammer v0</h1>
+          <h1 className="app-title">JazzMate v0.1</h1>
           <a
             href="https://www.buymeacoffee.com/andrewsg"
             target="_blank"
             rel="noopener noreferrer"
             className="coffee-link"
           >
-            ☕ Buy me a coffee :)
+            ☕ Support Jazzmate
           </a>
         </div>
 
@@ -121,6 +119,15 @@ export function TopBar({
               error={songPresetError}
               compact
             />
+            <button
+              type="button"
+              className="top-bar-icon-button"
+              onClick={() => window.print()}
+              title="Print sheet (or save as PDF via the browser's print dialog)"
+              aria-label="Print sheet"
+            >
+              🖨️
+            </button>
           </div>
         </TopBarField>
 
@@ -157,18 +164,6 @@ export function TopBar({
           </div>
         </TopBarField>
 
-        <TopBarField label="Notation">
-          <select
-            id="top-bar-notation-style"
-            aria-label="Chord notation style"
-            value={notationStyle}
-            onChange={(e) => onNotationStyleChange(e.target.value as NotationStyle)}
-          >
-            <option value="symbol">Symbol (-, °, ^7)</option>
-            <option value="written">Written (m, dim, maj7)</option>
-          </select>
-        </TopBarField>
-
         <TopBarField label="Tempo">
           <div className="top-bar-tempo-group">
             <input
@@ -200,6 +195,16 @@ export function TopBar({
           title={!isPlaying && instrumentsLoading ? 'Loading instrument samples…' : undefined}
         >
           {!isPlaying && instrumentsLoading ? 'Loading…' : isPlaying ? '■ Stop' : '▶ Play'}
+        </button>
+
+        <button
+          type="button"
+          className="top-bar-icon-button"
+          onClick={onOpenSettings}
+          title="Settings"
+          aria-label="Settings"
+        >
+          ⚙
         </button>
       </div>
     </header>

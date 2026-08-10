@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChordGrid } from './components/ChordGrid';
+import { BeatGridSheet } from './components/BeatGridSheet';
+import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
 import { TopBar } from './components/TopBar';
+import { SettingsModal } from './components/SettingsModal';
 import { ChannelStrip } from './components/ChannelStrip';
 import { MiniFader } from './components/MiniFader';
 import type { Chord, ChordPlacement, ChordSelection, NotationStyle, ScaleName } from './data/progressions';
@@ -72,6 +75,7 @@ import {
   isKeysInstrumentLoaded,
   isBassInstrumentLoaded,
   onAutoStop,
+  type CountInBeats,
 } from './audio/engine';
 
 // Fallback only — used if bundledSongPresets is somehow empty (e.g. all preset
@@ -114,18 +118,75 @@ function setSongInUrl(name: string | null): void {
   window.history.replaceState(null, '', url);
 }
 
+// UI-only preferences (not song data — those still stay JSON-file-only, per
+// CLAUDE.md's no-accounts/no-server-side stance). Same reasoning/exception
+// MobilePlayer.tsx already carved out for its own prefs, just desktop's own
+// storage key/shape rather than sharing mobile's — the two views' settings are
+// independent (grid style in particular is desktop-only; mobile has no editor).
+const DESKTOP_PREFS_STORAGE_KEY = 'jazzmate-desktop-prefs';
+type DesktopStoredPrefs = { notationStyle?: NotationStyle; compactGridView?: boolean; accentColor?: string };
+
+function loadStoredDesktopPrefs(): DesktopStoredPrefs {
+  try {
+    const raw = localStorage.getItem(DESKTOP_PREFS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredDesktopPrefs(prefs: DesktopStoredPrefs): void {
+  try {
+    localStorage.setItem(DESKTOP_PREFS_STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    // Private browsing, storage disabled/full, etc. — preferences just won't
+    // persist this session, not worth surfacing as an error.
+  }
+}
+
 function App() {
   const [songTitle, setSongTitle] = useState(DEFAULT_SONG_PRESET?.name ?? 'Untitled');
+  const [songSubtitle, setSongSubtitle] = useState(DEFAULT_SONG_PRESET?.subtitle ?? '');
   const [songAuthor, setSongAuthor] = useState(DEFAULT_SONG_PRESET?.author ?? '');
+  const [songPlayStyle, setSongPlayStyle] = useState(DEFAULT_SONG_PRESET?.playStyle ?? '');
   const [musicalKey, setMusicalKey] = useState(DEFAULT_SONG_PRESET?.key ?? 'C');
   const [scale, setScale] = useState<ScaleName>(DEFAULT_SONG_PRESET?.scale ?? 'major');
-  const [notationStyle, setNotationStyle] = useState<NotationStyle>('symbol');
+  const [notationStyle, setNotationStyle] = useState<NotationStyle>(
+    () => loadStoredDesktopPrefs().notationStyle ?? 'symbol',
+  );
+  // Swaps the grid panel for the same beat-grid chart the mobile companion view
+  // uses (BeatGridSheet.tsx) — see that file's own doc comment for the current
+  // state of editing parity with the normal ChordGrid view.
+  const [compactGridView, setCompactGridView] = useState(() => loadStoredDesktopPrefs().compactGridView ?? false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Falls back to whatever --accent already resolved to (light/dark default) if
+  // nothing's stored yet — a manual pick simply overrides that CSS variable at
+  // the root. Same mechanism as MobilePlayer.tsx's own accent picker — one shared
+  // CSS variable, so either view's choice is what the other would see too if both
+  // happened to run in the same browser profile.
+  const [accentColor, setAccentColor] = useState(
+    () => loadStoredDesktopPrefs().accentColor ?? getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+  );
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent', accentColor);
+  }, [accentColor]);
+
+  useEffect(() => {
+    saveStoredDesktopPrefs({ notationStyle, compactGridView, accentColor });
+  }, [notationStyle, compactGridView, accentColor]);
+
+  const handleResetAccent = () => {
+    document.documentElement.style.removeProperty('--accent');
+    setAccentColor(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  };
   const [placements, setPlacements] = useState<ChordPlacement[]>(
     DEFAULT_SONG_PRESET
       ? DEFAULT_RESOLVED_PLACEMENTS.map((p) => ({ id: crypto.randomUUID(), ...p }))
       : STARTER_PLACEMENTS,
   );
   const [tempo, setTempo] = useState(DEFAULT_SONG_PRESET?.tempo ?? 124);
+  const [countInBeats, setCountInBeats] = useState<CountInBeats>(4);
   const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
   const [drumStyle, setDrumStyle] = useState<DrumStyle>(baseDrumStyles[0]);
   const [drumsTimeFeel, setDrumsTimeFeel] = useState<TimeFeelOption>(
@@ -149,13 +210,21 @@ function App() {
   const [metronomeMuted, setMetronomeMutedState] = useState(!(DEFAULT_SONG_PRESET?.metronome ?? false));
   const [chordsMuted, setChordsMutedState] = useState(false);
   const [chordsChorusEnabled, setChordsChorusEnabledState] = useState(false);
-  const [chordsReverbEnabled, setChordsReverbEnabledState] = useState(false);
-  const [bassCompressionEnabled, setBassCompressionEnabledState] = useState(false);
+  const [chordsReverbEnabled, setChordsReverbEnabledState] = useState(true);
+  const [bassCompressionEnabled, setBassCompressionEnabledState] = useState(true);
   const [bassMuted, setBassMutedState] = useState(false);
-  const [drumsCompressionEnabled, setDrumsCompressionEnabledState] = useState(false);
-  const [drumsReverbEnabled, setDrumsReverbEnabledState] = useState(false);
+  const [drumsCompressionEnabled, setDrumsCompressionEnabledState] = useState(true);
+  const [drumsReverbEnabled, setDrumsReverbEnabledState] = useState(true);
   const [drumsMuted, setDrumsMutedState] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  // True for the count-in's own real-time duration after Play is pressed — the
+  // engine (audio/engine.ts's play()) delays the Transport's actual start by
+  // exactly that long, but isPlaying/playheadBeat both go true/set immediately
+  // when Play is clicked, so without this the compact grid view's active-chord
+  // highlight (and the staff view's playhead) would jump onto the first chord
+  // during the count-in clicks, before the song has actually started.
+  const [countInActive, setCountInActive] = useState(false);
+  const countInTimeoutRef = useRef<number | null>(null);
   const [customDrumStyle, setCustomDrumStyle] = useState<DrumStyle | null>(null);
   const [midiError, setMidiError] = useState<string | null>(null);
   const [melody, setMelody] = useState<MelodyNote[]>(DEFAULT_SONG_PRESET?.melody ?? []);
@@ -314,7 +383,12 @@ function App() {
   // to stop itself — see onAutoStop's doc comment in audio/engine.ts. Sync the UI
   // rather than leaving Play showing "Pause" over silence.
   useEffect(() => onAutoStop(() => {
+    if (countInTimeoutRef.current !== null) {
+      window.clearTimeout(countInTimeoutRef.current);
+      countInTimeoutRef.current = null;
+    }
     setIsPlaying(false);
+    setCountInActive(false);
     setPlayheadBeat(0);
   }), []);
 
@@ -411,7 +485,9 @@ function App() {
     // nothing for a refresh to look up, so it just falls back to the default song.
     setSongInUrl(bundledSongPresets.some((p) => p.name === preset.name) ? preset.name : null);
     setSongTitle(preset.name);
+    setSongSubtitle(preset.subtitle ?? '');
     setSongAuthor(preset.author ?? '');
+    setSongPlayStyle(preset.playStyle ?? '');
     setMusicalKey(preset.key);
     setScale(preset.scale);
     setTempo(preset.tempo);
@@ -465,7 +541,9 @@ function App() {
     const preset: SongPreset = {
       version: 1,
       name: songTitle,
+      subtitle: songSubtitle || undefined,
       author: songAuthor || undefined,
+      playStyle: songPlayStyle || undefined,
       key: musicalKey,
       scale,
       tempo,
@@ -524,14 +602,26 @@ function App() {
   };
 
   const handleTogglePlay = useCallback(async () => {
+    if (countInTimeoutRef.current !== null) {
+      window.clearTimeout(countInTimeoutRef.current);
+      countInTimeoutRef.current = null;
+    }
     if (isPlaying) {
       stop();
       setIsPlaying(false);
+      setCountInActive(false);
       setPlayheadBeat(0);
       return;
     }
     if (placements.length === 0) return;
     if (instrumentsLoading) return; // still loading sample buffers — see the modal below
+    if (countInBeats > 0) {
+      setCountInActive(true);
+      countInTimeoutRef.current = window.setTimeout(() => {
+        setCountInActive(false);
+        countInTimeoutRef.current = null;
+      }, (countInBeats * 60 * 1000) / tempo);
+    }
     await play({
       key: musicalKey,
       scale,
@@ -549,6 +639,7 @@ function App() {
       keysTimeFeel: keysTimeFeel.value,
       melody,
       sections,
+      countInBeats,
     });
     setIsPlaying(true);
   }, [
@@ -567,6 +658,7 @@ function App() {
     keysStyle,
     keysTimeFeel,
     melody,
+    countInBeats,
     sections,
     instrumentsLoading,
   ]);
@@ -603,8 +695,6 @@ function App() {
         onKeyChange={setMusicalKey}
         scale={scale}
         onScaleChange={setScale}
-        notationStyle={notationStyle}
-        onNotationStyleChange={setNotationStyle}
         tempo={tempo}
         onTempoChange={setTempo}
         isPlaying={isPlaying}
@@ -613,6 +703,20 @@ function App() {
         onSaveSongPreset={handleSaveSongPreset}
         onImportSongPresetFile={handleImportSongPresetFile}
         songPresetError={songPresetError}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        notationStyle={notationStyle}
+        onNotationStyleChange={setNotationStyle}
+        compactGridView={compactGridView}
+        onCompactGridViewChange={setCompactGridView}
+        countInBeats={countInBeats}
+        onCountInBeatsChange={setCountInBeats}
+        accentColor={accentColor}
+        onAccentColorChange={setAccentColor}
+        onResetAccent={handleResetAccent}
       />
       {instrumentsLoading && (
         <div className="loading-modal-backdrop">
@@ -636,40 +740,71 @@ function App() {
             />
           </div>
           <div className="layout-grid">
-            <ChordGrid
-              placements={placements}
-              melody={melody}
-              sections={sections}
-              musicalKey={musicalKey}
-              scale={scale}
-              notationStyle={notationStyle}
-              loopStart={loopStart}
-              loopEnd={loopEnd}
-              playheadBeat={playheadBeat}
-              isPlaying={isPlaying}
-              onPlayheadChange={handlePlayheadChange}
-              onDropChord={handleDropChord}
-              onReplaceChord={handleReplaceChord}
-              onResize={handleResize}
-              onMove={handleMove}
-              onRemove={handleRemove}
-              onClear={handleClear}
-              onLoopChange={handleLoopChange}
-              onAuditionChord={handleAudition}
-              onPastePlacements={handlePastePlacements}
-              onAddSection={handleAddSection}
-              onRenameSection={handleRenameSection}
-              onMoveSection={handleMoveSection}
-              onRemoveSection={handleRemoveSection}
-              onAddMelodyNote={handleAddMelodyNote}
-              onUpdateMelodyNote={handleUpdateMelodyNote}
-              onRemoveMelodyNote={handleRemoveMelodyNote}
-              title={songTitle}
-              onTitleChange={setSongTitle}
-              author={songAuthor}
-              onAuthorChange={setSongAuthor}
-              tempo={tempo}
-            />
+            {compactGridView ? (
+              <div className="beat-grid-sheet-page">
+                <SheetMusicHeader
+                  title={songTitle}
+                  onTitleChange={setSongTitle}
+                  subtitle={songSubtitle}
+                  onSubtitleChange={setSongSubtitle}
+                  author={songAuthor}
+                  onAuthorChange={setSongAuthor}
+                  playStyle={songPlayStyle}
+                  onPlayStyleChange={setSongPlayStyle}
+                  tempo={tempo}
+                  onClear={handleClear}
+                  showStaff={false}
+                />
+                <BeatGridSheet
+                  placements={placements}
+                  musicalKey={musicalKey}
+                  scale={scale}
+                  notationStyle={notationStyle}
+                  playheadBeat={playheadBeat}
+                  isPlaying={isPlaying && !countInActive}
+                  sections={sections}
+                />
+              </div>
+            ) : (
+              <ChordGrid
+                placements={placements}
+                melody={melody}
+                sections={sections}
+                musicalKey={musicalKey}
+                scale={scale}
+                notationStyle={notationStyle}
+                loopStart={loopStart}
+                loopEnd={loopEnd}
+                playheadBeat={playheadBeat}
+                isPlaying={isPlaying}
+                onPlayheadChange={handlePlayheadChange}
+                onDropChord={handleDropChord}
+                onReplaceChord={handleReplaceChord}
+                onResize={handleResize}
+                onMove={handleMove}
+                onRemove={handleRemove}
+                onClear={handleClear}
+                onLoopChange={handleLoopChange}
+                onAuditionChord={handleAudition}
+                onPastePlacements={handlePastePlacements}
+                onAddSection={handleAddSection}
+                onRenameSection={handleRenameSection}
+                onMoveSection={handleMoveSection}
+                onRemoveSection={handleRemoveSection}
+                onAddMelodyNote={handleAddMelodyNote}
+                onUpdateMelodyNote={handleUpdateMelodyNote}
+                onRemoveMelodyNote={handleRemoveMelodyNote}
+                title={songTitle}
+                onTitleChange={setSongTitle}
+                subtitle={songSubtitle}
+                onSubtitleChange={setSongSubtitle}
+                author={songAuthor}
+                onAuthorChange={setSongAuthor}
+                playStyle={songPlayStyle}
+                onPlayStyleChange={setSongPlayStyle}
+                tempo={tempo}
+              />
+            )}
           </div>
           <div className="channel-strip-column">
             <h2 className="panel-title">Instruments</h2>

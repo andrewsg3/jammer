@@ -1,0 +1,252 @@
+{
+  "version": 1,
+  "name": "The River",
+  "author": "Andrew Scott-George & Toni Santoyo-Brown",
+  "playStyle": "Medium Swing",
+  "key": "C",
+  "scale": "minor",
+  "tempo": 132,
+  "metronome": false,
+  "loopStart": 0,
+  "loopEnd": 100,
+  "drumStyle": "Jazz Shuffle",
+  "bassStyle": "Root-Fifth",
+  "keysStyle": "La Pompe",
+  "drumsTimeFeel": "normal",
+  "bassTimeFeel": "normal",
+  "keysTimeFeel": "normal",
+  "chordsInstrument": "Acoustic Piano",
+  "bassInstrument": "Upright",
+  "drumsInstrument": "Acoustic",
+  "customDrumPattern": null,
+  "sections": [
+    {
+      "label": "A",
+      "startBeat": 0,
+      "lengthBeats": 64
+    },
+    {
+      "label": "B",
+      "startBeat": 64,
+      "lengthBeats": 72
+    }
+  ],
+  "placements": [
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 0,
+        "quality": "min7"
+      },
+      "startBeat": 0,
+      "lengthBeats": 8
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 5,
+        "quality": "dom7"
+      },
+      "startBeat": 8,
+      "lengthBeats": 8
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 10,
+        "quality": "maj7"
+      },
+      "startBeat": 16,
+      "lengthBeats": 8
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 3,
+        "quality": "maj7"
+      },
+      "startBeat": 24,
+      "lengthBeats": 8
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 8,
+        "quality": "dom7"
+      },
+      "startBeat": 32,
+      "lengthBeats": 8
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 2,
+        "quality": "dim7"
+      },
+      "startBeat": 40,
+      "lengthBeats": 2
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 5,
+        "quality": "dim7"
+      },
+      "startBeat": 42,
+      "lengthBeats": 2
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 8,
+        "quality": "dim7"
+      },
+      "startBeat": 44,
+      "lengthBeats": 2
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 11,
+        "quality": "dim7"
+      },
+      "startBeat": 46,
+      "lengthBeats": 2
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 7,
+        "quality": "dom7"
+      },
+      "startBeat": 48,
+      "lengthBeats": 8
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 0,
+        "quality": "min7"
+      },
+      "startBeat": 60,
+      "lengthBeats": 4
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 3,
+        "quality": "maj7"
+      },
+      "startBeat": 64,
+      "lengthBeats": 8
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 10,
+        "quality": "maj9"
+      },
+      "startBeat": 72,
+      "lengthBeats": 8
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 5,
+        "quality": "dom9"
+      },
+      "startBeat": 80,
+      "lengthBeats": 8
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 0,
+        "quality": "min7"
+      },
+      "startBeat": 92,
+      "lengthBeats": 4
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 7,
+        "quality": "dom7"
+      },
+      "startBeat": 56,
+      "lengthBeats": 1
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 5,
+        "quality": "m9"
+      },
+      "startBeat": 57,
+      "lengthBeats": 1
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 4,
+        "quality": "m7b5"
+      },
+      "startBeat": 58,
+      "lengthBeats": 1
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 11,
+        "quality": "dim7"
+      },
+      "startBeat": 59,
+      "lengthBeats": 1
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 5,
+        "quality": "dom7"
+      },
+      "startBeat": 88,
+      "lengthBeats": 1
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 7,
+        "quality": "dom7"
+      },
+      "startBeat": 89,
+      "lengthBeats": 1
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 8,
+        "quality": "dim7"
+      },
+      "startBeat": 90,
+      "lengthBeats": 1
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 11,
+        "quality": "dim7"
+      },
+      "startBeat": 91,
+      "lengthBeats": 1
+    },
+    {
+      "selection": {
+        "type": "chromatic",
+        "offset": 7,
+        "quality": "dom7sharp9"
+      },
+      "startBeat": 96,
+      "lengthBeats": 4
+    }
+  ]
+}

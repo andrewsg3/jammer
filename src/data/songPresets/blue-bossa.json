@@ -2,6 +2,7 @@
   "version": 1,
   "name": "Blue Bossa",
   "author": "Kenny Dorham",
+  "playStyle": "Bossa Nova",
   "key": "C",
   "scale": "minor",
   "tempo": 128,

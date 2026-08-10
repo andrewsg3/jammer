@@ -62,8 +62,12 @@ type Props = {
   onRemoveMelodyNote: (index: number) => void;
   title: string;
   onTitleChange: (title: string) => void;
+  subtitle: string;
+  onSubtitleChange: (subtitle: string) => void;
   author: string;
   onAuthorChange: (author: string) => void;
+  playStyle: string;
+  onPlayStyleChange: (playStyle: string) => void;
   tempo: number;
 };
 
@@ -118,6 +122,44 @@ function segmentsFor(placement: ChordPlacement): ChordSegment[] {
       isLast: segEnd === end,
     });
     cursor = segEnd;
+  }
+  return segments;
+}
+
+type NcSegment = { key: string; row: number; localStart: number; span: number };
+
+/** Same row-splitting idea as segmentsFor, for a gap's plain beat range instead
+ * of a real placement — there's no ChordPlacement to hand back for a gap. */
+function ncSegmentsFor(key: string, startBeat: number, lengthBeats: number): NcSegment[] {
+  const segments: NcSegment[] = [];
+  const end = startBeat + lengthBeats;
+  let cursor = startBeat;
+  while (cursor < end) {
+    const row = rowOf(cursor);
+    const rowStart = row * BEATS_PER_ROW;
+    const segEnd = Math.min(end, rowStart + BEATS_PER_ROW);
+    segments.push({ key, row, localStart: cursor - rowStart, span: segEnd - cursor });
+    cursor = segEnd;
+  }
+  return segments;
+}
+
+/** Real-book "N.C." (No Chord) for every gap between two placements — mirrors
+ * BeatGridSheet.tsx's own gap handling so both views agree, though the shape
+ * differs to match each view's own convention: this shows once per gap (a
+ * continuous span, exactly how a real chord label spans its own duration here),
+ * not re-marked every bar the way BeatGridSheet's discrete per-bar cells need to
+ * keep announcing it. Leading/trailing silence (before the first or after the
+ * last chord) doesn't count — only space that's actually *between* two chords. */
+function ncSegmentsForGaps(placements: ChordPlacement[]): NcSegment[] {
+  const sorted = [...placements].sort((a, b) => a.startBeat - b.startBeat);
+  const segments: NcSegment[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const gapStart = sorted[i].startBeat + sorted[i].lengthBeats;
+    const gapEnd = sorted[i + 1].startBeat;
+    if (gapEnd > gapStart) {
+      segments.push(...ncSegmentsFor(`nc-${i}`, gapStart, gapEnd - gapStart));
+    }
   }
   return segments;
 }
@@ -215,8 +257,12 @@ export function ChordGrid({
   onRemoveMelodyNote,
   title,
   onTitleChange,
+  subtitle,
+  onSubtitleChange,
   author,
   onAuthorChange,
+  playStyle,
+  onPlayStyleChange,
   tempo,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -617,6 +663,17 @@ export function ChordGrid({
   const loopEndHomeRow = rowOf(Math.max(0, loopEnd - 1));
   const playheadRow = clamp(rowOf(playheadBeat), 0, ROWS - 1);
   const allSegments = placements.flatMap(segmentsFor);
+  const ncSegments = ncSegmentsForGaps(placements);
+
+  // Print only: rows past the last chord are hidden (see .chord-grid-row-group-
+  // print-tail's rule) rather than printing several pages of an empty staff. The
+  // on-screen editable grid is unaffected — this only ever adds a className that
+  // print CSS acts on. -1, not a smaller epsilon, for the same reason
+  // loopEndHomeRow above uses it: lengthBeats is never below MIN_LENGTH_BEATS (1),
+  // so it's always enough to land back on the placement's own row rather than the
+  // empty one right after it when a placement ends exactly on a row boundary.
+  const lastChordBeat = placements.reduce((max, p) => Math.max(max, p.startBeat + p.lengthBeats), 0);
+  const lastChordRow = placements.length > 0 ? rowOf(Math.max(0, lastChordBeat - 1)) : 0;
 
   return (
     <div className="chord-grid-wrapper">
@@ -627,8 +684,12 @@ export function ChordGrid({
         <SheetMusicHeader
           title={title}
           onTitleChange={onTitleChange}
+          subtitle={subtitle}
+          onSubtitleChange={onSubtitleChange}
           author={author}
           onAuthorChange={onAuthorChange}
+          playStyle={playStyle}
+          onPlayStyleChange={onPlayStyleChange}
           tempo={tempo}
           onClear={onClear}
         />
@@ -665,12 +726,16 @@ export function ChordGrid({
           const rowStart = row * BEATS_PER_ROW;
           const rowEnd = rowStart + BEATS_PER_ROW;
           const rowSegments = allSegments.filter((s) => s.row === row);
+          const rowNcSegments = ncSegments.filter((s) => s.row === row);
           const rowSections = sections.filter((s) => rowOf(s.startBeat) === row);
           const dimBefore = clamp(loopStart - rowStart, 0, BEATS_PER_ROW);
           const dimAfter = clamp(rowEnd - loopEnd, 0, BEATS_PER_ROW);
 
           return (
-            <div key={row} className="chord-grid-row-group">
+            <div
+              key={row}
+              className={`chord-grid-row-group${row > lastChordRow ? ' chord-grid-row-group-print-tail' : ''}`}
+            >
               <div className="section-strip" style={{ height: SECTION_HEIGHT }}>
                 {rowSections.map((section) => (
                   <div
@@ -937,6 +1002,19 @@ export function ChordGrid({
                     </div>
                   );
                 })}
+                {rowNcSegments.map((seg) => (
+                  <div
+                    key={seg.key}
+                    className="chord-label chord-label-nc"
+                    style={{
+                      left: `${(seg.localStart / BEATS_PER_ROW) * 100}%`,
+                      width: `${(seg.span / BEATS_PER_ROW) * 100}%`,
+                      height: CHORD_LABEL_HEIGHT,
+                    }}
+                  >
+                    <span className="chord-label-name">N.C.</span>
+                  </div>
+                ))}
               </div>
             </div>
           );

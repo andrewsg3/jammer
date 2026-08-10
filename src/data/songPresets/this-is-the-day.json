@@ -2,6 +2,7 @@
   "version": 1,
   "name": "This is the Day",
   "author": "The The",
+  "playStyle": "Rock",
   "key": "G",
   "scale": "major",
   "tempo": 142,

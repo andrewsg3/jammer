@@ -2,6 +2,7 @@
   "version": 1,
   "name": "Limehouse Blues",
   "author": "Django Reinhardt",
+  "playStyle": "Gypsy Jazz",
   "key": "G",
   "scale": "major",
   "tempo": 270,

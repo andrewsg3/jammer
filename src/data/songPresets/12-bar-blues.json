@@ -1,6 +1,7 @@
 {
   "version": 1,
   "name": "12 Bar Blues",
+  "playStyle": "Medium Shuffle",
   "key": "Bb",
   "scale": "major",
   "tempo": 140,

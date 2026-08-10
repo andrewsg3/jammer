@@ -113,7 +113,53 @@ real key-signature-aware spelling). Good enough to look like a real book at a gl
   not a scaled-down editor; building/editing a progression stays desktop-only, since the chord
   grid's drag/resize/select interactions don't translate to touch.
 - No real notation engraving (beaming, rhythm-accurate note shapes, key-aware enharmonic
-  spelling) — see "How melody notation works" above.
+  spelling) — see "How melody notation works" above. **Reconsidered for export specifically** —
+  see "VexFlow for printable/exported lead sheets" below.
+
+## VexFlow for printable/exported lead sheets (idea, not scoped)
+Revisits the "no real notation engraving" non-goal above, but scoped deliberately narrower than
+"replace the hand-rolled renderer" — the idea is a **printable/exportable** lead sheet, generated
+through VexFlow, sitting alongside the existing live editable grid rather than necessarily
+replacing it.
+
+**Why export is the natural scope, not the live view.** `ChordGrid.tsx`'s staff isn't just a
+picture of notation — it's the live editing surface for drag/resize/select/copy-paste on chord
+placements, a scrubbable playhead, a draggable loop range (rendered as repeat-barline glyphs), the
+section-marker overlay, and now the melody editor (`melodyEditMode`, see "In-browser MIDI editor"
+above) with click-to-place/drag-to-move notes directly on the rendered staff. VexFlow is an
+engraving library, not an interaction framework — it renders notation, it doesn't host drag
+gestures or click-to-edit on what it draws. Retrofitting all of that interactivity onto/into
+VexFlow-rendered output would be a substantial rework with real risk of regressing everything
+"Current shape" above describes as already working, for a payoff (nicer-looking *live* notation)
+this app hasn't actually been missing. A **separate, static/printable export path** sidesteps all
+of that: feed the same underlying data (`ChordPlacement[]`, `MelodyNote[]`, `SectionMarker[]`,
+key/scale) into VexFlow's own note/voice/formatter API to produce a real-engraved, non-interactive
+page — nothing about the live grid has to change at all.
+
+**What VexFlow would newly deliver that the hand-rolled renderer explicitly doesn't** (see "How
+melody notation works" above for why each was accepted as a trade-off, not an oversight): real
+beaming, rhythm-accurate note-duration shapes (today's renderer only ever draws a notehead at
+`startBeat`, never a length), and real key-signature-aware enharmonic spelling (today's
+`spellPitch` always spells a black key as "the natural below it, sharp," regardless of key —
+wrong in flat-heavy keys). All three are exactly the gaps "How melody notation works" lists as
+*accepted*, not fixable-later — an export path is where fixing them for real would actually
+belong, since export doesn't also need to stay live-editable the way the grid does.
+
+**Hybrid chord symbols, not VexFlow's own text/annotation API.** This app's chord-symbol rendering
+is a deliberate, already-documented choice — Architects Daughter specifically chosen over a plain
+default for legibility on dense symbols like "F#m7b5" (see "Fonts / notation rendering" above).
+The plan here is a hybrid: VexFlow owns the staff/clef/key-signature/noteheads/beaming, but this
+app's own chord-symbol layer (same font, same positioning logic) renders as an overlay on top of
+whatever coordinates VexFlow's formatter hands back for each measure/beat, the same way
+`staffLayout.ts` today shares one set of staff-geometry constants between `ChordGrid.tsx` and
+`SheetMusicHeader.tsx` so two independently-rendered staves still line up exactly — same idea,
+just reconciling this app's own layout math against VexFlow's instead of against itself.
+
+**Open question, not yet resolved:** whether "possibly the lead sheet view on desktop app" (as
+raised) means export-only, or eventually swapping the *live* view's rendering to VexFlow too once
+an export path proves the hybrid chord-symbol approach works. Given the interactivity risk above,
+export-first with the live grid untouched is the safer order either way — a live-view swap, if
+ever attempted, should come after, not alongside.
 
 ## How to run
 ```
@@ -182,6 +228,34 @@ Velocity is a per-trigger volume offset on the `Tone.Player`, not a native veloc
 envelope — fine for now; per-lane velocity-layered samples (soft/hard variants) would be the
 natural upgrade later, for any lane, not just Electronic.
 
+## Attributions & references
+Consolidates the credits that used to live scattered across each sample file's own comment
+(still there too — this is the one place to check all of them at a glance) plus non-code
+resources worth remembering why they're relevant. Also surfaced in-app via the desktop Settings
+modal's "Attributions" link (`components/AttributionsModal.tsx`) — that panel should stay in
+sync with this list, not drift into its own separate copy.
+
+**Samples:**
+- **Acoustic Piano** (`data/pianoSamples.ts`) — Salamander Grand Piano by Alexander Holm,
+  CC-BY 3.0 (http://freesound.org/people/sarulis/), specifically the pre-trimmed web-ready subset
+  Tone.js's own team cuts for their examples/@tonejs/piano
+  (https://github.com/Tonejs/audio/tree/master/salamander).
+- **Upright Bass pizzicato** (`data/bassSamples.ts`) — Freesound, uploaded by "mtg" (Music
+  Technology Group, Universitat Pompeu Fabra), Freesound IDs in the 354xxx range (the single
+  anchor sample already wired in, plus the fuller note-by-note set alongside it — see "Notes for
+  whoever's iterating" below for the current state of turning that into a real multisample).
+- **Electric Bass** (`data/bassSamples.ts`) — recorded directly, no external source to credit.
+- **Acoustic drum kit** (`data/drumSamples.ts`) — Ableton factory content; see "Sample-based drum
+  playback" above for the licensing gut-check this app applies before committing anything sourced
+  this way.
+
+**Fonts** (see "Fonts / notation rendering" above for how each is actually used): Architects
+Daughter and Noto Music, both via Google Fonts, both OFL-licensed.
+
+**Reference resources:**
+- https://standardrepertoire.com/pages/the-top-25-jazz-standards.html — referenced when picking/
+  verifying which jazz standards to bundle as bundled `data/songPresets/*.json` presets.
+
 ## In-browser MIDI editor (done, v1)
 Melody used to be import-only — no way to program a line by hand, only drop in a `.mid` file.
 `ChordGrid.tsx` now has an "Edit Melody" toggle (`melodyEditMode`, in the section toolbar next to
@@ -221,6 +295,46 @@ notehead at `startBeat`, never a length, before or after this).
 `App.tsx` mints a runtime one) — editing uses the note's index in the `melody` array as its
 identity for the duration of a drag/selection. Safe because nothing else mutates `melody`
 concurrently; would need real ids if that stopped being true (e.g. notes gained multi-select).
+
+**Considered next revision: a piano-roll editing surface, not click-on-staff (idea, not built).**
+V1's interaction model above edits notes directly on the rendered staff — click near a line/space
+to add a natural, Shift+click for a sharp, snapped to a fixed half-beat grid. The idea here is a
+different *editing* front-end entirely: a sideways piano-roll (pitch as a vertical keyboard —
+black/white key rows — time running horizontally, the standard DAW piano-roll layout) overlaid on
+a **customizable** rhythmic grid (1/8, 1/8 triplet, 1/16, 1/16 triplet — a real subdivision picker,
+not just finer straight-grid snapping), with the result translated into this app's existing
+approximate staff rendering as a separate display step rather than editing the staff directly.
+Worth noting because it would close several of v1's explicitly-cut gaps essentially for free:
+- **Note-duration/resize dragging** — the biggest one. A piano-roll block's width *is* its
+  duration; dragging its right edge to resize is the natural interaction there in a way it never
+  was for a notehead click on a staff. V1 has no story for this at all (`lengthBeats` today can
+  only change by delete-and-re-add).
+- **Triplet subdivisions** — `MELODY_SNAP_BEATS` today is a single fixed straight-grid value;
+  nothing in the current model has a notion of a triplet grid at all. A piano roll's grid is
+  already just a rendering choice independent of the underlying beat math, so swapping in a
+  triplet-spaced grid is mostly a rendering change, not a data-model one.
+- **Pitch entry without the natural+Shift dance** — a piano roll's vertical axis is one row per
+  semitone (with visual black/white key styling), so every pitch is directly clickable; the
+  current natural-then-Shift-for-sharp scheme exists specifically because a staff Y-position alone
+  only encodes a diatonic step, not an accidental (see `midiFromStaffSteps` in `data/melody.ts`) —
+  a problem a piano roll doesn't have in the first place.
+
+**What stays the same:** the underlying data model doesn't change at all — `MelodyNote` (`data/
+melody.ts`) is already decoupled from its rendering, so a piano roll would just be a second editing
+front-end producing the same `{startBeat, midi, lengthBeats, velocity}` shape v1 does, translated
+back into the existing (still deliberately approximate — see "How melody notation works" above)
+staff rendering as a read-only display step. The "not aiming to nail every engraving rule" non-goal
+there is unaffected either way — a piano roll makes *editing* more precise, it doesn't obligate the
+staff *display* to become rhythm-accurate engraving too (that's the separate, larger VexFlow idea
+below).
+
+**Possible connection to the per-section drum/bass/keys overlay idea above:** a piano-roll-plus-
+customizable-grid editor is close to the generic shape a hand-drawn bassline editor would also
+want (same pitch-vs-time grid, same drag-to-resize), and a drum lane editor is a structural cousin
+of it too (fixed named lanes instead of continuous pitch, same time grid). Not the same feature —
+melody is monophonic and chord-independent, drums/bass are polyphonic-lane and chord/section-aware
+— but if both get built, sharing the underlying grid/drag-resize interaction code is worth
+revisiting rather than building three independent editors from scratch.
 
 ## Drum fills into section starts (done)
 Every section marker (see `data/sections.ts`) gets a crash on its downbeat *and* a real lead-in
@@ -405,6 +519,125 @@ around chord changes). If this gets picked back up, the lick-bank approach
 above (real short phrases, not generated-from-scratch notes) is probably the
 one worth trying first — pure algorithmic generation is exactly the part that
 didn't hold up.
+
+**Considered and set aside: a trained model (chord progressions + transcribed solos) for solo
+generation.** Come up in conversation as an alternative to the lick-bank/algorithmic approach
+above. Real difference from everything else in this section: training a model on a corpus of
+paired chords+transcribed solos is actual machine learning, not "picks from pre-written phrases /
+picks notes algorithmically from a scale" — it runs straight into this file's "No AI/generative
+anything" non-goal (see above) rather than skirting it. Three separate problems, not just the
+principle of the thing:
+- **Training data licensing.** Transcribed jazz solos are near-universally derivative of
+  copyrighted recordings/compositions; a corpus large enough to train anything usable (something
+  like the Weimar Jazz Database exists for *research* use, not redistribution-in-a-portfolio-app
+  use) would need its own licensing gut-check, the same kind already done for sample audio (see
+  "Attributions & references" above) but harder — there's no equivalent of a commercial sample
+  pack's clear license terms for "solo transcriptions."
+- **No backend, but also no free lunch client-side.** Training itself would happen offline either
+  way (this app has no server to train on), but *inference* would need to ship a real model to the
+  browser — feasible in principle (ONNX Runtime Web / TensorFlow.js, small enough sequence model),
+  but a meaningfully different engineering surface from anything else here: a model file to bundle,
+  a runtime dependency, tokenization/detokenization glue between MIDI-ish note sequences and
+  whatever the model expects. Not a natural extension of `instrumentStyles.ts`'s rule-based
+  pattern engines the way the lick-bank idea is.
+- **Not actually needed for the stated goal.** The trading-fours feature's actual requirement is
+  "sounds like a plausible bot soloist," which the lick-bank + scale-constrained-generation plan
+  above is scoped to deliver without any of the above. A trained model would be a strictly bigger,
+  riskier bet for the same end-user outcome.
+
+Net: stays out of scope for the reasons "AI trading-fours" above already gives, just spelled out
+here since it's a materially different (and bigger) idea than the lick-bank one, not a restatement
+of it.
+
+**Chord progression analyzer (considered, looks genuinely buildable — not on the roadmap yet).**
+Distinct from every idea above in one important way: it's pure music theory / pattern-matching
+over data the app already has, not generative anything, so it doesn't touch the "No AI/generative
+anything" non-goal at all. The idea: label runs of chords with what they're functionally doing —
+- **ii-V-I / ii-V detection**: three (or two) consecutive chords whose roots step by a descending
+  4th (or ascending 5th) each time, with qualities consistent with ii (min7), V (dom7), I (maj7) in
+  some key — not necessarily the song's tonic key, since ii-V-I licks routinely target a
+  secondary key center.
+- **Cycle of fourths/fifths runs**: 3+ consecutive chords whose roots each move a P4/P5 from the
+  last, regardless of quality — a looser, purely-root-motion pattern than ii-V-I specifically.
+- **Functional/Roman-numeral labeling**: tonic/subdominant/dominant, or a scale-degree numeral,
+  relative to the song's key — much of the underlying math already exists, since the app already
+  stores/derives each chord's root as an offset from the key (the same offset math
+  `Chord.bass`/`ChordSelection`'s `bassOffset` already use for slash-bass notes — see "Chord grid"
+  in "Current shape" above) rather than an absolute note name.
+- **UI sketch**: most likely a small annotation layer above/below the affected chord blocks in
+  `ChordGrid.tsx` (bracket + label, e.g. "ii–V–I in Bb") rather than a separate panel — reads
+  closest to how real lead sheets sometimes get theory-teacher pencil annotations, and sits next
+  to the existing chord-scale-suggestions panel (`ChordPalette.tsx`) as a second, complementary
+  pedagogical feature rather than a competing one.
+
+Not yet scoped in detail (pattern-matching edge cases — overlapping matches, ambiguous key
+centers for a ii-V that could resolve to more than one key — are real design questions, not just
+implementation work), but no part of it conflicts with an existing non-goal or requires new
+runtime infrastructure the way the trained-model idea above does. Worth picking up as a genuine
+pedagogical feature alongside chord-scale suggestions/auditioning.
+
+## Per-section instrument arrangement + "[Track] mode" editing overlays (idea, not scoped)
+Three related asks bundled as one: (1) let drums/bass/keys vary by section instead of one style
+for the whole song, (2) let the user manually place content — pick a drum fill from a dropdown or
+draw one, hand-draw a bassline/comp — instead of only ever picking from the pattern library, (3) a
+consistent per-track editing overlay, skinned in that track's own color, for doing so. Splits into
+pieces of very different size:
+
+**1. Per-section style/pattern selection — the more foundational, more disruptive half.**
+`drumStyle`/`bassStyle`/`keysStyle` are single top-level song settings today (`App.tsx`), and
+`SectionMarker` (`data/sections.ts`) is explicit that it's "purely a visual/organizational aid:
+nothing in playback reads this array at all" — sections don't drive scheduling anywhere yet except
+the one exception carved out for fills (see below). Making drums/bass/keys vary by section means:
+- A place to store per-section overrides — a `Record<sectionId, { drumStyle?, bassStyle?,
+  keysStyle? }>`-shaped map is the natural fit, most likely living alongside the `sectionDefs`
+  from "Sections + arrangement in song presets" above, since that's already the shape that ties a
+  named section to its own self-contained content.
+- Every scheduling function (`scheduleDrums` in `audio/drums.ts` and its bass/keys equivalents)
+  currently schedules the *whole* timeline in one pass against one style. They'd need to become
+  section-aware, switching pattern source at each section boundary. There's real precedent for
+  "sections drive scheduling" — "Drum fills into section starts" already computes a per-section
+  window and schedules a separate `Tone.Part` against it — just not yet for the main groove
+  itself, which is still one continuous `Tone.Loop` with no concept of song position at all.
+
+**2. Hand-drawn/placed content, not just picked from the library — the more novel half.**
+- Drums: a crash + lead-in fill already happens automatically at every section start ("Drum fills
+  into section starts", done) — this idea asks for *manual* control over that instead: pick a fill
+  from a dropdown (of bundled `data/drumFills/*.mid`, the same library `data/drumFills.ts` already
+  loads) or, further out, draw one directly. Closest existing precedent for "draw one directly" is
+  the melody editor's click-to-place interaction model (see "In-browser MIDI editor" above), but on
+  a percussion grid instead of a staff — no pitch axis, one row per `DrumVoice` lane instead
+  (kick/snare/rim/hihat×3/ride/ride bell/crash/toms) — nothing like that grid shape exists in this
+  app yet.
+- Bass/keys: a bigger lift than drum fills, since existing bass/keys patterns are *rule-based*
+  (`BassRule`/`KeysRule` in `instrumentStyles.ts`) — chord-relative, re-evaluated live against
+  whatever chord is currently sounding, not a literal note list. A hand-drawn bassline would
+  produce something closer to a fixed melody line (`MelodyNote[]`-shaped, see `data/melody.ts`)
+  than another `BassRule`, meaning a hand-drawn section would need its own separate playback path
+  (a fixed-note scheduler like `audio/melody.ts`'s single `Tone.Synth`, not `audio/bass.ts`'s
+  chord-tracking one) coexisting with library-picked sections that still use the rule engine.
+
+**3. The overlay UI itself — genuinely the cheapest, most reusable part.** This app already has one
+precedent for "toggle a track into an edit mode that takes over the staff/grid": the melody editor
+(`ChordGrid.tsx`'s `melodyEditMode`). A drums/bass/keys equivalent would follow the same shape — a
+per-track toggle, its own edit surface, off by default so normal scrubbing/playback behavior is
+preserved, coexisting with the existing library-picker UI rather than replacing it (a section with
+no manual edits just keeps using its style pick, same as today). "Matches the colour of the
+instrument" is close to free: each track already has its own `--track-accent` custom property
+defined in `index.css` for its channel strip (drums `#e0803f`, bass `#3f8fe0`, keys/harmony
+`#9f5fe0`, melody `#4fb06d`) — an overlay for any of them could reuse that same value directly
+rather than picking new colors.
+
+**Genuinely open questions, not yet resolved:**
+- Whether per-section overrides fully replace "one style for the whole song" as the mental model,
+  or layer on top of it as an opt-in per section (probably the latter — least disruptive to every
+  existing song preset, which has no concept of this at all today).
+- Whether a hand-drawn bass/keys line should still make harmonic sense when a section repeats with
+  *different* chords (an arrangement repeating a section verbatim, per "Sections + arrangement"
+  above, is exactly the case where this bites) — a fixed note line, unlike the rule engines, has no
+  way to adapt to a different underlying chord the second time it plays.
+- Whether drums needs its own lane-grid editor built from scratch, or whether the dropdown-only
+  fill picker (much cheaper, reuses the existing bundled-fills library as-is) is enough on its own
+  to satisfy most of what this idea is actually after.
 
 ## Direction: what this app needs next
 Asked-and-answered product question, worth keeping around since it'll come up again. Given how

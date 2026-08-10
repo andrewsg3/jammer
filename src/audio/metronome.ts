@@ -1,18 +1,32 @@
 import * as Tone from 'tone';
 
 const output = new Tone.Volume(0).toDestination();
+// Count-in clicks get their own always-on output, deliberately not routed through
+// `output` above — a count-in is only useful if it's actually audible, so it can't
+// be silenced by the Metronome channel strip's own mute/volume the way the regular
+// click loop can.
+const countInOutput = new Tone.Volume(0).toDestination();
 
 let synth: Tone.MembraneSynth | null = null;
+let countInSynth: Tone.MembraneSynth | null = null;
 let loop: Tone.Loop | null = null;
 let beatCount = 0;
 
+const CLICK_SYNTH_OPTIONS = {
+  pitchDecay: 0.008,
+  octaves: 2,
+  envelope: { attack: 0.001, decay: 0.06, sustain: 0 },
+} as const;
+
 function ensureSynth() {
   if (!synth) {
-    synth = new Tone.MembraneSynth({
-      pitchDecay: 0.008,
-      octaves: 2,
-      envelope: { attack: 0.001, decay: 0.06, sustain: 0 },
-    }).connect(output);
+    synth = new Tone.MembraneSynth(CLICK_SYNTH_OPTIONS).connect(output);
+  }
+}
+
+function ensureCountInSynth() {
+  if (!countInSynth) {
+    countInSynth = new Tone.MembraneSynth(CLICK_SYNTH_OPTIONS).connect(countInOutput);
   }
 }
 
@@ -39,4 +53,21 @@ export function scheduleMetronome(): void {
 export function disposeMetronome(): void {
   loop?.dispose();
   loop = null;
+}
+
+/** Clicks leading into the downbeat, before the Transport itself has actually
+ * started — scheduled via Tone.now()-relative one-shots (same technique
+ * engine.ts's chord/scale auditions use), since the Transport-driven loop above
+ * has nothing to schedule against yet. Accents every 4th click the same way the
+ * real loop does, so a 2-bar count-in still reads as two bars, not just 8 clicks.
+ * Always audible (see countInOutput above) regardless of the Metronome track's
+ * own mute/volume — those only govern the click loop that runs during playback. */
+export function playCountIn(beats: number, bpm: number): void {
+  ensureCountInSynth();
+  const secondsPerBeat = 60 / bpm;
+  const now = Tone.now();
+  for (let i = 0; i < beats; i++) {
+    const isDownbeat = i % 4 === 0;
+    countInSynth!.triggerAttackRelease(isDownbeat ? 'C6' : 'C5', '32n', now + i * secondsPerBeat, isDownbeat ? 1 : 0.6);
+  }
 }

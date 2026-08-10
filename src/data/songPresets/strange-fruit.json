@@ -2,6 +2,7 @@
   "version": 1,
   "name": "Strange Fruit",
   "author": "Lewis Allan",
+  "playStyle": "Ballad",
   "key": "D",
   "scale": "minor",
   "tempo": 50,

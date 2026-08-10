@@ -2,12 +2,13 @@
   "version": 1,
   "name": "A Night in Tunisia",
   "author": "Dizzy Gillespie",
+  "playStyle": "Afro-Cuban",
   "key": "D",
   "scale": "minor",
-  "tempo": 128,
+  "tempo": 155,
   "metronome": false,
   "loopStart": 0,
-  "drumStyle": "Songo",
+  "drumStyle": "What'D I Say",
   "bassStyle": "Tunisia Vamp",
   "keysStyle": "Charleston",
   "chordsInstrument": "Acoustic Piano",
@@ -17,8 +18,8 @@
   "bassTimeFeel": "normal",
   "keysTimeFeel": "normal",
   "sections": [
-    { "label": "A", "startBeat": 0, "lengthBeats": 32 },
-    { "label": "B", "startBeat": 32, "lengthBeats": 32 }
+    { "label": "A", "startBeat": 0, "lengthBeats":  48 },
+    { "label": "B", "startBeat": 48, "lengthBeats": 32 }
   ],
   "placements": [
     { "selection": { "type": "chromatic", "offset": 1, "quality": "dom7sharp11" }, "lengthBeats": 4 },

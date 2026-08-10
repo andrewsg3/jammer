@@ -2,6 +2,7 @@
   "version": 1,
   "name": "Summertime",
   "author": "George Gershwin",
+  "playStyle": "Ballad",
   "key": "A",
   "scale": "minor",
   "tempo": 81,

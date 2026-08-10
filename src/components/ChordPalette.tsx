@@ -15,7 +15,7 @@ import {
 } from '../data/progressions';
 import type { Chord, ChordOption, ChordQuality, NotationStyle, ScaleName } from '../data/progressions';
 import { SCALE_SUGGESTIONS } from '../data/scaleSuggestions';
-import { EXOTIC_SCALE_GROUPS } from '../data/exoticScales';
+import { EXOTIC_SCALE_GROUPS, scaleDegreeLabels, scaleDegreeNoteNames } from '../data/exoticScales';
 
 // Same 12 chromatic roots as the main quality picker's row, for the "/bass" dropdown
 // — offsets, not absolute note names, so the picked bass note transposes correctly
@@ -175,6 +175,8 @@ function ExoticScaleModal({
   const [scaleName, setScaleName] = useState(ALL_EXOTIC_SCALES[0].name);
   const chord: Chord = { root, quality };
   const scale = ALL_EXOTIC_SCALES.find((s) => s.name === scaleName) ?? ALL_EXOTIC_SCALES[0];
+  const degreeLabels = scaleDegreeLabels(scale.intervals);
+  const degreeNoteNames = scaleDegreeNoteNames(scaleRoot, scale.intervals);
 
   return (
     <div className="exotic-scale-backdrop" role="dialog" aria-modal="true" aria-label="Audition any scale" onClick={onClose}>
@@ -242,6 +244,14 @@ function ExoticScaleModal({
                 </optgroup>
               ))}
             </select>
+          </div>
+          <div className="exotic-scale-degrees">
+            <div className="exotic-scale-degrees-row" aria-label={`Scale degrees: ${degreeLabels.join(', ')}`}>
+              {degreeLabels.join('-')}
+            </div>
+            <div className="exotic-scale-degrees-row" aria-label={`Notes: ${degreeNoteNames.join(', ')}`}>
+              {degreeNoteNames.join('-')}
+            </div>
           </div>
           <button
             type="button"

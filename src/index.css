@@ -176,7 +176,8 @@ body {
   gap: 4px;
 }
 
-.song-preset-file-controls-compact .song-preset-actions button {
+.song-preset-file-controls-compact .song-preset-actions button,
+.top-bar-icon-button {
   flex: 0 0 auto;
   width: 30px;
   padding: 6px 0;
@@ -219,7 +220,9 @@ body {
 }
 
 .top-bar-tempo-group input[type='number'] {
-  width: 72px;
+  /* Matches #top-bar-scale's width — reads as part of the same family of
+     compact picker controls (Key/Scale) instead of a narrower, mismatched box. */
+  width: 78px;
 }
 
 .top-bar-tempo-group span {
@@ -503,7 +506,7 @@ select option {
 }
 
 .channel-strip-mute {
-  width: 26px;
+  width: 34px;
   height: 22px;
   padding: 0;
   font-size: 11px;
@@ -741,6 +744,9 @@ button:hover {
   font-style: italic;
 }
 
+/* Solid, same look as every other button in the app (see the bare `button`
+   rule) rather than its own outlined pill — this one's just a trigger for the
+   exotic-scale modal, not a distinct control family that needs its own style. */
 .exotic-scale-open-button {
   align-self: flex-start;
   display: inline-flex;
@@ -749,25 +755,17 @@ button:hover {
   font: inherit;
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  padding: 6px 14px;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
   margin: 2px 0 10px;
   cursor: pointer;
-  transition:
-    background-color 0.12s ease,
-    color 0.12s ease,
-    transform 0.12s ease,
-    box-shadow 0.12s ease;
 }
 
 .exotic-scale-open-button:hover {
-  background: var(--accent);
-  color: var(--bg);
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px color-mix(in srgb, var(--accent) 25%, transparent);
+  opacity: 0.9;
 }
 
 .exotic-scale-backdrop {
@@ -865,6 +863,26 @@ button:hover {
   font-size: 16px;
   font-weight: 700;
   margin-left: auto;
+}
+
+/* The selected scale's own degree formula (top row, e.g. "1-2-b3-4-5-b6-b7")
+   and that formula's actual note names at the chosen scale root (bottom row,
+   e.g. "A-B-C-D-E-F-G") — monospace so same-length runs stay roughly aligned
+   between the two rows despite "b3"/"#4" being wider than a bare digit. */
+.exotic-scale-degrees {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+}
+
+.exotic-scale-degrees-row:first-child {
+  opacity: 0.6;
+}
+
+.exotic-scale-degrees-row:last-child {
+  font-weight: 600;
 }
 
 .exotic-scale-audition-button {
@@ -1046,12 +1064,42 @@ button:hover {
   z-index: 1;
 }
 
-.sheet-header-tempo {
+.sheet-header-tempo-block {
   position: absolute;
   left: 0;
   top: 50%;
-  transform: translateY(-50%);
+  /* translateY first, then rotate -- rotating around the un-shifted origin would
+     also swing the block off its vertically-centered position. Rotated around
+     its own left edge (not the default center) so it reads like a tempo marking
+     hand-scrawled starting from that point, real-book style, rather than
+     spinning in place. */
+  transform: translateY(10%) rotate(-20deg);
+  transform-origin: left center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sheet-header-tempo {
   font-size: 13px;
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* Real-book style marking (e.g. "Medium Swing", "Ballad") stacked above the
+   tempo — same spot fake books print it, and editable the same way title/author
+   are (see .sheet-title/.sheet-author's shared rule below, which this joins).
+   Deliberately NOT the title's cursive Architects Daughter (unlike title/author,
+   which inherit it) -- at any real song-title length that font renders "Medium
+   Swing" wide enough to visually collide with the centered title next to it. A
+   small plain serif, the way an actual fake book's style annotation looks
+   distinct from its hand-lettered title, is both more authentic and narrower. */
+.sheet-play-style {
+  align-self: center;
+  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
+  text-transform: uppercase;
+  font-size: 10px;
+  font-style: italic;
   white-space: nowrap;
 }
 
@@ -1063,6 +1111,9 @@ button:hover {
   padding-bottom: 4px;
   text-align: center;
   white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* Extends past the title text on both sides rather than hugging the letters —
@@ -1086,9 +1137,16 @@ button:hover {
 }
 
 .sheet-title,
+.sheet-subtitle,
 .sheet-author {
   font-family: inherit;
   text-transform: inherit;
+}
+
+.sheet-title,
+.sheet-subtitle,
+.sheet-author,
+.sheet-play-style {
   color: #1a1a1a;
   background: transparent;
   border: none;
@@ -1098,9 +1156,13 @@ button:hover {
 }
 
 .sheet-title:hover,
+.sheet-subtitle:hover,
 .sheet-author:hover,
+.sheet-play-style:hover,
 .sheet-title:focus,
-.sheet-author:focus {
+.sheet-subtitle:focus,
+.sheet-author:focus,
+.sheet-play-style:focus {
   background: rgba(0, 0, 0, 0.05);
   outline: none;
 }
@@ -1109,6 +1171,14 @@ button:hover {
   display: inline-block;
   font-size: 26px;
   font-weight: 400;
+}
+
+/* Real-book convention: a smaller line under the main title. */
+.sheet-subtitle {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.7;
 }
 
 .sheet-author {
@@ -1385,6 +1455,14 @@ button:hover {
   display: flex;
   align-items: flex-end;
   padding: 0 3px;
+  /* Without this, the 6px of horizontal padding above adds ON TOP OF the
+     percentage-based width instead of eating into it — every chord block ends up
+     rendered 6px wider than its own beat-span, overlapping that far into
+     whichever chord starts right after it (verified via getBoundingClientRect:
+     adjacent blocks' boxes overlapped by exactly 6px, matching this padding
+     exactly). That's what let a click meant for one chord's drag-body land on
+     the next chord instead. */
+  box-sizing: border-box;
   border-radius: 3px;
 }
 
@@ -1408,6 +1486,17 @@ button:hover {
   font-weight: 400;
 }
 
+/* Real-book "N.C." (No Chord) for a gap between placements — see
+   ncSegmentsForGaps in ChordGrid.tsx. Styled as a marking rather than a literal
+   chord (italic, dimmer), same treatment BeatGridSheet.tsx's own .beat-grid-
+   sheet-nc uses for the compact view's version of the same thing. Not
+   interactive (no chord-label-body/remove/resize) since there's no real
+   placement backing it. */
+.chord-label-nc {
+  font-style: italic;
+  opacity: 0.7;
+}
+
 /* Real-book engraving convention: everything past the triad-quality marker (7ths,
    9ths, alterations) sets smaller and raised, like a real book's superscript
    extensions — the quality marker itself (-, °, +, ^) stays full size next to the
@@ -1418,14 +1507,30 @@ button:hover {
   vertical-align: super;
 }
 
+/* Sits just outside the block's own top-right corner (not inside it, in normal
+   flex flow with the drag body) — a click meant to grab-drag a chord landing a
+   little high/right used to be able to land on this instead. Taking it out of
+   flow this way also gives .chord-label-body (flex:1) the block's full width to
+   itself, up to .resize-handle's own strip at the true right edge. */
 .chord-block-remove {
-  background: transparent;
-  border: none;
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fdfdfb;
+  border: 1px solid #ccc;
+  border-radius: 50%;
   color: #1a1a1a;
-  padding: 0 2px;
-  font-size: 13px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
   font-family: inherit;
   opacity: 0;
+  z-index: 2;
 }
 
 .chord-label:hover .chord-block-remove,
@@ -1692,18 +1797,37 @@ button:hover {
   opacity: 0.7;
 }
 
-/* Minimal beat-grid lead sheet: a chord's symbol sits in its first beat's cell,
-   the rest of its held duration is blank cells — same convention as a hand-written
-   chart. Deliberately not theme-aware, same reasoning as .chord-grid-page on
-   desktop: manuscript paper is white regardless of the app's own dark/light mode. */
-.mobile-player__paper {
-  flex: 1;
-  min-height: 0;
+.mobile-player__play-style {
+  font-size: 12px;
+  font-style: italic;
+  opacity: 0.6;
+}
+
+/* Minimal beat-grid lead sheet's "paper" background — a chord's symbol sits in its
+   first beat's cell, the rest of its held duration is blank cells, same convention
+   as a hand-written chart. Deliberately not theme-aware, same reasoning as
+   .chord-grid-page on desktop: manuscript paper is white regardless of the app's
+   own dark/light mode. Shared by mobile and desktop's "visualize like mobile"
+   toggle (see .beat-grid-sheet's own comment) — each still owns its outer layout
+   (flex sizing, margins) separately, since that's genuinely different between a
+   phone screen and a desktop panel. */
+.mobile-player__paper,
+.beat-grid-sheet-page {
   overflow-y: auto;
   background: #fdfdfb;
+  /* Matches .chord-grid-page's own explicit color — without it, any header text
+     without its own color (e.g. .sheet-header-tempo, which SheetMusicHeader now
+     also renders here in the desktop compact view) falls back to inheriting the
+     app's theme --text color instead of the manuscript paper's ink black. */
+  color: #1a1a1a;
   border-radius: 4px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   padding: 8px;
+}
+
+.mobile-player__paper {
+  flex: 1;
+  min-height: 0;
 }
 
 /* One grid for the whole chart, not a stack of independently-positioned row boxes
@@ -1714,30 +1838,62 @@ button:hover {
    border — row-gap below needs each strip fully self-contained, or the gap would
    just be a hole in an otherwise-continuous line. No per-beat vertical dividers —
    only the bar-end modifier below draws a line, so the only visible columns are
-   the actual bar boundaries. */
-.mobile-player__paper-grid {
+   the actual bar boundaries. Shared by MobilePlayer.tsx and desktop's "visualize
+   like mobile" toggle (ChordGrid.tsx) via BeatGridSheet.tsx — each wraps it in its
+   own "paper" background/scroll container (.mobile-player__paper on mobile,
+   .beat-grid-sheet-page on desktop), but the grid/cells themselves are one shared
+   component and CSS surface so the two never visually drift apart. */
+.beat-grid-sheet {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(16, 1fr);
   grid-auto-rows: 40px;
   row-gap: 6px;
 }
 
-.mobile-player__paper-cell {
+/* Section marker badge (e.g. "A") — a plain absolutely-positioned overlay, not a
+   real grid item (BeatGridSheet.tsx computes its pixel position from the same
+   row-height/gap this rule's siblings use), so it can sit right on a cell's
+   corner without claiming a column and distorting the auto-placed chord cells
+   the way an explicitly-grid-placed item would (see the ROW_HEIGHT_PX comment
+   in BeatGridSheet.tsx). Centered on that corner via the transform below, so it
+   reads as marking the point rather than occupying the cell. */
+.beat-grid-sheet-section {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a1a;
+  color: #fdfdfb;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.beat-grid-sheet-cell {
   position: relative;
   border-top: 1px solid #e2e2e2;
   border-bottom: 1px solid #e2e2e2;
 }
 
-.mobile-player__paper-cell--row-start {
+.beat-grid-sheet-cell--row-start {
   border-left: 1px solid #e2e2e2;
 }
 
 /* The only internal vertical divider — one per bar, not one per beat. */
-.mobile-player__paper-cell--bar-end {
+.beat-grid-sheet-cell--bar-end {
   border-right: 2px solid #999;
 }
 
-.mobile-player__paper-cell--active {
+.beat-grid-sheet-cell--active {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
@@ -1746,7 +1902,7 @@ button:hover {
    the font's own regular weight rather than faking bold: that font has no real
    bold weight of its own, and synthetic bold looks blurry on a handwriting-style
    face (see the font's own note up top). */
-.mobile-player__paper-repeat {
+.beat-grid-sheet-repeat {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1758,7 +1914,7 @@ button:hover {
   z-index: 1;
 }
 
-.mobile-player__paper-chord {
+.beat-grid-sheet-chord {
   position: absolute;
   left: 4px;
   top: 50%;
@@ -1768,6 +1924,15 @@ button:hover {
   font-size: 17px;
   color: #1a1a1a;
   z-index: 1;
+}
+
+/* "N.C." (No Chord) — real-book convention for a gap between placements, styled
+   as a marking rather than a literal chord (italic, slightly smaller) even
+   though it sits in the exact same spot a chord name would. */
+.beat-grid-sheet-nc {
+  font-style: italic;
+  font-size: 15px;
+  opacity: 0.75;
 }
 
 .mobile-player__controls {
@@ -1869,6 +2034,19 @@ button:hover {
   box-sizing: border-box;
   background: var(--bg);
   text-align: center;
+}
+
+/* The grid variant needs its chart to actually fill the available height and
+   scroll, not center/shrink to content like the countdown readout's compact
+   rows do. */
+.mobile-player__now-playing--grid {
+  align-items: stretch;
+}
+
+.mobile-player__now-playing-grid-chart {
+  flex: 1;
+  min-height: 0;
+  text-align: left;
 }
 
 /* Chord + its number sit side by side as one unit — current and next repeat the
@@ -2082,4 +2260,202 @@ button:hover {
 .mobile-player__settings-coffee-link:hover,
 .mobile-player__settings-coffee-link:focus-visible {
   filter: brightness(0.92);
+}
+
+/* Desktop's settings modal (SettingsModal.tsx) — same backdrop+panel pattern as
+   MobilePlayer's own .mobile-player__settings* above, kept as its own class
+   family rather than sharing those since the two hold different settings (no
+   volume sliders here — desktop's mixer already lives in the channel strips). */
+.settings-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.settings-modal {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.settings-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settings-modal-close {
+  font: inherit;
+  font-size: 16px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.settings-modal-subheading {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
+.settings-modal-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 30px;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.settings-modal-select {
+  grid-column: 2 / span 2;
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.settings-modal-color {
+  width: 100%;
+  height: 32px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.settings-modal-reset {
+  font-size: 16px;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 6px;
+}
+
+.settings-modal-attributions-link {
+  align-self: flex-start;
+  font-size: 12px;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.attributions-modal {
+  max-width: 420px;
+}
+
+.attributions-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attributions-list a {
+  color: var(--accent);
+}
+
+/* Printing/"Export as PDF" is just the browser's own print pipeline (window.print()
+   in TopBar.tsx) pointed at the sheet — no separate PDF renderer. Everything here
+   either hides editing-only chrome (palette, mixer, transport overlay, per-element
+   edit affordances) or undoes the app shell's on-screen scroll-pane sizing
+   (body/#root/.app/.layout/.layout-grid all constrain height + overflow so each
+   pane scrolls itself within the viewport — exactly what a printed page must NOT
+   do, or every row past the on-screen scroll position would silently vanish).
+   .chord-grid-page's own manuscript-paper styling (see its rule above) already
+   looks right on paper unchanged, dark mode or not. */
+@media print {
+  /* Staff lines, bar divisions, and the section-marker boxes are all drawn with
+     background-color/box-shadow (.staff-line, .staff-barline, etc.), not border —
+     and every browser strips background colors/shadows from printed output by
+     default (the "background graphics" print-dialog checkbox most people leave
+     off), silently dropping every line on the sheet. This forces them through
+     regardless of that setting. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .top-bar,
+  .layout-sidebar,
+  .channel-strip-column,
+  .loading-modal-backdrop,
+  .chord-grid-hint,
+  .section-toolbar,
+  .sheet-clear-button,
+  .section-marker-remove,
+  .chord-block-remove,
+  .resize-handle,
+  .playhead,
+  .playhead-flag,
+  .loop-handle,
+  .loop-dim,
+  .chord-grid-row-group-print-tail {
+    display: none !important;
+  }
+
+  html,
+  body,
+  #root,
+  .app,
+  .layout,
+  .layout-grid,
+  .chord-grid-page,
+  .chord-grid,
+  .sheet-header {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  .app {
+    max-width: none;
+    padding: 0;
+  }
+
+  .chord-grid-page {
+    border: none;
+    box-shadow: none;
+  }
 }
