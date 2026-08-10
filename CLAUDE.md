@@ -552,29 +552,88 @@ of it.
 **Chord progression analyzer (considered, looks genuinely buildable — not on the roadmap yet).**
 Distinct from every idea above in one important way: it's pure music theory / pattern-matching
 over data the app already has, not generative anything, so it doesn't touch the "No AI/generative
-anything" non-goal at all. The idea: label runs of chords with what they're functionally doing —
-- **ii-V-I / ii-V detection**: three (or two) consecutive chords whose roots step by a descending
-  4th (or ascending 5th) each time, with qualities consistent with ii (min7), V (dom7), I (maj7) in
-  some key — not necessarily the song's tonic key, since ii-V-I licks routinely target a
-  secondary key center.
-- **Cycle of fourths/fifths runs**: 3+ consecutive chords whose roots each move a P4/P5 from the
-  last, regardless of quality — a looser, purely-root-motion pattern than ii-V-I specifically.
-- **Functional/Roman-numeral labeling**: tonic/subdominant/dominant, or a scale-degree numeral,
-  relative to the song's key — much of the underlying math already exists, since the app already
-  stores/derives each chord's root as an offset from the key (the same offset math
-  `Chord.bass`/`ChordSelection`'s `bassOffset` already use for slash-bass notes — see "Chord grid"
-  in "Current shape" above) rather than an absolute note name.
-- **UI sketch**: most likely a small annotation layer above/below the affected chord blocks in
-  `ChordGrid.tsx` (bracket + label, e.g. "ii–V–I in Bb") rather than a separate panel — reads
-  closest to how real lead sheets sometimes get theory-teacher pencil annotations, and sits next
-  to the existing chord-scale-suggestions panel (`ChordPalette.tsx`) as a second, complementary
-  pedagogical feature rather than a competing one.
+anything" non-goal at all. Same UI shape either way — see "What harmony to detect" below for the
+actual catalog of patterns this would need to recognize, worked out in more detail than a first
+pass would need, on the theory that scoping the intelligence first is cheaper than re-deriving it
+mid-implementation.
 
-Not yet scoped in detail (pattern-matching edge cases — overlapping matches, ambiguous key
-centers for a ii-V that could resolve to more than one key — are real design questions, not just
-implementation work), but no part of it conflicts with an existing non-goal or requires new
-runtime infrastructure the way the trained-model idea above does. Worth picking up as a genuine
-pedagogical feature alongside chord-scale suggestions/auditioning.
+## Chord progression analyzer: what harmony to detect (design doc, not built yet)
+The detector's real math is already half-available: every chord's root is stored as an offset
+from the song's key (the same offset math `Chord.bass`/`ChordSelection`'s `bassOffset` already use
+for slash-bass notes — see "Chord grid" in "Current shape" above), not an absolute note name, so
+"is this root a fourth above the last one" or "what scale degree is this" is modular arithmetic on
+numbers the app already has, not new data modeling. What's not built yet is the actual pattern
+catalog — this section is that catalog, ordered from "always on" to "speculative stretch goal."
+
+**Layer 0 — functional labeling (always computed, the foundation everything else sits on).**
+Every chord gets a tonic/subdominant/dominant bucket (or a scale-degree Roman numeral) purely from
+its own root's offset from the song's key — I/iii/vi read as tonic, ii/IV as subdominant, V/vii°
+as dominant. This doesn't require any relationship to neighboring chords at all, unlike every
+pattern below it, so it's the one thing that can always render even when nothing else matches.
+
+**Layer 1 — cadential patterns (root motion + quality, the main event):**
+- **ii-V-I (major)**: three consecutive chords, root motion descending a P4 (or ascending P5)
+  twice, qualities min7 → dom7 → maj7/maj6. The canonical jazz cell — this is the pattern the
+  whole feature exists for.
+- **ii-V-i (minor)**: the minor-key cousin, and a genuinely separate check, not a quality-relaxed
+  version of the major one — misreading a real minor ii-V-i as an incomplete major ii-V would be
+  actively wrong, not just less precise. Same root motion, qualities min7b5 ("ii°") → dom7 →
+  min7/min(maj7). Real jazz theory usually wants the V altered (b9/#9/#5) here — this app's chord
+  model only has a plain `dom7` quality (see "Chord-scale suggestions" above for the same
+  constraint already accepted elsewhere), so there's nothing to special-case: every dominant in
+  this app already reads as the generic case altered dominants would specialize from.
+- **Secondary dominants (V7/x)**: any dom7 chord whose root sits a P5 above (P4 below) the
+  *next* chord's root, where that next chord ISN'T the song's actual tonic — e.g. in C major, an
+  A7 resolving to Dmin7 is "V7/ii." Looser than ii-V-I: no preceding min7 required, just the
+  dominant-to-target root relationship. Very common in real jazz charts, and a natural superset
+  check to run wherever ii-V-I didn't already claim a match.
+- **Tritone substitution**: a dom7 chord resolving *down a half-step* into its target instead of
+  down a fourth (e.g. Db7 → Cmaj7 standing in for G7 → Cmaj7). Distinct, easy-to-detect root-motion
+  signature (half-step resolution into the target) rather than a variant of the fourth-motion
+  checks above — worth its own pass.
+- **Backdoor ii-V (bIII-min7 → bVII7 → I)**: e.g. in C, Ebmin7 - Ab7 - Cmaj7. A real, idiomatic
+  jazz cadence, but a bigger lift than the others — flagged as a stretch item within Layer 1, not
+  core to a first pass.
+
+**Layer 2 — root-motion-only, quality-agnostic (the loosest, most permissive check):**
+- **Cycle of fourths/fifths runs**: 3+ consecutive chords whose roots each move a P4/P5 from the
+  last, regardless of quality (classic example: "Autumn Leaves"' A section). This overlaps
+  constantly with Layer 1 — a ii-V-I *is* a 3-chord cycle-of-fourths fragment with specific
+  qualities layered on — so it only fires on a span Layer 1 didn't already claim (see precedence
+  below), rather than double-labeling the same three chords two ways.
+
+**Layer 3 — structural/positional, not just chord-to-chord (stretch, needs section data):**
+- **Turnarounds** (I-vi-ii-V and its many substitution variants): recognizable less by local root
+  motion and more by *where* they sit — short (~2 bar), near-tonic-to-V, right before a section
+  repeat or ending. Needs `SectionMarker`/arrangement position info as an input, not just the
+  chord list, unlike everything above — a meaningfully different kind of check, not just another
+  entry in the same pattern table.
+- **Modal interchange / borrowed chords** (stretch): a chord whose quality doesn't match what the
+  song's own diatonic scale degree "should" produce, but does match the parallel minor/major's
+  equivalent (e.g. a borrowed Fmin7 in C major). This app's `ScaleName` has no harmonic/melodic
+  minor modeled at all (same gap `SCALE_SUGGESTIONS`' empty-array handling already accepts) — this
+  would need its own small parallel-mode quality lookup table rather than reusing anything that
+  exists today.
+
+**Precedence, since these overlap heavily by design:** try Layer 1's most-specific checks first
+(ii-V-I/ii-V-i, then tritone sub/backdoor, then secondary dominants for whatever's left), and only
+fall back to Layer 2's generic cycle label for a root-motion run nothing more specific already
+explained. Layer 0's functional label always renders regardless — it's a property of each chord,
+not a competing match for a span. Layer 3 checks run independently and can legitimately overlap
+Layer 1/2 labels (a turnaround is *built from* ii-V-I/cycle pieces, so both labels being present at
+once is correct, not a bug).
+
+**Still genuinely unresolved, same open questions as before:** ambiguous key centers (a ii-V can
+plausibly resolve to more than one key, and picking a "best" one per window rather than always
+assuming the song's overall key is the real implementation work here, not the root-motion math
+itself), and how aggressively Layer 2's loose cycle check should fire before it starts feeling
+like noise rather than insight.
+
+**UI sketch (unchanged from the original idea):** a small annotation layer above/below the
+affected chord blocks in `ChordGrid.tsx` (bracket + label, e.g. "ii–V–I in Bb") rather than a
+separate panel — reads closest to how real lead sheets sometimes get theory-teacher pencil
+annotations, and sits next to the existing chord-scale-suggestions panel (`ChordPalette.tsx`) as a
+second, complementary pedagogical feature rather than a competing one.
 
 ## Per-section instrument arrangement + "[Track] mode" editing overlays (idea, not scoped)
 Three related asks bundled as one: (1) let drums/bass/keys vary by section instead of one style

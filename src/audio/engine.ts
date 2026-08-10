@@ -62,6 +62,7 @@ import {
   setVolume as setMelodyOutputVolume,
   setMuted as setMelodyOutputMuted,
 } from './melody';
+import { acquireWakeLock, releaseWakeLock } from './wakeLock';
 
 const AUDITION_OCTAVE = 4;
 // Always Acoustic Piano, independent of whatever instrument the Harmony track
@@ -303,6 +304,9 @@ export function setDrumsInstrument(name: string): void {
 export async function play(params: PlaybackParams): Promise<void> {
   await Tone.start();
   stop();
+  // Fire-and-forget — acquireWakeLock() swallows its own rejections, and
+  // playback shouldn't wait on it either way.
+  void acquireWakeLock();
   setTempo(params.tempo);
 
   Tone.Transport.loop = true;
@@ -350,6 +354,7 @@ export function stop(): void {
   disposeKeys();
   disposeMelody();
   disposeMetronome();
+  releaseWakeLock();
 }
 
 const autoStopListeners = new Set<() => void>();
