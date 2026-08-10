@@ -16,6 +16,7 @@ import { loadBundledDrumStyles } from '../data/drumLibrary';
 import { loadBundledBassStyles } from '../data/bassLibrary';
 import type { SectionMarker } from '../data/sections';
 import { bundledSongPresets, resolveLoopRange, resolveSongPreset, type SongPreset } from '../data/songPresets';
+import { APP_TITLE } from '../appInfo';
 import {
   getCurrentBeat,
   isBassInstrumentLoaded,
@@ -411,7 +412,7 @@ export function MobilePlayer() {
   return (
     <div className="mobile-player">
       <div className="mobile-player__topbar">
-        <h1 className="app-title">JazzMate v0.1</h1>
+        <h1 className="app-title">{APP_TITLE}</h1>
         <button
           className="mobile-player__settings-button"
           onClick={() => setSettingsOpen(true)}

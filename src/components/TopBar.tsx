@@ -3,6 +3,7 @@ import { SCALE_NAMES, SCALE_LABELS } from '../data/progressions';
 import type { ScaleName } from '../data/progressions';
 import type { SongPreset } from '../data/songPresets';
 import { SongPresetFileControls } from './SongPresetFileControls';
+import { APP_TITLE } from '../appInfo';
 
 const MIN_TEMPO = 40;
 const MAX_TEMPO = 220;
@@ -80,7 +81,7 @@ export function TopBar({
     <header className="top-bar">
       <div className="top-bar-inner">
         <div className="top-bar-brand">
-          <h1 className="app-title">JazzMate v0.1</h1>
+          <h1 className="app-title">{APP_TITLE}</h1>
           <a
             href="https://www.buymeacoffee.com/andrewsg"
             target="_blank"
