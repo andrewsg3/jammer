@@ -229,6 +229,53 @@ function voicingNotes(chord: Chord, voicing: KeysRule['voicing']): string[] {
   }
 }
 
+/**
+ * Shared engine behind 'virtual-insanity' and 'my-favorite-things': root alone
+ * on beat 1, the full chord on the "and" of 1 (at `chordSwing` through the
+ * beat), then the root again on the "and" of the cycle's last beat (at
+ * `rootSwing` through its beat) -- a syncopated pickup leading into the next
+ * cycle's downbeat rather than a different pitch. Cycles every `beatsPerCycle`
+ * beats, not the whole placement -- same floor-of-1 reasoning as charleston/
+ * rising-sun. `beatsPerCycle` exists because this app's grid/rhythm engines are
+ * 4/4-only throughout (see CLAUDE.md) -- 'my-favorite-things' is actually a 3/4
+ * waltz, so it uses 3 here to get a real 3-beat comping cycle out of a chart
+ * that's still, mechanically, a 4/4 grid underneath. The two styles share this
+ * exact shape and differ in cycle length and how far behind the beat the chord
+ * stab sits (see each style's own KeysRule comment for its specific ratios).
+ */
+function playRootChordRootFigure(
+  event: KeysEvent,
+  time: number,
+  factor: number,
+  chordSwing: number,
+  rootSwing: number,
+  beatsPerCycle: number = 4,
+): void {
+  const root = event.notes[0];
+  const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
+  let hasPlayed = false;
+  for (let barStart = 0; barStart < virtualLength; barStart += beatsPerCycle) {
+    const rootTime1 = time + Tone.Time(offsetTime(barStart / factor)).toSeconds();
+    if (hasPlayed) synth!.triggerRelease(root, rootTime1);
+    synth!.triggerAttackRelease(root, '8n', rootTime1, 0.7);
+    hasPlayed = true;
+
+    const chordBeat = barStart + chordSwing;
+    if (chordBeat < virtualLength) {
+      const chordTime = time + Tone.Time(offsetTime(chordBeat / factor)).toSeconds();
+      synth!.triggerRelease(root, chordTime);
+      synth!.triggerAttackRelease(event.notes, '2n', chordTime, 0.6);
+    }
+
+    const rootBeat2 = barStart + (beatsPerCycle - 1) + rootSwing;
+    if (rootBeat2 < virtualLength) {
+      const rootTime2 = time + Tone.Time(offsetTime(rootBeat2 / factor)).toSeconds();
+      synth!.triggerRelease(event.notes, rootTime2);
+      synth!.triggerAttackRelease(root, '8n', rootTime2, 0.65);
+    }
+  }
+}
+
 export function scheduleKeys(
   placements: ChordPlacement[],
   key: string,
@@ -304,45 +351,27 @@ export function scheduleKeys(
         }
       }
     } else if (event.rhythm === 'virtual-insanity') {
-      // Syncopated funk/soul comping figure ("Virtual Insanity" / "My Favorite
-      // Things"-style): the root alone on beat 1, the full chord on the "and" of
-      // 1, then the root again on the "and" of 4 -- a syncopated pickup that
-      // leads into the next bar's downbeat rather than a different pitch. Cycles
-      // every 4 beats, not the whole placement -- same floor-of-1 reasoning as
-      // charleston/rising-sun above.
-      //
-      // Heavily swung, but not both "and" hits the same amount, and not the
-      // same triplet subdivision either: the chord's entrance on 1& sits on the
-      // *first* triplet partial (1/3 through the beat) rather than the second
-      // (2/3, the usual swung-8th/shuffle position blues-shuffle-swing uses
-      // elsewhere in this file) -- a full triplet earlier than plain swing would
-      // place it. The pickup root on 4& stays on the later 3/4 (a dotted-eighth
-      // feel, not a triplet position at all) leaning hard into the next downbeat.
-      const CHORD_SWING = 1 / 3;
-      const ROOT_SWING = 3 / 4;
-      const root = event.notes[0];
-      const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
-      let hasPlayed = false;
-      for (let barStart = 0; barStart < virtualLength; barStart += 4) {
-        const rootTime1 = time + Tone.Time(offsetTime(barStart / factor)).toSeconds();
-        if (hasPlayed) synth!.triggerRelease(root, rootTime1);
-        synth!.triggerAttackRelease(root, '8n', rootTime1, 0.7);
-        hasPlayed = true;
-
-        const chordBeat = barStart + CHORD_SWING;
-        if (chordBeat < virtualLength) {
-          const chordTime = time + Tone.Time(offsetTime(chordBeat / factor)).toSeconds();
-          synth!.triggerRelease(root, chordTime);
-          synth!.triggerAttackRelease(event.notes, '2n', chordTime, 0.6);
-        }
-
-        const rootBeat2 = barStart + 3 + ROOT_SWING;
-        if (rootBeat2 < virtualLength) {
-          const rootTime2 = time + Tone.Time(offsetTime(rootBeat2 / factor)).toSeconds();
-          synth!.triggerRelease(event.notes, rootTime2);
-          synth!.triggerAttackRelease(root, '8n', rootTime2, 0.65);
-        }
-      }
+      // The chord's entrance on 1& sits on the *first* triplet partial (1/3
+      // through the beat) rather than the second (2/3, the usual swung-8th/
+      // shuffle position blues-shuffle-swing uses elsewhere in this file) -- a
+      // full triplet earlier than plain swing would place it, at the user's
+      // request after hearing the plain-swing version land too late. The
+      // pickup root on 4& sits on the later 3/4 (a dotted-eighth feel, not a
+      // triplet position at all), leaning hard into the next downbeat.
+      playRootChordRootFigure(event, time, factor, 1 / 3, 3 / 4);
+    } else if (event.rhythm === 'my-favorite-things') {
+      // Same root-chord-(pickup)root shape as virtual-insanity above (they're
+      // often grouped together as the same idiom), and *not* pulled forward the
+      // same way the way virtual-insanity's chord stab is -- both the chord and
+      // the pickup root sit at the same heavier 3/4 position, the version that
+      // existed before virtual-insanity's chord got moved earlier to the first
+      // triplet partial. Genuinely 3/4 time (a waltz), not 4/4 like every other
+      // keys style here -- since this app's grid/rhythm engines don't have real
+      // meter support (see CLAUDE.md), this fakes it the cheap way: a 3-beat
+      // cycle (beatsPerCycle) instead of 4, so the pickup root lands on the
+      // "and" of beat 3 (the cycle's actual last beat) rather than a
+      // nonexistent beat 4. The chart itself still renders/counts in 4/4.
+      playRootChordRootFigure(event, time, factor, 3 / 4, 3 / 4, 3);
     } else if (event.rhythm === 'arpeggio-up' || event.rhythm === 'arpeggio-updown') {
       // 'up' just cycles the voicing tones; 'updown' bounces back down before
       // repeating (root-3rd-5th-7th-5th-3rd-...), a classic broken-chord roll.
