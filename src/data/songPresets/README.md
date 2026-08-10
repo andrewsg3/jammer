@@ -175,6 +175,22 @@ semitones above the tonic, `0`-`11`:
 |               |          | `m11`        | m11     |
 |               |          | `maj13`      | maj13   |
 
+### Slash chords (a chord over a different bass note)
+
+Only `chromatic` selections can carry a slash bass — add `bassOffset`, semitones
+above the tonic, the same convention `offset` already uses:
+
+```json
+{ "type": "chromatic", "offset": 2, "quality": "dom7", "bassOffset": 6 }
+```
+
+In the key of C, that's "D7/F#" (root D = offset 2, bass F# = offset 6). Since
+both are offsets from the key rather than absolute note names, the whole chord —
+root, quality, *and* bass — transposes correctly if you change the preset's `key`
+later. Only the bass note changes: the chord's real 3rd/5th/7th still come from
+`offset`/`quality` as normal, `bassOffset` just swaps out the bottom note (the
+root is still "there" harmonically, just not on the bottom).
+
 ## Styles (`drumStyle`, `bassStyle`, `keysStyle`)
 
 These are **names**, matched exactly against the currently-loaded style list — check

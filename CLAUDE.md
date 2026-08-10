@@ -435,6 +435,18 @@ The actual mechanism (`data/songPresets.ts`):
 No bundled presets have been manually migrated to the new shape — they'll pick it up naturally
 the next time each is re-saved through the app.
 
+**Idea, not scoped: playback that respects the arrangement's own structure.** Right now looping
+is just a flat `loopStart`/`loopEnd` beat range over the resolved timeline — playing, say,
+"Intro A A B A Coda" always loops whatever beat range you've set, with no awareness that "Intro"
+and "Coda" are one-shot sections and "A"/"B" are the part actually meant to vamp/repeat. The
+natural extension: let playback loop *by arrangement position* rather than by beat range — play
+the head/intro through once, then loop just the "AB"-shaped body indefinitely (or however the
+arrangement is actually meant to be played live), rather than requiring the user to hand-compute
+the right beat numbers for `loopStart`/`loopEnd` every time. Would need a real UI/data decision
+(which arrangement entries are "the loop," and where playback resumes to when it wraps) — not
+attempted yet, just worth keeping in mind given how naturally it follows from sections+arrangement
+existing at all.
+
 ## Chord-scale suggestions and auditioning (done); AI trading-fours (planned)
 
 Three related practice-aid ideas. The first two are done; the third is a much
@@ -570,6 +582,24 @@ anything" non-goal at all. Same UI shape either way — see "What harmony to det
 actual catalog of patterns this would need to recognize, worked out in more detail than a first
 pass would need, on the theory that scoping the intelligence first is cheaper than re-deriving it
 mid-implementation.
+
+## Guitar fingering diagrams (CAGED system) (idea, not scoped)
+Another practice-aid idea in the same family as chord-scale suggestions/auditioning above:
+clicking a chord (in the palette, or once placed on the grid) shows how to actually play it on
+guitar, as a set of fretboard diagrams in the CAGED system — the standard way a chord's shape
+maps to five movable positions up the neck, each named for the open-position chord shape (C, A,
+G, E, D) it's derived from. Same "click a chord, see something useful about it" interaction shape
+`ChordPalette.tsx`'s `selectedChord` state already drives for scale suggestions — this would be a
+sibling panel/modal, not a new interaction pattern.
+
+Real scoping questions, not yet worked out: fingering-diagram data would need to exist for every
+root × quality combination this app supports (`CHORD_QUALITIES` is already a 29-member union) —
+either a real fretboard-shape generator (find valid fingerings algorithmically from the chord's
+actual tones + CAGED shape rules) or a curated lookup table, and a generator is the only approach
+that doesn't need hand-authoring dozens of shapes per quality. Rendering itself is a new visual
+component this app doesn't have anything like yet (a small fretboard grid with fret/string dots
+and open/muted-string markers) — closer to the in-browser MIDI editor's "new 2D surface" category
+than to the chord-scale suggestion panel's plain buttons/text. Not scoped further than this.
 
 ## Chord progression analyzer: what harmony to detect (design doc, not built yet)
 The detector's real math is already half-available: every chord's root is stored as an offset
