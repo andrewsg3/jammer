@@ -115,6 +115,14 @@ real key-signature-aware spelling). Good enough to look like a real book at a gl
 - No real notation engraving (beaming, rhythm-accurate note shapes, key-aware enharmonic
   spelling) — see "How melody notation works" above. **Reconsidered for export specifically** —
   see "VexFlow for printable/exported lead sheets" below.
+- **4/4 only — no real time-signature support.** `BEATS_PER_BAR`/`STEPS_PER_BAR`-style constants
+  are load-bearing in at least 8 places (`ChordGrid.tsx`'s bar/beat grid and staff barlines, the
+  hardcoded "4/4" glyph in `SheetMusicHeader.tsx`, the drum/bass/keys pattern-generation engines,
+  MIDI import step math) — not one easily-changed constant. Real support would be its own scoped
+  effort, comparable to the MIDI editor or sections+arrangement work. A cheap fake for a genuinely
+  3/4 tune ("My Favorite Things") — keep the chart in the 4/4 grid, but cycle one rhythm engine's
+  own pattern in 3 beats instead of 4 — was tried and abandoned (didn't work, not narrowed down
+  further); the keys style for that song was pulled back out rather than left half-working.
 
 ## VexFlow for printable/exported lead sheets (idea, not scoped)
 Revisits the "no real notation engraving" non-goal above, but scoped deliberately narrower than
