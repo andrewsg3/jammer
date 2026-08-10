@@ -303,6 +303,34 @@ export function scheduleKeys(
           synth!.triggerAttackRelease(event.notes, '16n', hitTime2, 0.55);
         }
       }
+    } else if (event.rhythm === 'virtual-insanity') {
+      // Syncopated funk/soul comping figure ("Virtual Insanity" / "My Favorite
+      // Things"-style): the root alone on beat 1, the full chord on the "and" of
+      // 1, then the root again on the "and" of 4 -- a syncopated pickup that
+      // leads into the next bar's downbeat rather than a different pitch. Cycles
+      // every 4 beats, not the whole placement -- same floor-of-1 reasoning as
+      // charleston/rising-sun above.
+      const root = event.notes[0];
+      const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
+      let hasPlayed = false;
+      for (let barStart = 0; barStart < virtualLength; barStart += 4) {
+        const rootTime1 = time + Tone.Time(offsetTime(barStart / factor)).toSeconds();
+        if (hasPlayed) synth!.triggerRelease(root, rootTime1);
+        synth!.triggerAttackRelease(root, '8n', rootTime1, 0.7);
+        hasPlayed = true;
+
+        if (barStart + 0.5 < virtualLength) {
+          const chordTime = time + Tone.Time(offsetTime((barStart + 0.5) / factor)).toSeconds();
+          synth!.triggerRelease(root, chordTime);
+          synth!.triggerAttackRelease(event.notes, '2n', chordTime, 0.6);
+        }
+
+        if (barStart + 3.5 < virtualLength) {
+          const rootTime2 = time + Tone.Time(offsetTime((barStart + 3.5) / factor)).toSeconds();
+          synth!.triggerRelease(event.notes, rootTime2);
+          synth!.triggerAttackRelease(root, '8n', rootTime2, 0.65);
+        }
+      }
     } else if (event.rhythm === 'arpeggio-up' || event.rhythm === 'arpeggio-updown') {
       // 'up' just cycles the voicing tones; 'updown' bounces back down before
       // repeating (root-3rd-5th-7th-5th-3rd-...), a classic broken-chord roll.

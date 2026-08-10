@@ -85,6 +85,7 @@ export type KeysRule = {
     | 'arpeggio-up'
     | 'arpeggio-updown'
     | 'rising-sun'
+    | 'virtual-insanity'
     | 'bossa-nova'
     | 'bossa-nova-2'
     | 'blues-shuffle'
@@ -143,6 +144,7 @@ export const keysStyles: KeysStyle[] = [
   { name: 'Bossa Nova 2', rule: { voicing: 'seventh', rhythm: 'bossa-nova-2' } },
   { name: 'Blues Shuffle', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle' } },
   { name: 'Blues Shuffle (Swing)', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle-swing' } },
+  { name: 'Virtual Insanity', rule: { voicing: 'seventh', rhythm: 'virtual-insanity' } },
 ];
 
 // Instrument/timbre variants — an axis independent of the rhythmic style above.
