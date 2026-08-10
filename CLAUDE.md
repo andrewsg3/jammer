@@ -244,7 +244,8 @@ sync with this list, not drift into its own separate copy.
   Technology Group, Universitat Pompeu Fabra), Freesound IDs in the 354xxx range. The real
   note-by-note multisample (`UPRIGHT_MULTISAMPLE_URLS`) is what's actually wired up now; the
   original single-anchor sample (`UPRIGHT_SAMPLE_URLS`) stays exported as a fallback — see
-  bass.ts's `buildSynth()` for the still-open per-file transient-trim caveat.
+  bass.ts's `buildSynth()` — the 11 notes with genuinely audible leading silence
+  have since had it trimmed (an automated onset-detection pass, not by ear yet).
 - **Electric Bass** (`data/bassSamples.ts`) — recorded directly, no external source to credit.
 - **Acoustic Guitar** (`data/guitarSamples.ts`) — Freesound, uploaded by "harri", IDs 13699-13711.
   **License not yet verified/recorded here** — added and wired up without the licensing gut-check

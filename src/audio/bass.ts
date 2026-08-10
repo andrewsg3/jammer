@@ -69,17 +69,18 @@ let part: Tone.Part<BassEvent> | null = null;
 // every buffer's front before handing it to Tone.Sampler) and reverted — the
 // actual pre-transient silence varies file to file, so one flat cut either left
 // some notes with residual latency or clipped into others' real attack,
-// audible as a wrong-sounding pluck either way. Fixing each file's own
-// transient by ear (Ableton) is the real fix; this just plays whatever's in
-// data/bassSamples.ts as-is, same as every other sampled instrument here.
+// audible as a wrong-sounding pluck either way.
 //
 // Upright now wired to the real per-note UPRIGHT_MULTISAMPLE_URLS instead of the
 // single-anchor UPRIGHT_SAMPLE_URLS it used to fall back to — see
-// bassSamples.ts's own comment on UPRIGHT_MULTISAMPLE_URLS. The per-file
-// pre-transient-silence trim mentioned above still hasn't been done for this
-// set specifically, so some notes may have a touch of extra latency/mush on
-// their attack until that's addressed by ear — worth a listen across the range
-// before calling this fully done.
+// bassSamples.ts's own comment on UPRIGHT_MULTISAMPLE_URLS. The per-file trim
+// this comment used to say was still outstanding is now done, but by an
+// automated onset-detection pass (first sample crossing 5% of each file's own
+// peak, cut a little before that at the nearest near-silent sample) rather than
+// by ear in Ableton — every note that had genuinely audible leading silence
+// (11 of the 40 in use, up to 126ms on the worst one) now has well under 21ms.
+// Not yet confirmed by ear against the actual recordings, just verified
+// objectively — worth a listen across the range before calling this fully done.
 function buildSynth(): Tone.MonoSynth | Tone.PluckSynth | Tone.Sampler {
   // Checked by key count, not a specific hardcoded note like "C2"/"G#2" — which
   // note ends up as the anchor depends entirely on whatever data/bassSamples.ts
