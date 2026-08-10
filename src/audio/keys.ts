@@ -311,13 +311,13 @@ export function scheduleKeys(
       // every 4 beats, not the whole placement -- same floor-of-1 reasoning as
       // charleston/rising-sun above.
       //
-      // Heavily swung: both "and" hits land at 3/4 through their beat rather than
-      // the exact midpoint -- noticeably further back than blues-shuffle-swing's
-      // plain triplet swing (2/3) elsewhere in this file, closer to a dotted-
-      // eighth feel. The real "Virtual Insanity"/"My Favorite Things" comping
-      // figure this is modeled on leans hard behind the beat; a straight or
-      // lightly-swung 0.5 read as too square for it.
-      const HEAVY_SWING = 3 / 4;
+      // Heavily swung, but not both "and" hits the same amount: the chord's
+      // entrance on 1& uses standard triplet swing (2/3 -- the same ratio
+      // blues-shuffle-swing uses elsewhere in this file) so it doesn't land too
+      // far behind the beat, while the pickup root on 4& stays at a heavier 3/4
+      // (closer to a dotted-eighth feel) leaning hard into the next downbeat.
+      const CHORD_SWING = 2 / 3;
+      const ROOT_SWING = 3 / 4;
       const root = event.notes[0];
       const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
       let hasPlayed = false;
@@ -327,14 +327,14 @@ export function scheduleKeys(
         synth!.triggerAttackRelease(root, '8n', rootTime1, 0.7);
         hasPlayed = true;
 
-        const chordBeat = barStart + HEAVY_SWING;
+        const chordBeat = barStart + CHORD_SWING;
         if (chordBeat < virtualLength) {
           const chordTime = time + Tone.Time(offsetTime(chordBeat / factor)).toSeconds();
           synth!.triggerRelease(root, chordTime);
           synth!.triggerAttackRelease(event.notes, '2n', chordTime, 0.6);
         }
 
-        const rootBeat2 = barStart + 3 + HEAVY_SWING;
+        const rootBeat2 = barStart + 3 + ROOT_SWING;
         if (rootBeat2 < virtualLength) {
           const rootTime2 = time + Tone.Time(offsetTime(rootBeat2 / factor)).toSeconds();
           synth!.triggerRelease(event.notes, rootTime2);
