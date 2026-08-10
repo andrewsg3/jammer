@@ -311,12 +311,14 @@ export function scheduleKeys(
       // every 4 beats, not the whole placement -- same floor-of-1 reasoning as
       // charleston/rising-sun above.
       //
-      // Heavily swung, but not both "and" hits the same amount: the chord's
-      // entrance on 1& uses standard triplet swing (2/3 -- the same ratio
-      // blues-shuffle-swing uses elsewhere in this file) so it doesn't land too
-      // far behind the beat, while the pickup root on 4& stays at a heavier 3/4
-      // (closer to a dotted-eighth feel) leaning hard into the next downbeat.
-      const CHORD_SWING = 2 / 3;
+      // Heavily swung, but not both "and" hits the same amount, and not the
+      // same triplet subdivision either: the chord's entrance on 1& sits on the
+      // *first* triplet partial (1/3 through the beat) rather than the second
+      // (2/3, the usual swung-8th/shuffle position blues-shuffle-swing uses
+      // elsewhere in this file) -- a full triplet earlier than plain swing would
+      // place it. The pickup root on 4& stays on the later 3/4 (a dotted-eighth
+      // feel, not a triplet position at all) leaning hard into the next downbeat.
+      const CHORD_SWING = 1 / 3;
       const ROOT_SWING = 3 / 4;
       const root = event.notes[0];
       const virtualLength = Math.max(1, Math.round(event.lengthBeats * factor));
