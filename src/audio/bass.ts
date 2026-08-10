@@ -11,7 +11,7 @@ import {
 import { STEPS_PER_BEAT, timeFeelFactor } from '../data/instrumentStyles';
 import type { BassRule, BassPattern, TimeFeel } from '../data/instrumentStyles';
 import { REFERENCE_ROOT_MIDI } from '../data/midiBassImport';
-import { UPRIGHT_SAMPLE_URLS, ELECTRIC_SAMPLE_URLS } from '../data/bassSamples';
+import { UPRIGHT_MULTISAMPLE_URLS, ELECTRIC_SAMPLE_URLS } from '../data/bassSamples';
 
 // Tone.js's Bars:Beats:Sixteenths time strings accept a fractional sixteenths
 // component, so a STEPS_PER_BEAT (12-per-beat) step converts to sixteenths just by
@@ -73,23 +73,29 @@ let part: Tone.Part<BassEvent> | null = null;
 // transient by ear (Ableton) is the real fix; this just plays whatever's in
 // data/bassSamples.ts as-is, same as every other sampled instrument here.
 //
-// Upright is temporarily back on the single-anchor UPRIGHT_SAMPLE_URLS instead
-// of the real per-note UPRIGHT_MULTISAMPLE_URLS — see bassSamples.ts's own
-// comment on UPRIGHT_SAMPLE_URLS for why, and swap this back once the
-// multisample's transients are properly trimmed.
+// Upright now wired to the real per-note UPRIGHT_MULTISAMPLE_URLS instead of the
+// single-anchor UPRIGHT_SAMPLE_URLS it used to fall back to — see
+// bassSamples.ts's own comment on UPRIGHT_MULTISAMPLE_URLS. The per-file
+// pre-transient-silence trim mentioned above still hasn't been done for this
+// set specifically, so some notes may have a touch of extra latency/mush on
+// their attack until that's addressed by ear — worth a listen across the range
+// before calling this fully done.
 function buildSynth(): Tone.MonoSynth | Tone.PluckSynth | Tone.Sampler {
   // Checked by key count, not a specific hardcoded note like "C2"/"G#2" — which
   // note ends up as the anchor depends entirely on whatever data/bassSamples.ts
   // parses the bundled file's name as, and a hardcoded check silently (no error,
   // just a wrong-sounding fallback) goes stale the moment that note's spelling
   // changes, exactly what happened here once already.
-  if (currentInstrument === 'Upright' && Object.keys(UPRIGHT_SAMPLE_URLS).length > 0) {
-    // Real recorded pizzicato (see data/bassSamples.ts) rather than a synth patch
-    // — Tone.Sampler repitches the one sampled note to cover the rest of the
-    // range. Falls through to the synth below if the sample isn't there.
+  if (currentInstrument === 'Upright' && Object.keys(UPRIGHT_MULTISAMPLE_URLS).length > 0) {
+    // Real recorded multisampled pizzicato (see data/bassSamples.ts) rather than
+    // a synth patch — Tone.Sampler repitches the nearest sampled note for
+    // anything not itself sampled, same technique the piano/guitar use, just a
+    // much denser (near-chromatic) sample set than either of those.
     // +6dB trim — the raw recording sits quieter than the synth patches at the
     // same nominal fader position.
-    return new Tone.Sampler({ urls: UPRIGHT_SAMPLE_URLS, release: 0.3 }).connect(new Tone.Volume(6).connect(output));
+    return new Tone.Sampler({ urls: UPRIGHT_MULTISAMPLE_URLS, release: 0.3 }).connect(
+      new Tone.Volume(6).connect(output),
+    );
   }
   if (currentInstrument === 'Electric' && Object.keys(ELECTRIC_SAMPLE_URLS).length > 0) {
     // Same technique as sampled 'Upright' above, one anchor note repitched by

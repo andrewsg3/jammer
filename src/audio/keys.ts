@@ -10,6 +10,7 @@ import {
 import { timeFeelFactor } from '../data/instrumentStyles';
 import type { KeysRule, TimeFeel } from '../data/instrumentStyles';
 import { PIANO_SAMPLE_URLS } from '../data/pianoSamples';
+import { GUITAR_SAMPLE_URLS } from '../data/guitarSamples';
 
 // A relative beat offset (e.g. 1.5 beats after this placement's start) as a
 // Bars:Beats:Sixteenths string — fractional sixteenths are fine, Tone parses them.
@@ -86,10 +87,17 @@ function buildSynth() {
     // doesn't want a chorus effect smearing its own natural sound.
     return new Tone.Sampler({ urls: PIANO_SAMPLE_URLS, release: 1 }).connect(output);
   }
+  if (currentInstrument === 'Acoustic Guitar') {
+    // Real samples (see data/guitarSamples.ts) rather than a synth patch, same
+    // idea as Acoustic Piano above — a single sampled octave repitched by
+    // Tone.Sampler rather than one file per key. Also not routed through
+    // `chorus`, for the same reason the piano isn't.
+    return new Tone.Sampler({ urls: GUITAR_SAMPLE_URLS, release: 0.5 }).connect(output);
+  }
   if (currentInstrument === 'Electric Cello') {
     // A plain oscillator with a fast decay/low sustain approximates a picked/strummed
-    // guitar chord well enough without physical modeling — real samples are out of
-    // scope (see CLAUDE.md).
+    // sound well enough without physical modeling — a synth-patch alternative to the
+    // real guitar samples above, not a stand-in for them.
     return new Tone.PolySynth(Tone.FMSynth, {
       "harmonicity": 3.01,
       "modulationIndex": 14,

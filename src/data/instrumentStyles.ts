@@ -154,6 +154,7 @@ export type Instrument = { name: string };
 // keysInstruments[0] whenever no song preset/saved choice says otherwise).
 export const keysInstruments: Instrument[] = [
   { name: 'Acoustic Piano' },
+  { name: 'Acoustic Guitar' },
   { name: 'Electric Piano' },
   { name: 'Electric Cello' },
   { name: 'Kalimba' },

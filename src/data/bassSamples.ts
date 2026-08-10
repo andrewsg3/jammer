@@ -34,12 +34,11 @@ function findSample(instrumentPrefix: string): Record<string, string> {
 export const ELECTRIC_SAMPLE_URLS = findSample('electric-bass');
 
 // Single-anchor upright pizzicato (Freesound #354312), repitched the rest of the
-// way by Tone.Sampler — the same technique the electric bass above uses.
-// Temporarily back in use instead of UPRIGHT_MULTISAMPLE_URLS below: the
-// multisample's per-file pre-transient silence needs a real by-ear (or properly
-// tuned onset-detection) trim before it sounds right, and that isn't done yet —
-// see CLAUDE.md/bass.ts's buildSynth() comment. Swap the Upright branch in
-// buildSynth() back to UPRIGHT_MULTISAMPLE_URLS once that's sorted.
+// way by Tone.Sampler — the same technique the electric bass above uses. No
+// longer wired up in bass.ts's buildSynth() (superseded by the real
+// UPRIGHT_MULTISAMPLE_URLS below) — kept exported as a known-good fallback in
+// case the multisample's untrimmed transients (see bass.ts's buildSynth()
+// comment) turn out to be worse than expected and it needs reverting.
 export const UPRIGHT_SAMPLE_URLS = findSample('upright-pizzicato');
 
 // The real multisample: every note from a Freesound chromatic recording session

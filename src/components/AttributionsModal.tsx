@@ -52,6 +52,10 @@ export function AttributionsModal({ open, onClose }: Props) {
             <strong>Electric Bass</strong> — recorded directly.
           </li>
           <li>
+            <strong>Acoustic Guitar</strong> — Freesound, uploaded by "harri" (license not yet
+            verified — see CLAUDE.md).
+          </li>
+          <li>
             <strong>Acoustic drum kit</strong> — Ableton factory content.
           </li>
         </ul>

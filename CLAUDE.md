@@ -241,10 +241,15 @@ sync with this list, not drift into its own separate copy.
   Tone.js's own team cuts for their examples/@tonejs/piano
   (https://github.com/Tonejs/audio/tree/master/salamander).
 - **Upright Bass pizzicato** (`data/bassSamples.ts`) — Freesound, uploaded by "mtg" (Music
-  Technology Group, Universitat Pompeu Fabra), Freesound IDs in the 354xxx range (the single
-  anchor sample already wired in, plus the fuller note-by-note set alongside it — see "Notes for
-  whoever's iterating" below for the current state of turning that into a real multisample).
+  Technology Group, Universitat Pompeu Fabra), Freesound IDs in the 354xxx range. The real
+  note-by-note multisample (`UPRIGHT_MULTISAMPLE_URLS`) is what's actually wired up now; the
+  original single-anchor sample (`UPRIGHT_SAMPLE_URLS`) stays exported as a fallback — see
+  bass.ts's `buildSynth()` for the still-open per-file transient-trim caveat.
 - **Electric Bass** (`data/bassSamples.ts`) — recorded directly, no external source to credit.
+- **Acoustic Guitar** (`data/guitarSamples.ts`) — Freesound, uploaded by "harri", IDs 13699-13711.
+  **License not yet verified/recorded here** — added and wired up without the licensing gut-check
+  this file asks for elsewhere (see "Sample-based drum playback" above); needs the same check
+  (and this entry filled in properly) before treating it as cleared.
 - **Acoustic drum kit** (`data/drumSamples.ts`) — Ableton factory content; see "Sample-based drum
   playback" above for the licensing gut-check this app applies before committing anything sourced
   this way.
