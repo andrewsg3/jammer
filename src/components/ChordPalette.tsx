@@ -92,9 +92,10 @@ function PaletteRow({
 
 function ChromaticSection({
   musicalKey,
+  scale,
   notationStyle,
   onAudition,
-}: Pick<Props, 'musicalKey' | 'notationStyle' | 'onAudition'>) {
+}: Pick<Props, 'musicalKey' | 'scale' | 'notationStyle' | 'onAudition'>) {
   const [quality, setQuality] = useState<ChordQuality>('dom7');
   // undefined = no slash bass — every row below is a plain chord, same as before
   // this existed. Applies the same picked bass note to all 12 roots at once
@@ -105,7 +106,7 @@ function ChromaticSection({
   return (
     <PaletteRow
       title="Chromatic"
-      options={chromaticOptions(musicalKey, quality, bassOffset)}
+      options={chromaticOptions(musicalKey, scale, quality, bassOffset)}
       notationStyle={notationStyle}
       onAudition={onAudition}
       headerExtra={
@@ -359,7 +360,7 @@ export function ChordPalette({
         notationStyle={notationStyle}
         onAudition={handleAudition}
       />
-      <ChromaticSection musicalKey={musicalKey} notationStyle={notationStyle} onAudition={handleAudition} />
+      <ChromaticSection musicalKey={musicalKey} scale={scale} notationStyle={notationStyle} onAudition={handleAudition} />
     </div>
   );
 }

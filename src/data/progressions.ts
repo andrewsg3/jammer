@@ -614,19 +614,39 @@ export function secondaryDominantOptions(key: string, scale: ScaleName): ChordOp
 // matching the convention already used for borrowed chords.
 const CHROMATIC_DEGREE_LABELS = ['1', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'];
 
-export function chromaticChord(key: string, offset: number, quality: ChordQuality, bassOffset?: number): Chord {
-  const chord: Chord = { root: shiftRootFlat(key, offset), quality };
-  if (bassOffset !== undefined) chord.bass = shiftRootFlat(key, bassOffset);
+/** Sharp in a sharp key, flat in a flat key — matches keySignatureAccidentals'
+ * own sign for this key/scale, so a chromatic chord's root reads consistently
+ * with the staff's own key signature (e.g. F#, not Gb, in E minor's one sharp)
+ * rather than always defaulting to flat regardless of key. Unlike chromatic
+ * roots, borrowed chords (bIII/bVI/bVII etc.) stay flat-spelled unconditionally
+ * in borrowedOptions — that's a real, deliberate theory convention (they're
+ * named by their flat relationship to the tonic), not the same "just pick
+ * whichever's more readable" question this is answering for chromaticChord. */
+export function chromaticChord(
+  key: string,
+  scale: ScaleName,
+  offset: number,
+  quality: ChordQuality,
+  bassOffset?: number,
+): Chord {
+  const shift = keySignatureAccidentals(key, scale).sign === 'sharp' ? shiftRoot : shiftRootFlat;
+  const chord: Chord = { root: shift(key, offset), quality };
+  if (bassOffset !== undefined) chord.bass = shift(key, bassOffset);
   return chord;
 }
 
 /** All 12 chromatic roots at a single given quality — the chord-builder's root row.
  * `bassOffset`, when given, is applied to every option (the same slash bass note
  * dragged onto whichever root you pick). */
-export function chromaticOptions(key: string, quality: ChordQuality, bassOffset?: number): ChordOption[] {
+export function chromaticOptions(
+  key: string,
+  scale: ScaleName,
+  quality: ChordQuality,
+  bassOffset?: number,
+): ChordOption[] {
   return CHROMATIC_DEGREE_LABELS.map((label, offset) => ({
     selection: { type: 'chromatic', offset, quality, ...(bassOffset !== undefined ? { bassOffset } : {}) },
-    chord: chromaticChord(key, offset, quality, bassOffset),
+    chord: chromaticChord(key, scale, offset, quality, bassOffset),
     label,
   }));
 }
@@ -649,6 +669,6 @@ export function resolveSelection(key: string, scale: ScaleName, selection: Chord
       return { root: shiftRoot(target.root, 7), quality: 'dom7' };
     }
     case 'chromatic':
-      return chromaticChord(key, selection.offset, selection.quality, selection.bassOffset);
+      return chromaticChord(key, scale, selection.offset, selection.quality, selection.bassOffset);
   }
 }
