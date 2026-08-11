@@ -330,6 +330,7 @@ export async function play(params: PlaybackParams): Promise<void> {
       params.bass,
       params.bassPattern,
       params.bassTimeFeel,
+      params.beatsPerBar,
     );
   }
   if (params.keys) scheduleKeys(params.placements, params.key, params.scale, params.keys, params.keysTimeFeel);

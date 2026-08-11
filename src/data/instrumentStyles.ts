@@ -94,7 +94,15 @@ export type KeysRule = {
 
 // hidden: true means resolvable by name (for a song preset to reference) but not
 // listed in the style picker — see the underscore-prefix convention in drumLibrary.ts.
-export type DrumStyle = { name: string; pattern: DrumPattern | null; hidden?: boolean };
+// beatsPerBar: the meter this specific groove was actually authored/recorded in --
+// undefined means meter-agnostic (currently only "None", which has no content to
+// drift). Every bundled .mid pattern gets tagged 4 unless it lives in one of
+// drumLibrary.ts's per-meter subfolders (e.g. drumPatterns/3-4/) -- a drum loop's
+// own recorded length doesn't automatically retime itself the way an algorithmic
+// bass/keys rule can, so a groove genuinely authored for a different meter needs
+// its own file, not just a beatsPerBar prop threaded through at playback time. See
+// CLAUDE.md's "Beats per bar" section.
+export type DrumStyle = { name: string; pattern: DrumPattern | null; hidden?: boolean; beatsPerBar?: number };
 // A bass style is either algorithmic (rule, generated per-chord at render time) or a
 // fixed imported pattern (transposed to each chord's root at render time) — never both.
 export type BassStyle = {

@@ -699,8 +699,16 @@ function App() {
   // handleLoadSongPreset's lookup above (which searches the full drumStyles/bassStyles),
   // but shouldn't clutter the dropdown for every other song — except the one that's
   // actually selected right now, which needs to keep showing correctly rather than
-  // falling back to "None" because it's missing from the option list.
-  const visibleDrumStyles = drumStyles.filter((s) => !s.hidden || s.name === drumStyle.name);
+  // falling back to "None" because it's missing from the option list. Drum styles are
+  // further filtered to the song's own beatsPerBar (undefined = meter-agnostic, i.e.
+  // "None") -- a real recorded groove authored for a different meter would just drift
+  // against this song's bars, so it's not offered at all rather than offered and
+  // sounding wrong; see CLAUDE.md's "Beats per bar" section.
+  const visibleDrumStyles = drumStyles.filter(
+    (s) =>
+      (!s.hidden || s.name === drumStyle.name) &&
+      (s.beatsPerBar === undefined || s.beatsPerBar === beatsPerBar || s.name === drumStyle.name),
+  );
   const visibleBassStyles = bassStyles.filter((s) => !s.hidden || s.name === bassStyle.name);
 
   return (

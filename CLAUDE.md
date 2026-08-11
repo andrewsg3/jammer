@@ -141,14 +141,41 @@ and count-in clicks (`playCountIn`) both now take a `beatsPerBar` param (threade
 self-contained enough to land alongside Phase 1 rather than waiting on the real Phase 2 below —
 it's just a click accent pattern, not a pattern generator with real musical content.
 
-**Phase 2 (not started, deliberately deferred).** The accompaniment engines still hardcode 4-beat
-bars in several independent places: `instrumentStyles.ts`'s `STEPS_PER_BAR = STEPS_PER_BEAT * 4`,
-`bass.ts`'s `smartWalkBarEvents`/`tumbaoEvents`/`rootFifthPumpEvents`/`tunisiaVampEvents`/
-`noteForBeat`, `keys.ts`'s charleston/virtual-insanity/rising-sun/blues-shuffle/la-pompe rhythm
-cycles, and the drum/bass MIDI importers' own bar-rounding. None of these read the song's
-`beatsPerBar` yet — loading a non-4/4 preset today changes the chart correctly but the backing
-band still comps as if it were 4/4. Scoped as its own follow-up, comparable in size to the MIDI
-editor or sections+arrangement work, not bundled into Phase 1.
+**Phase 2 (started, narrow slice done; the rest deliberately deferred).** The accompaniment
+engines mostly still hardcode 4-beat bars — `instrumentStyles.ts`'s `STEPS_PER_BAR =
+STEPS_PER_BEAT * 4` is unchanged, and most of `bass.ts` (`tumbaoEvents`/`rootFifthPumpEvents`/
+`tunisiaVampEvents`), all of `keys.ts`'s charleston/virtual-insanity/rising-sun/blues-shuffle/
+la-pompe rhythm cycles, and the drum/bass MIDI importers' own bar-rounding don't read the song's
+`beatsPerBar` yet. Two pieces are done, for different reasons:
+- **`bass.ts`'s Smart Walking (`smartWalkBarEvents`/`smartWalkPlacementEvents`/
+  `smartWalkAllEvents`) is genuinely meter-generic now** — it's pure algorithmic generation (root
+  on beat 1, a chromatic approach tone on the last beat, chord tones spread evenly across whatever
+  beats fall in between), so parameterizing it on `beatsPerBar` was just a math change, not new
+  musical content. `beatsPerBar=4` reproduces the original fixed beat-2/beat-3 shape exactly
+  (verified: `middleBeats = beatsPerBar - 2` gives the same two fractions, 1/3 and 2/3, landing on
+  the same two sixteenth-offsets as before) — existing 4/4 songs are unaffected.
+- **`keys.ts`'s `sustained` rhythm ("Sustained 7ths" etc.) turned out to already be meter-generic**
+  — it just holds the voicing for `placement.lengthBeats`, with no internal beat-position logic at
+  all, so no change was needed there. Also true of every "one voicing per placement" rule in
+  general (`noteForBeat`-driven bass rules loop `beat < vp.lengthBeats` already, not a hardcoded
+  4) — it's specifically the rules with their own internal *rhythmic cycle* (Charleston, La Pompe,
+  the walking-bass bar shape before the fix above) that assume 4/4, not accompaniment in general.
+- **Drums are structurally different and can't be "generalized" the same way** — a drum style is
+  either "None" or a real recorded/imported `.mid` groove (`DrumPattern`), never an algorithmic
+  rule, so there's no formula to reparameterize the way Smart Walking's was. A groove actually
+  written in 4/4 (kick-on-1-and-3 feel, etc.) just *is* a 4/4 performance; naively changing what
+  `STEPS_PER_BAR` rounds its loop length to would either truncate real content or loop it at the
+  wrong length, drifting against a non-4/4 chart's bars exactly the way an unconverted groove does
+  today. The fix that actually works is a **new recording per meter**, not a formula — see
+  `drumLibrary.ts`'s per-meter subfolder convention (`drumPatterns/<beatsPerBar>-4/`, tagging each
+  loaded `DrumStyle.beatsPerBar`) and the style-picker filtering in `App.tsx`'s
+  `visibleDrumStyles`. No 3/4 (or other non-4/4) grooves are bundled yet — the mechanism is built,
+  content isn't.
+
+The rest (drum/bass MIDI importers' bar-rounding, `keys.ts`'s remaining rhythm cycles, `bass.ts`'s
+tumbao/root-fifth-pump/Tunisia-vamp) stays deferred — same reasoning as before, scoped as its own
+follow-up rather than bundled in here, tackled piece by piece as specific songs need it rather
+than as one big rewrite.
 
 ## Explicit non-goals (still true)
 - No AI/generative anything.
@@ -222,7 +249,13 @@ npm run dev
 ## Notes for whoever's iterating on this (me)
 - Adding a drum/bass style: drop a new `.mid` file in `data/drumPatterns/` or
   `data/bassPatterns/` — no code change needed. A leading underscore (`_name.mid`) makes it
-  loadable by name (for a song preset to reference) without cluttering the style picker.
+  loadable by name (for a song preset to reference) without cluttering the style picker. A drum
+  groove genuinely written in a meter other than 4/4 goes in a per-meter subfolder instead, e.g.
+  `data/drumPatterns/3-4/` — a real recorded groove doesn't retime itself the way an algorithmic
+  bass/keys rule can (see "Beats per bar" below), so it needs its own file rather than a
+  beatsPerBar prop threaded through at playback time. The style picker only offers a drum style
+  whose own `beatsPerBar` matches the loaded song's meter (or whichever style is already selected,
+  so switching meter never shows a picker with a value not actually in its own option list).
 - Adding a drum fill: drop a new short (one or half-bar) `.mid` file in `data/drumFills/` — same
   no-code-change convention, see "Drum fills into section starts" below. `data/drumFills/` is empty
   today, so every fill currently played is the one hardcoded `FALLBACK_FILL` in `audio/drums.ts`.

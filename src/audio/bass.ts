@@ -467,16 +467,20 @@ function clampToBassRange(midi: number): number {
 }
 
 /**
- * One bar of smart-walking bass. Beat 1 is always `chord`'s root; beat 4 is a
- * chromatic approach tone into `targetChord`'s root (the *next* chord's root on a
- * bar right before a change, thanks to the lookahead in smartWalkAllEvents — or
- * just next bar's own root if the chord is holding). Beats 2 and 3 are `chord`'s
- * own tones, picked to land close to the straight line between beat 1 and the
- * approach tone, so the line leans the same direction it's about to move rather
- * than wandering. `pointer` threads the last note's absolute pitch in from the
- * previous bar (see smartWalkAllEvents) so octave choices stay smooth instead of
- * leaping — and a held chord still gets real movement, alternating up/down bar to
- * bar, rather than collapsing back onto the same note it started on.
+ * One bar of smart-walking bass, in the song's own `beatsPerBar`. Beat 1 is
+ * always `chord`'s root; the last beat is a chromatic approach tone into
+ * `targetChord`'s root (the *next* chord's root on a bar right before a change,
+ * thanks to the lookahead in smartWalkAllEvents — or just next bar's own root if
+ * the chord is holding). Every beat in between is one of `chord`'s own tones,
+ * picked to land close to the straight line between beat 1 and the approach
+ * tone, so the line leans the same direction it's about to move rather than
+ * wandering — spread evenly across however many "middle" beats a bar actually
+ * has (2 in 4/4, matching the original beat-2/beat-3 shape exactly; 1 in 3/4;
+ * more in a longer meter). `pointer` threads the last note's absolute pitch in
+ * from the previous bar (see smartWalkAllEvents) so octave choices stay smooth
+ * instead of leaping — and a held chord still gets real movement, alternating
+ * up/down bar to bar, rather than collapsing back onto the same note it started
+ * on.
  */
 function smartWalkBarEvents(
   chord: Chord,
@@ -486,6 +490,7 @@ function smartWalkBarEvents(
   totalSixteenths: number,
   placement: ChordPlacement,
   pointer: { midi: number },
+  beatsPerBar: number,
 ): BassEvent[] {
   const events: BassEvent[] = [];
   const push = (offset: number, midi: number, velocity: number) => {
@@ -525,29 +530,39 @@ function smartWalkBarEvents(
     return best;
   };
 
-  push(cellStart + 4, pickMid(1 / 3), 0.7); // beat 2
-  push(cellStart + 8, pickMid(2 / 3), 0.7); // beat 3
-  push(cellStart + 12, approachMidi, 0.75); // beat 4: chromatic approach
+  // Beats 2..(beatsPerBar-1): chord tones spaced evenly toward the approach tone.
+  // beatsPerBar=4 (the original shape) gives middleBeats=2 -> fractions 1/3, 2/3,
+  // landing on cellStart+4/+8 exactly as before; beatsPerBar=3 gives middleBeats=1
+  // -> a single passing tone at the halfway point.
+  const middleBeats = beatsPerBar - 2;
+  for (let i = 1; i <= middleBeats; i++) {
+    push(cellStart + i * 4, pickMid(i / (middleBeats + 1)), 0.7);
+  }
+  push(cellStart + (beatsPerBar - 1) * 4, approachMidi, 0.75); // last beat: chromatic approach
 
   pointer.midi = approachMidi;
   return events;
 }
 
-/** Walks `chord` across a single placement, bar by bar, approaching `nextChord`'s
- * root (if any) on the last bar. */
+/** Walks `chord` across a single placement, bar by bar (in the song's own
+ * `beatsPerBar`), approaching `nextChord`'s root (if any) on the last bar. */
 function smartWalkPlacementEvents(
   chord: Chord,
   nextChord: Chord | null,
   placement: ChordPlacement,
   pointer: { midi: number },
+  beatsPerBar: number,
 ): BassEvent[] {
   const totalSixteenths = placement.lengthBeats * 4;
+  const barSixteenths = beatsPerBar * 4;
   const events: BassEvent[] = [];
   let bar = 0;
-  for (let cellStart = 0; cellStart < totalSixteenths; cellStart += 16, bar++) {
-    const isLastBar = cellStart + 16 >= totalSixteenths;
+  for (let cellStart = 0; cellStart < totalSixteenths; cellStart += barSixteenths, bar++) {
+    const isLastBar = cellStart + barSixteenths >= totalSixteenths;
     const targetChord = isLastBar && nextChord ? nextChord : chord;
-    events.push(...smartWalkBarEvents(chord, targetChord, bar, cellStart, totalSixteenths, placement, pointer));
+    events.push(
+      ...smartWalkBarEvents(chord, targetChord, bar, cellStart, totalSixteenths, placement, pointer, beatsPerBar),
+    );
   }
   return events;
 }
@@ -562,7 +577,13 @@ function smartWalkPlacementEvents(
  * (same adjacency rule tumbaoEvents uses) — across a gap, a bar just walks back to
  * its own root instead of reaching for a chord that isn't actually coming next.
  */
-function smartWalkAllEvents(placements: ChordPlacement[], key: string, scale: ScaleName, factor: number): BassEvent[] {
+function smartWalkAllEvents(
+  placements: ChordPlacement[],
+  key: string,
+  scale: ScaleName,
+  factor: number,
+  beatsPerBar: number,
+): BassEvent[] {
   const sorted = [...placements].sort((a, b) => a.startBeat - b.startBeat);
   const events: BassEvent[] = [];
   if (sorted.length === 0) return events;
@@ -578,7 +599,9 @@ function smartWalkAllEvents(placements: ChordPlacement[], key: string, scale: Sc
       next && next.startBeat === placement.startBeat + placement.lengthBeats
         ? resolveSelection(key, scale, next.selection)
         : null;
-    events.push(...withTimeFeel(placement, factor, (vp) => smartWalkPlacementEvents(chord, nextChord, vp, pointer)));
+    events.push(
+      ...withTimeFeel(placement, factor, (vp) => smartWalkPlacementEvents(chord, nextChord, vp, pointer, beatsPerBar)),
+    );
   }
   return events;
 }
@@ -615,6 +638,7 @@ export function scheduleBass(
   rule: BassRule | null,
   pattern: BassPattern | null,
   timeFeel: TimeFeel = 'normal',
+  beatsPerBar: number = 4,
 ): void {
   ensureSynth();
   const factor = timeFeelFactor(timeFeel);
@@ -636,7 +660,7 @@ export function scheduleBass(
   } else if (rule && rule.style === 'smart-walk') {
     // Needs the whole progression at once (chord-change lookahead + a continuous
     // register pointer), not the per-placement loop below — see smartWalkAllEvents.
-    events.push(...smartWalkAllEvents(placements, key, scale, factor));
+    events.push(...smartWalkAllEvents(placements, key, scale, factor, beatsPerBar));
   } else if (rule) {
     for (const placement of placements) {
       const chord = resolveSelection(key, scale, placement.selection);
