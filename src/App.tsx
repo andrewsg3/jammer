@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChordGrid, TOTAL_BEATS } from './components/ChordGrid';
+import { ChordGrid, totalBeatsFor } from './components/ChordGrid';
 import { BeatGridSheet } from './components/BeatGridSheet';
 import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
@@ -104,9 +104,10 @@ const DEFAULT_RESOLVED = DEFAULT_SONG_PRESET
   ? resolveSongPreset(DEFAULT_SONG_PRESET)
   : { placements: [], sections: [] };
 const DEFAULT_RESOLVED_PLACEMENTS = DEFAULT_RESOLVED.placements;
+const DEFAULT_BEATS_PER_BAR = DEFAULT_SONG_PRESET?.beatsPerBar ?? 4;
 const DEFAULT_LOOP_RANGE = DEFAULT_SONG_PRESET
   ? resolveLoopRange(DEFAULT_SONG_PRESET, DEFAULT_RESOLVED_PLACEMENTS)
-  : { loopStart: 0, loopEnd: 16 };
+  : { loopStart: 0, loopEnd: DEFAULT_BEATS_PER_BAR * 4 };
 
 /** Keeps ?song= in sync with whatever's actually loaded, without adding a back-button
  * stop per song switch — a plain refresh should reopen the same song, not navigate. */
@@ -185,6 +186,11 @@ function App() {
       : STARTER_PLACEMENTS,
   );
   const [tempo, setTempo] = useState(DEFAULT_SONG_PRESET?.tempo ?? 124);
+  // Simple meter only (always over a "4" denominator) -- see CLAUDE.md's "Beats
+  // per bar" section. Drives chart/notation rendering (ChordGrid.tsx,
+  // BeatGridSheet.tsx); the accompaniment engines (drums/bass/keys pattern
+  // generators) don't read this yet -- see CLAUDE.md for that deferred scope.
+  const [beatsPerBar, setBeatsPerBar] = useState(DEFAULT_BEATS_PER_BAR);
   const [countInBeats, setCountInBeats] = useState<CountInBeats>(4);
   const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
   const [drumStyle, setDrumStyle] = useState<DrumStyle>(baseDrumStyles[0]);
@@ -411,7 +417,7 @@ function App() {
   const handleAddChordAtEnd = (selection: ChordSelection, lengthBeats: number) => {
     setPlacements((prev) => {
       const startBeat = prev.length === 0 ? 0 : Math.max(...prev.map((p) => p.startBeat + p.lengthBeats));
-      if (startBeat + lengthBeats > TOTAL_BEATS) return prev;
+      if (startBeat + lengthBeats > totalBeatsFor(beatsPerBar)) return prev;
       return [...prev, { id: crypto.randomUUID(), selection, startBeat, lengthBeats }];
     });
   };
@@ -499,6 +505,7 @@ function App() {
     setMusicalKey(preset.key);
     setScale(preset.scale);
     setTempo(preset.tempo);
+    setBeatsPerBar(preset.beatsPerBar ?? 4);
     setMetronomeMutedState(!preset.metronome);
     const resolved = resolveSongPreset(preset);
     const resolvedPlacements = resolved.placements;
@@ -555,6 +562,7 @@ function App() {
       key: musicalKey,
       scale,
       tempo,
+      beatsPerBar,
       metronome: !metronomeMuted,
       loopStart,
       loopEnd,
@@ -705,6 +713,8 @@ function App() {
         onScaleChange={setScale}
         tempo={tempo}
         onTempoChange={setTempo}
+        beatsPerBar={beatsPerBar}
+        onBeatsPerBarChange={setBeatsPerBar}
         isPlaying={isPlaying}
         onTogglePlay={handleTogglePlay}
         instrumentsLoading={instrumentsLoading}
@@ -768,6 +778,7 @@ function App() {
                   playheadBeat={playheadBeat}
                   isPlaying={isPlaying && !countInActive}
                   sections={sections}
+                  beatsPerBar={beatsPerBar}
                 />
               </div>
             ) : (
@@ -808,6 +819,7 @@ function App() {
                 playStyle={songPlayStyle}
                 onPlayStyleChange={setSongPlayStyle}
                 tempo={tempo}
+                beatsPerBar={beatsPerBar}
               />
             )}
           </div>

@@ -12,6 +12,11 @@ const TAP_HISTORY_SIZE = 8;
 
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+// Simple meters only (always over a "4" denominator) -- see CLAUDE.md's "Beats
+// per bar" section for the full scope and why 6/9/12 here mean 6/4, 9/4, 12/4,
+// not the compound 6/8, 9/8, 12/8 a musician might otherwise expect.
+const BEATS_PER_BAR_OPTIONS = [3, 4, 5, 6, 7, 8, 9, 12];
+
 type Props = {
   songPresets: SongPreset[];
   onLoadSongPreset: (preset: SongPreset) => void;
@@ -22,6 +27,8 @@ type Props = {
   onScaleChange: (scale: ScaleName) => void;
   tempo: number;
   onTempoChange: (tempo: number) => void;
+  beatsPerBar: number;
+  onBeatsPerBarChange: (beatsPerBar: number) => void;
   isPlaying: boolean;
   onTogglePlay: () => void;
   instrumentsLoading: boolean;
@@ -50,6 +57,8 @@ export function TopBar({
   onScaleChange,
   tempo,
   onTempoChange,
+  beatsPerBar,
+  onBeatsPerBarChange,
   isPlaying,
   onTogglePlay,
   instrumentsLoading,
@@ -163,6 +172,28 @@ export function TopBar({
               ))}
             </select>
           </div>
+        </TopBarField>
+
+        <TopBarField label="Meter">
+          <select
+            id="top-bar-beats-per-bar"
+            aria-label="Beats per bar"
+            value={beatsPerBar}
+            onChange={(e) => onBeatsPerBarChange(Number(e.target.value))}
+          >
+            {/* A preset can carry a beatsPerBar outside this app's own picker list
+                (hand-authored JSON, or a future value this list hasn't caught up
+                to yet) -- inject it so the select shows it correctly instead of
+                silently falling back to whichever option is first. */}
+            {!BEATS_PER_BAR_OPTIONS.includes(beatsPerBar) && (
+              <option value={beatsPerBar}>{beatsPerBar}/4</option>
+            )}
+            {BEATS_PER_BAR_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n}/4
+              </option>
+            ))}
+          </select>
         </TopBarField>
 
         <TopBarField label="Tempo">

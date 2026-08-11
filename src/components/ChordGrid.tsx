@@ -8,13 +8,25 @@ import type { SectionMarker } from '../data/sections';
 import { SheetMusicHeader } from './SheetMusicHeader';
 import { STAFF_HEIGHT, STAFF_LINE_GAP, SHARP_KEY_SIG_STEPS, FLAT_KEY_SIG_STEPS } from './staffLayout';
 
-// 12 rows of 4 bars — a full lead-sheet page (A4-ish proportions), not just a loop snippet.
+// 12 rows of 4 bars — a full lead-sheet page (A4-ish proportions), not just a loop
+// snippet. BARS_PER_ROW/GRID_BARS/ROWS are a fixed page-layout choice, independent
+// of the song's own time signature — a chart still reads "4 bars per line" (and
+// "48 bars total") in any meter. Only how many *beats* that represents changes,
+// via beatsPerBar (a prop now, not a constant — see totalBeatsFor/beatsPerRowFor
+// below and CLAUDE.md's "Beats per bar" section for the full scope).
 export const GRID_BARS = 48;
-const BEATS_PER_BAR = 4;
 const BARS_PER_ROW = 4;
-const BEATS_PER_ROW = BARS_PER_ROW * BEATS_PER_BAR; // 16
-export const TOTAL_BEATS = GRID_BARS * BEATS_PER_BAR; // 192
 const ROWS = GRID_BARS / BARS_PER_ROW; // 12
+
+/** Beats in one full row (BARS_PER_ROW bars) at a given time signature. */
+function beatsPerRowFor(beatsPerBar: number): number {
+  return BARS_PER_ROW * beatsPerBar;
+}
+
+/** Total beats the whole GRID_BARS-bar page holds at a given time signature. */
+export function totalBeatsFor(beatsPerBar: number): number {
+  return GRID_BARS * beatsPerBar;
+}
 
 const RULER_HEIGHT = 14;
 const SECTION_HEIGHT = 16; // px — strip above the ruler where section-marker brackets sit
@@ -23,9 +35,8 @@ const ROW_CONTENT_HEIGHT = CHORD_LABEL_HEIGHT + STAFF_HEIGHT;
 const ROW_GAP = 8;
 // px — section strip + ruler + (chord-label strip + staff) + row gap, for Y-position math (clientPosToGlobalBeat).
 const ROW_HEIGHT = SECTION_HEIGHT + RULER_HEIGHT + ROW_CONTENT_HEIGHT + ROW_GAP;
-const MIN_LENGTH_BEATS = 1; // 1/4 bar
+const MIN_LENGTH_BEATS = 1; // smallest addressable chord/section length, any meter
 const MIN_LOOP_LENGTH_BEATS = 1;
-const DEFAULT_SECTION_LENGTH_BEATS = BEATS_PER_ROW; // one row (4 bars) — a visible, easily-resized starting size
 
 type Props = {
   placements: ChordPlacement[];
@@ -69,14 +80,15 @@ type Props = {
   playStyle: string;
   onPlayStyleChange: (playStyle: string) => void;
   tempo: number;
+  beatsPerBar: number;
 };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function rowOf(beat: number): number {
-  return Math.floor(beat / BEATS_PER_ROW);
+function rowOf(beat: number, beatsPerRow: number): number {
+  return Math.floor(beat / beatsPerRow);
 }
 
 function overlaps(a: ChordPlacement, startBeat: number, lengthBeats: number): boolean {
@@ -90,8 +102,9 @@ function canPlace(
   excludeId: string | null,
   startBeat: number,
   lengthBeats: number,
+  totalBeats: number,
 ): boolean {
-  if (startBeat < 0 || lengthBeats <= 0 || startBeat + lengthBeats > TOTAL_BEATS) return false;
+  if (startBeat < 0 || lengthBeats <= 0 || startBeat + lengthBeats > totalBeats) return false;
   return placements.every((p) => p.id === excludeId || !overlaps(p, startBeat, lengthBeats));
 }
 
@@ -105,14 +118,14 @@ type ChordSegment = {
 };
 
 /** Splits a placement into one segment per row it visually spans. */
-function segmentsFor(placement: ChordPlacement): ChordSegment[] {
+function segmentsFor(placement: ChordPlacement, beatsPerRow: number): ChordSegment[] {
   const segments: ChordSegment[] = [];
   const end = placement.startBeat + placement.lengthBeats;
   let cursor = placement.startBeat;
   while (cursor < end) {
-    const row = rowOf(cursor);
-    const rowStart = row * BEATS_PER_ROW;
-    const segEnd = Math.min(end, rowStart + BEATS_PER_ROW);
+    const row = rowOf(cursor, beatsPerRow);
+    const rowStart = row * beatsPerRow;
+    const segEnd = Math.min(end, rowStart + beatsPerRow);
     segments.push({
       placement,
       row,
@@ -130,14 +143,14 @@ type NcSegment = { key: string; row: number; localStart: number; span: number };
 
 /** Same row-splitting idea as segmentsFor, for a gap's plain beat range instead
  * of a real placement — there's no ChordPlacement to hand back for a gap. */
-function ncSegmentsFor(key: string, startBeat: number, lengthBeats: number): NcSegment[] {
+function ncSegmentsFor(key: string, startBeat: number, lengthBeats: number, beatsPerRow: number): NcSegment[] {
   const segments: NcSegment[] = [];
   const end = startBeat + lengthBeats;
   let cursor = startBeat;
   while (cursor < end) {
-    const row = rowOf(cursor);
-    const rowStart = row * BEATS_PER_ROW;
-    const segEnd = Math.min(end, rowStart + BEATS_PER_ROW);
+    const row = rowOf(cursor, beatsPerRow);
+    const rowStart = row * beatsPerRow;
+    const segEnd = Math.min(end, rowStart + beatsPerRow);
     segments.push({ key, row, localStart: cursor - rowStart, span: segEnd - cursor });
     cursor = segEnd;
   }
@@ -151,23 +164,23 @@ function ncSegmentsFor(key: string, startBeat: number, lengthBeats: number): NcS
  * not re-marked every bar the way BeatGridSheet's discrete per-bar cells need to
  * keep announcing it. Leading/trailing silence (before the first or after the
  * last chord) doesn't count — only space that's actually *between* two chords. */
-function ncSegmentsForGaps(placements: ChordPlacement[]): NcSegment[] {
+function ncSegmentsForGaps(placements: ChordPlacement[], beatsPerRow: number): NcSegment[] {
   const sorted = [...placements].sort((a, b) => a.startBeat - b.startBeat);
   const segments: NcSegment[] = [];
   for (let i = 0; i < sorted.length - 1; i++) {
     const gapStart = sorted[i].startBeat + sorted[i].lengthBeats;
     const gapEnd = sorted[i + 1].startBeat;
     if (gapEnd > gapStart) {
-      segments.push(...ncSegmentsFor(`nc-${i}`, gapStart, gapEnd - gapStart));
+      segments.push(...ncSegmentsFor(`nc-${i}`, gapStart, gapEnd - gapStart, beatsPerRow));
     }
   }
   return segments;
 }
 
-function maxFittingLength(placements: ChordPlacement[], current: ChordPlacement): number {
+function maxFittingLength(placements: ChordPlacement[], current: ChordPlacement, totalBeats: number): number {
   let best = 0;
-  for (let len = MIN_LENGTH_BEATS; current.startBeat + len <= TOTAL_BEATS; len++) {
-    if (canPlace(placements, current.id, current.startBeat, len)) best = len;
+  for (let len = MIN_LENGTH_BEATS; current.startBeat + len <= totalBeats; len++) {
+    if (canPlace(placements, current.id, current.startBeat, len, totalBeats)) best = len;
     else break;
   }
   return best || current.lengthBeats;
@@ -189,17 +202,18 @@ function canPlaceSection(
   excludeId: string | null,
   startBeat: number,
   lengthBeats: number,
+  totalBeats: number,
 ): boolean {
-  if (startBeat < 0 || lengthBeats <= 0 || startBeat + lengthBeats > TOTAL_BEATS) return false;
+  if (startBeat < 0 || lengthBeats <= 0 || startBeat + lengthBeats > totalBeats) return false;
   return sections.every((s) => s.id === excludeId || !overlapsSection(s, startBeat, lengthBeats));
 }
 
 /** Converts a mouse position (relative to the whole multi-row wrapper) into a global beat index. */
-function clientPosToGlobalBeat(wrapperRect: DOMRect, clientX: number, clientY: number): number {
-  const beatWidth = wrapperRect.width / BEATS_PER_ROW; // row width is fluid — fills the container
+function clientPosToGlobalBeat(wrapperRect: DOMRect, clientX: number, clientY: number, beatsPerRow: number): number {
+  const beatWidth = wrapperRect.width / beatsPerRow; // row width is fluid — fills the container
   const row = clamp(Math.floor((clientY - wrapperRect.top) / ROW_HEIGHT), 0, ROWS - 1);
-  const beatInRow = clamp(Math.floor((clientX - wrapperRect.left) / beatWidth), 0, BEATS_PER_ROW - 1);
-  return row * BEATS_PER_ROW + beatInRow;
+  const beatInRow = clamp(Math.floor((clientX - wrapperRect.left) / beatWidth), 0, beatsPerRow - 1);
+  return row * beatsPerRow + beatInRow;
 }
 
 // Melody notes snap to the eighth note (half-beat) rather than the whole beat
@@ -209,13 +223,13 @@ function clientPosToGlobalBeat(wrapperRect: DOMRect, clientX: number, clientY: n
 const MELODY_SNAP_BEATS = 0.5;
 
 /** Same idea as clientPosToGlobalBeat, but eighth-note resolution — for the melody editor. */
-function clientPosToFineBeat(wrapperRect: DOMRect, clientX: number, clientY: number): number {
-  const beatWidth = wrapperRect.width / BEATS_PER_ROW;
+function clientPosToFineBeat(wrapperRect: DOMRect, clientX: number, clientY: number, beatsPerRow: number): number {
+  const beatWidth = wrapperRect.width / beatsPerRow;
   const row = clamp(Math.floor((clientY - wrapperRect.top) / ROW_HEIGHT), 0, ROWS - 1);
   const rawBeatInRow = (clientX - wrapperRect.left) / beatWidth;
   const snapped = Math.round(rawBeatInRow / MELODY_SNAP_BEATS) * MELODY_SNAP_BEATS;
-  const beatInRow = clamp(snapped, 0, BEATS_PER_ROW - MELODY_SNAP_BEATS);
-  return row * BEATS_PER_ROW + beatInRow;
+  const beatInRow = clamp(snapped, 0, beatsPerRow - MELODY_SNAP_BEATS);
+  return row * beatsPerRow + beatInRow;
 }
 
 /** Inverse of the melody-note render math (see the melody-note render block below) —
@@ -264,7 +278,10 @@ export function ChordGrid({
   playStyle,
   onPlayStyleChange,
   tempo,
+  beatsPerBar,
 }: Props) {
+  const beatsPerRow = beatsPerRowFor(beatsPerBar);
+  const totalBeats = totalBeatsFor(beatsPerBar);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Melody editing is opt-in (see clientPosToFineBeat/clientPosToStaffSteps above)
@@ -342,7 +359,7 @@ export function ChordGrid({
         const pasteStart =
           placements.length === 0 ? 0 : Math.max(...placements.map((p) => p.startBeat + p.lengthBeats));
         const targets = clipboardRef.current.map((c) => ({ ...c, startBeat: pasteStart + c.relativeStart }));
-        const allFit = targets.every((t) => canPlace(placements, null, t.startBeat, t.lengthBeats));
+        const allFit = targets.every((t) => canPlace(placements, null, t.startBeat, t.lengthBeats, totalBeats));
         if (!allFit) return; // no partial pastes — keep the result predictable
         const pasted = targets.map((t) => ({
           id: crypto.randomUUID(),
@@ -380,7 +397,7 @@ export function ChordGrid({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, placements, onRemove, onPastePlacements, selectedMelodyIndex, onRemoveMelodyNote]);
+  }, [selectedIds, placements, onRemove, onPastePlacements, selectedMelodyIndex, onRemoveMelodyNote, totalBeats]);
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -426,7 +443,7 @@ export function ChordGrid({
     if (!raw || !wrapperRef.current) return;
 
     const rect = wrapperRef.current.getBoundingClientRect();
-    const dropBeat = clientPosToGlobalBeat(rect, e.clientX, e.clientY);
+    const dropBeat = clientPosToGlobalBeat(rect, e.clientX, e.clientY, beatsPerRow);
     const selection = deserializeSelection(raw);
 
     // Dropping directly on an existing chord replaces it (same slot/length) —
@@ -442,8 +459,8 @@ export function ChordGrid({
     // New chords default to the length of whichever block was last selected, rather
     // than always resetting to a bar — makes dropping a run of same-length chords
     // (e.g. a string of half-bar changes) not require resizing every single one.
-    const defaultLength = placements.find((p) => p.id === anchorId)?.lengthBeats ?? 4;
-    if (!canPlace(placements, null, dropBeat, defaultLength)) return; // reject overlapping/off-grid drops
+    const defaultLength = placements.find((p) => p.id === anchorId)?.lengthBeats ?? beatsPerBar;
+    if (!canPlace(placements, null, dropBeat, defaultLength, totalBeats)) return; // reject overlapping/off-grid drops
 
     onDropChord(selection, dropBeat, defaultLength);
   };
@@ -460,7 +477,7 @@ export function ChordGrid({
     e.preventDefault();
     e.stopPropagation(); // don't also let this scrub the playhead
     const wrapperRect = wrapperRef.current.getBoundingClientRect();
-    const startBeat = clientPosToFineBeat(wrapperRect, e.clientX, e.clientY);
+    const startBeat = clientPosToFineBeat(wrapperRect, e.clientX, e.clientY, beatsPerRow);
     const steps = clientPosToStaffSteps(wrapperRect, e.clientY);
     const midi = midiFromStaffSteps(steps, e.shiftKey);
     onAddMelodyNote({ startBeat, midi, lengthBeats: MELODY_SNAP_BEATS, velocity: 0.8 });
@@ -480,9 +497,9 @@ export function ChordGrid({
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const startBeat = clamp(
-        clientPosToFineBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY),
+        clientPosToFineBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY, beatsPerRow),
         0,
-        TOTAL_BEATS - note.lengthBeats,
+        totalBeats - note.lengthBeats,
       );
       const steps = clientPosToStaffSteps(wrapperRect, moveEvent.clientY);
       const midi = midiFromStaffSteps(steps, moveEvent.shiftKey);
@@ -506,9 +523,9 @@ export function ChordGrid({
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       // +1 — dragging targets "the beat after" the cursor, matching the loop-end handle.
-      const targetEnd = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY) + 1;
+      const targetEnd = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY, beatsPerRow) + 1;
       const target = Math.max(MIN_LENGTH_BEATS, targetEnd - placement.startBeat);
-      const maxFit = maxFittingLength(placements, placement);
+      const maxFit = maxFittingLength(placements, placement, totalBeats);
       const finalLength = Math.min(target, maxFit);
       if (finalLength !== placement.lengthBeats) onResize(placement, finalLength);
     };
@@ -526,13 +543,13 @@ export function ChordGrid({
     const wrapperRect = wrapperRef.current.getBoundingClientRect();
     // Where within the block the user grabbed it, so the block doesn't jump to have
     // its start snap under the cursor on the first move event.
-    const grabOffset = clientPosToGlobalBeat(wrapperRect, e.clientX, e.clientY) - placement.startBeat;
+    const grabOffset = clientPosToGlobalBeat(wrapperRect, e.clientX, e.clientY, beatsPerRow) - placement.startBeat;
     let lastEmitted = placement.startBeat;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const pointerBeat = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY);
-      const target = clamp(pointerBeat - grabOffset, 0, TOTAL_BEATS - placement.lengthBeats);
-      if (target !== lastEmitted && canPlace(placements, placement.id, target, placement.lengthBeats)) {
+      const pointerBeat = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY, beatsPerRow);
+      const target = clamp(pointerBeat - grabOffset, 0, totalBeats - placement.lengthBeats);
+      if (target !== lastEmitted && canPlace(placements, placement.id, target, placement.lengthBeats, totalBeats)) {
         lastEmitted = target;
         onMove(placement, target);
       }
@@ -552,13 +569,13 @@ export function ChordGrid({
     e.preventDefault();
     if (!wrapperRef.current) return;
     const wrapperRect = wrapperRef.current.getBoundingClientRect();
-    const grabOffset = clientPosToGlobalBeat(wrapperRect, e.clientX, e.clientY) - section.startBeat;
+    const grabOffset = clientPosToGlobalBeat(wrapperRect, e.clientX, e.clientY, beatsPerRow) - section.startBeat;
     let lastEmitted = section.startBeat;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const pointerBeat = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY);
-      const target = clamp(pointerBeat - grabOffset, 0, TOTAL_BEATS - section.lengthBeats);
-      if (target !== lastEmitted && canPlaceSection(sections, section.id, target, section.lengthBeats)) {
+      const pointerBeat = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY, beatsPerRow);
+      const target = clamp(pointerBeat - grabOffset, 0, totalBeats - section.lengthBeats);
+      if (target !== lastEmitted && canPlaceSection(sections, section.id, target, section.lengthBeats, totalBeats)) {
         lastEmitted = target;
         onMoveSection(section, target);
       }
@@ -573,8 +590,8 @@ export function ChordGrid({
 
   const handleAddSectionClick = () => {
     const start = sections.length === 0 ? 0 : Math.max(...sections.map((s) => s.startBeat + s.lengthBeats));
-    if (start >= TOTAL_BEATS) return; // grid's full — nowhere left to append one
-    const length = Math.min(DEFAULT_SECTION_LENGTH_BEATS, TOTAL_BEATS - start);
+    if (start >= totalBeats) return; // grid's full — nowhere left to append one
+    const length = Math.min(beatsPerRow, totalBeats - start);
     onAddSection(start, length);
     // See prevSectionIdsRef's effect above — it notices the new section once it
     // shows up in the sections prop and starts editing it automatically.
@@ -598,7 +615,7 @@ export function ChordGrid({
     const wrapperRect = wrapperRef.current.getBoundingClientRect();
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const beat = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY);
+      const beat = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY, beatsPerRow);
       const clamped = clamp(beat, 0, loopEnd - MIN_LOOP_LENGTH_BEATS);
       if (clamped !== loopStart) onLoopChange(clamped, loopEnd);
     };
@@ -617,8 +634,8 @@ export function ChordGrid({
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       // +1 — loopEnd is an exclusive boundary, so dragging targets "the beat after" the cursor.
-      const beat = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY) + 1;
-      const clamped = clamp(beat, loopStart + MIN_LOOP_LENGTH_BEATS, TOTAL_BEATS);
+      const beat = clientPosToGlobalBeat(wrapperRect, moveEvent.clientX, moveEvent.clientY, beatsPerRow) + 1;
+      const clamped = clamp(beat, loopStart + MIN_LOOP_LENGTH_BEATS, totalBeats);
       if (clamped !== loopEnd) onLoopChange(loopStart, clamped);
     };
     const handleMouseUp = () => {
@@ -646,7 +663,7 @@ export function ChordGrid({
     const wrapperRect = wrapperRef.current.getBoundingClientRect();
 
     const setFromEvent = (clientX: number, clientY: number) => {
-      onPlayheadChange(clientPosToGlobalBeat(wrapperRect, clientX, clientY));
+      onPlayheadChange(clientPosToGlobalBeat(wrapperRect, clientX, clientY, beatsPerRow));
     };
     setFromEvent(e.clientX, e.clientY);
 
@@ -659,11 +676,11 @@ export function ChordGrid({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  const loopStartRow = rowOf(loopStart);
-  const loopEndHomeRow = rowOf(Math.max(0, loopEnd - 1));
-  const playheadRow = clamp(rowOf(playheadBeat), 0, ROWS - 1);
-  const allSegments = placements.flatMap(segmentsFor);
-  const ncSegments = ncSegmentsForGaps(placements);
+  const loopStartRow = rowOf(loopStart, beatsPerRow);
+  const loopEndHomeRow = rowOf(Math.max(0, loopEnd - 1), beatsPerRow);
+  const playheadRow = clamp(rowOf(playheadBeat, beatsPerRow), 0, ROWS - 1);
+  const allSegments = placements.flatMap((p) => segmentsFor(p, beatsPerRow));
+  const ncSegments = ncSegmentsForGaps(placements, beatsPerRow);
 
   // Print only: rows past the last chord are hidden (see .chord-grid-row-group-
   // print-tail's rule) rather than printing several pages of an empty staff. The
@@ -673,7 +690,7 @@ export function ChordGrid({
   // so it's always enough to land back on the placement's own row rather than the
   // empty one right after it when a placement ends exactly on a row boundary.
   const lastChordBeat = placements.reduce((max, p) => Math.max(max, p.startBeat + p.lengthBeats), 0);
-  const lastChordRow = placements.length > 0 ? rowOf(Math.max(0, lastChordBeat - 1)) : 0;
+  const lastChordRow = placements.length > 0 ? rowOf(Math.max(0, lastChordBeat - 1), beatsPerRow) : 0;
 
   return (
     <div className="chord-grid-wrapper">
@@ -723,13 +740,13 @@ export function ChordGrid({
           onMouseDown={handlePlayheadScrubStart}
         >
           {Array.from({ length: ROWS }, (_, row) => {
-          const rowStart = row * BEATS_PER_ROW;
-          const rowEnd = rowStart + BEATS_PER_ROW;
+          const rowStart = row * beatsPerRow;
+          const rowEnd = rowStart + beatsPerRow;
           const rowSegments = allSegments.filter((s) => s.row === row);
           const rowNcSegments = ncSegments.filter((s) => s.row === row);
-          const rowSections = sections.filter((s) => rowOf(s.startBeat) === row);
-          const dimBefore = clamp(loopStart - rowStart, 0, BEATS_PER_ROW);
-          const dimAfter = clamp(rowEnd - loopEnd, 0, BEATS_PER_ROW);
+          const rowSections = sections.filter((s) => rowOf(s.startBeat, beatsPerRow) === row);
+          const dimBefore = clamp(loopStart - rowStart, 0, beatsPerRow);
+          const dimAfter = clamp(rowEnd - loopEnd, 0, beatsPerRow);
 
           return (
             <div
@@ -741,7 +758,7 @@ export function ChordGrid({
                   <div
                     key={section.id}
                     className="section-marker"
-                    style={{ left: `${((section.startBeat - rowStart) / BEATS_PER_ROW) * 100}%` }}
+                    style={{ left: `${((section.startBeat - rowStart) / beatsPerRow) * 100}%` }}
                     onMouseDown={handleSectionMoveStart(section)}
                   >
                     {editingSectionId === section.id ? (
@@ -778,7 +795,7 @@ export function ChordGrid({
                 {playheadRow === row && (
                   <div
                     className="playhead-flag"
-                    style={{ left: `${((playheadBeat - rowStart) / BEATS_PER_ROW) * 100}%` }}
+                    style={{ left: `${((playheadBeat - rowStart) / beatsPerRow) * 100}%` }}
                   />
                 )}
               </div>
@@ -849,8 +866,12 @@ export function ChordGrid({
                               {symbol}
                             </span>
                           ))}
-                          <div className="staff-time-signature" style={{ left: timeSigX }} aria-label="Time signature 4/4">
-                            <span>4</span>
+                          <div
+                            className="staff-time-signature"
+                            style={{ left: timeSigX }}
+                            aria-label={`Time signature ${beatsPerBar}/4`}
+                          >
+                            <span>{beatsPerBar}</span>
                             <span>4</span>
                           </div>
                         </>
@@ -873,7 +894,7 @@ export function ChordGrid({
                       const i = originalIndex;
                       const { steps, sharp } = staffStepsAboveBottomLine(note.midi);
                       const y = STAFF_HEIGHT - steps * (STAFF_LINE_GAP / 2);
-                      const left = `${((note.startBeat - rowStart) / BEATS_PER_ROW) * 100}%`;
+                      const left = `${((note.startBeat - rowStart) / beatsPerRow) * 100}%`;
                       // Ledger lines only appear where a note actually needs one — every
                       // line-spacing step the note sits beyond the staff edge, not just a
                       // flat "out of range" line. See the derivation in CLAUDE.md's melody
@@ -927,22 +948,22 @@ export function ChordGrid({
                 {dimBefore > 0 && (
                   <div
                     className="loop-dim"
-                    style={{ left: 0, width: `${(dimBefore / BEATS_PER_ROW) * 100}%` }}
+                    style={{ left: 0, width: `${(dimBefore / beatsPerRow) * 100}%` }}
                   />
                 )}
                 {dimAfter > 0 && (
                   <div
                     className="loop-dim"
                     style={{
-                      left: `${((BEATS_PER_ROW - dimAfter) / BEATS_PER_ROW) * 100}%`,
-                      width: `${(dimAfter / BEATS_PER_ROW) * 100}%`,
+                      left: `${((beatsPerRow - dimAfter) / beatsPerRow) * 100}%`,
+                      width: `${(dimAfter / beatsPerRow) * 100}%`,
                     }}
                   />
                 )}
                 {playheadRow === row && (
                   <div
                     className="playhead"
-                    style={{ left: `${((playheadBeat - rowStart) / BEATS_PER_ROW) * 100}%` }}
+                    style={{ left: `${((playheadBeat - rowStart) / beatsPerRow) * 100}%` }}
                   />
                 )}
                 {rowSegments.map((seg) => {
@@ -959,8 +980,8 @@ export function ChordGrid({
                       key={`${placement.id}-${seg.row}`}
                       className={classNames}
                       style={{
-                        left: `${(seg.localStart / BEATS_PER_ROW) * 100}%`,
-                        width: `${(seg.span / BEATS_PER_ROW) * 100}%`,
+                        left: `${(seg.localStart / beatsPerRow) * 100}%`,
+                        width: `${(seg.span / beatsPerRow) * 100}%`,
                         height: CHORD_LABEL_HEIGHT,
                       }}
                     >
@@ -1007,8 +1028,8 @@ export function ChordGrid({
                     key={seg.key}
                     className="chord-label chord-label-nc"
                     style={{
-                      left: `${(seg.localStart / BEATS_PER_ROW) * 100}%`,
-                      width: `${(seg.span / BEATS_PER_ROW) * 100}%`,
+                      left: `${(seg.localStart / beatsPerRow) * 100}%`,
+                      width: `${(seg.span / beatsPerRow) * 100}%`,
                       height: CHORD_LABEL_HEIGHT,
                     }}
                   >

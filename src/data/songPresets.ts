@@ -48,6 +48,12 @@ export type SongPreset = {
   key: string;
   scale: ScaleName;
   tempo: number;
+  // Beats per bar -- optional, defaults to 4 (every preset written before this
+  // existed is implicitly 4/4). Always over a "4" denominator (simple meter);
+  // this app has no notion of compound meter (6/8, 9/8, 12/8) -- a preset with
+  // beatsPerBar: 6 renders/counts as 6/4, not 6/8. See CLAUDE.md's "Beats per
+  // bar" section for the full scope (what this drives, what it doesn't yet).
+  beatsPerBar?: number;
   metronome: boolean;
   // Both optional — see resolveLoopRange. loopStart defaults to 0, loopEnd to the
   // end of the last resolved placement (loop the whole progression).
@@ -330,6 +336,7 @@ export function isSongPreset(value: unknown): value is SongPreset {
     typeof v.key === 'string' &&
     SCALE_NAMES.includes(v.scale as ScaleName) &&
     typeof v.tempo === 'number' &&
+    (v.beatsPerBar === undefined || typeof v.beatsPerBar === 'number') &&
     typeof v.metronome === 'boolean' &&
     (v.loopStart === undefined || typeof v.loopStart === 'number') &&
     (v.loopEnd === undefined || typeof v.loopEnd === 'number') &&

@@ -3,12 +3,13 @@ import { chordName, chordNameParts, resolveSelection } from '../data/progression
 import type { Chord, ChordPlacement, NotationStyle, ScaleName } from '../data/progressions';
 import type { SectionMarker } from '../data/sections';
 
-// Four 4/4 bars per line — the minimal "chord + blanks for its held duration" chart
+// Four bars per line — the minimal "chord + blanks for its held duration" chart
 // shape the mobile companion view originated (see CLAUDE.md's melody notation
 // section for why this codebase doesn't attempt real rhythm notation instead).
-const BEATS_PER_BAR = 4;
+// BARS_PER_ROW is a fixed page-layout choice, independent of the song's own
+// meter (see ChordGrid.tsx's own BARS_PER_ROW for the same reasoning) — only
+// how many beats a bar/row represents varies, via the beatsPerBar prop below.
 const BARS_PER_ROW = 4;
-const BEATS_PER_ROW = BEATS_PER_BAR * BARS_PER_ROW;
 // Must match .beat-grid-sheet's own grid-auto-rows/row-gap in index.css — used to
 // compute a section badge's pixel position (see the sections render block
 // below), since it's a plain absolutely-positioned overlay, not a real grid
@@ -81,6 +82,10 @@ type Props = {
   // one via mobile-player__now-playing-section), so this defaults to none rather
   // than forcing every caller to pass an empty array.
   sections?: SectionMarker[];
+  // Simple meter only, always over a "4" denominator -- see CLAUDE.md's "Beats
+  // per bar" section. Defaults to 4 so existing callers (MobilePlayer.tsx, if
+  // not yet updated) keep behaving exactly as before.
+  beatsPerBar?: number;
 };
 
 /**
@@ -101,7 +106,9 @@ export function BeatGridSheet({
   playheadBeat,
   isPlaying,
   sections = [],
+  beatsPerBar = 4,
 }: Props) {
+  const beatsPerRow = beatsPerBar * BARS_PER_ROW;
   // A flat list of beat cells — CSS grid auto-flow wraps every BEATS_PER_ROW (four
   // bars) into a new visual row, so the whole chart is one grid rather than a stack
   // of independently-bordered row boxes (a per-row version could show a hairline
@@ -127,7 +134,7 @@ export function BeatGridSheet({
       const isGapStart = !placement && !wasInGap;
       wasInGap = !placement;
       let mark: BeatCell['mark'] = placement ? (isChordStart ? 'name' : null) : isGapStart ? 'nc' : null;
-      if (beat % BEATS_PER_BAR === 0) {
+      if (beat % beatsPerBar === 0) {
         if (!placement) {
           // Every bar a gap still covers gets its own "N.C." — same reasoning as
           // a held chord getting a fresh "%" each bar rather than only marking
@@ -154,7 +161,7 @@ export function BeatGridSheet({
       }
       return { beat, placement, mark };
     });
-  }, [placements, musicalKey, scale, notationStyle]);
+  }, [placements, musicalKey, scale, notationStyle, beatsPerBar]);
 
   const beatRuns = useMemo(() => {
     const runs: BeatRun[] = [];
@@ -183,8 +190,8 @@ export function BeatGridSheet({
             style={{ gridColumn: `span ${run.length}` }}
             className={
               'beat-grid-sheet-cell' +
-              (run.startBeat % BEATS_PER_ROW === 0 ? ' beat-grid-sheet-cell--row-start' : '') +
-              ((run.startBeat + run.length) % BEATS_PER_BAR === 0 ? ' beat-grid-sheet-cell--bar-end' : '') +
+              (run.startBeat % beatsPerRow === 0 ? ' beat-grid-sheet-cell--row-start' : '') +
+              ((run.startBeat + run.length) % beatsPerBar === 0 ? ' beat-grid-sheet-cell--bar-end' : '') +
               (isActive ? ' beat-grid-sheet-cell--active' : '')
             }
           >
@@ -209,15 +216,15 @@ export function BeatGridSheet({
         );
       })}
       {sections.map((section) => {
-        const row = Math.floor(section.startBeat / BEATS_PER_ROW);
-        const col = section.startBeat % BEATS_PER_ROW;
+        const row = Math.floor(section.startBeat / beatsPerRow);
+        const col = section.startBeat % beatsPerRow;
         return (
           <div
             key={section.id}
             className="beat-grid-sheet-section"
             style={{
               top: row * (ROW_HEIGHT_PX + ROW_GAP_PX),
-              left: `${(col / BEATS_PER_ROW) * 100}%`,
+              left: `${(col / beatsPerRow) * 100}%`,
             }}
           >
             {section.label}

@@ -114,6 +114,11 @@ export function MobilePlayer() {
   const [musicalKey, setMusicalKey] = useState(preset?.key ?? 'C');
   const [scale, setScale] = useState<ScaleName>(preset?.scale ?? 'major');
   const [tempo, setTempoState] = useState(preset?.tempo ?? 120);
+  // Playback-only, like key/scale/tempo above -- no mobile UI edits this (see
+  // CLAUDE.md's mobile non-goals), just read straight from whichever preset is
+  // loaded. Simple meter only, always over a "4" denominator -- see CLAUDE.md's
+  // "Beats per bar" section.
+  const beatsPerBar = preset?.beatsPerBar ?? 4;
   const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
   const [bassStyles, setBassStyles] = useState<BassStyle[]>(baseBassStyles);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -448,6 +453,7 @@ export function MobilePlayer() {
           playheadBeat={playheadBeat}
           isPlaying={isPlaying && !countInActive}
           sections={sections}
+          beatsPerBar={beatsPerBar}
         />
       </div>
 
@@ -564,11 +570,19 @@ export function MobilePlayer() {
                 onChange={(e) => setCountInBeats(Number(e.target.value) as CountInBeats)}
                 aria-label="Count-in before play starts"
               >
-                {COUNT_IN_OPTIONS.map((beats) => (
-                  <option key={beats} value={beats}>
-                    {beats === 0 ? 'Off' : `${beats} beats (${beats / 4} bar${beats === 4 ? '' : 's'})`}
-                  </option>
-                ))}
+                {COUNT_IN_OPTIONS.map((beats) => {
+                  // COUNT_IN_OPTIONS is fixed at 4/8 beats regardless of the loaded
+                  // song's own meter -- only show the "(N bars)" parenthetical when
+                  // that's a whole number of bars in the current time signature
+                  // (e.g. 4 beats in 3/4 is one bar plus a beat, not worth a label).
+                  const bars = beats / beatsPerBar;
+                  const barsLabel = Number.isInteger(bars) ? ` (${bars} bar${bars === 1 ? '' : 's'})` : '';
+                  return (
+                    <option key={beats} value={beats}>
+                      {beats === 0 ? 'Off' : `${beats} beats${barsLabel}`}
+                    </option>
+                  );
+                })}
               </select>
             </label>
             <label className="mobile-player__settings-row">
@@ -674,6 +688,7 @@ export function MobilePlayer() {
               playheadBeat={playheadBeat}
               isPlaying={isPlaying && !countInActive}
               sections={sections}
+              beatsPerBar={beatsPerBar}
             />
           </div>
           <button className="mobile-player__now-playing-stop" onClick={handleTogglePlay}>

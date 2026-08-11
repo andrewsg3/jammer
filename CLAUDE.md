@@ -25,8 +25,9 @@ actually here now.
 ## Current shape
 - **Chord grid** (`components/ChordGrid.tsx`) — a 48-bar (12 rows × 4 bars) drag/drop lead-sheet
   page, not a text field. Chord symbols sit above a real 5-line staff per row; row 0 also carries
-  the clef, a computed key signature, and the 4/4 time signature (see `data/progressions.ts`'s
-  `keySignatureAccidentals`). Placements support multi-row spans, resize/move/select/copy-paste,
+  the clef, a computed key signature, and the song's time signature (see `data/progressions.ts`'s
+  `keySignatureAccidentals`, and "Beats per bar" below for the time signature itself). Placements
+  support multi-row spans, resize/move/select/copy-paste,
   a scrubbable playhead, and a draggable loop range (rendered as 𝄆/𝄇 repeat-barline glyphs, not
   the exact loop beat — see the row's edge, not mid-measure). Chromatic chords can carry an
   optional slash bass note (`Chord.bass`, `ChordSelection`'s chromatic variant `bassOffset` —
@@ -106,6 +107,41 @@ real key-signature-aware spelling). Good enough to look like a real book at a gl
 - **Playback** (`audio/melody.ts`): a single monophonic `Tone.Synth`, scheduled straight from
   the imported notes — no chord-tracking logic needed at all, unlike bass/keys.
 
+## Beats per bar (Phase 1 done — chart/notation; Phase 2 not started — accompaniment engines)
+Time-signature support, scoped in two deliberately separate phases so the bigger, riskier half
+(rewriting the accompaniment engines) didn't have to land before the chart itself could show
+anything other than 4/4. **Simple meters only, always over a "4" denominator** — a preset with
+`beatsPerBar: 6` renders/counts as 6/4, not the compound 6/8 a musician might otherwise expect;
+this app has no notion of compound meter at all. Picker values: 3, 4, 5, 6, 7, 8, 9, 12 (not the
+same list Hookpad itself uses — no 2, and 7/8 are added — picked to cover what a real chart is
+likely to need without also promising compound-meter behavior the picker's own "/4" labels don't
+deliver).
+
+**Phase 1 (done).** `SongPreset.beatsPerBar?: number` (`data/songPresets.ts`, defaults to 4 for
+every preset written before this existed) flows into a `beatsPerBar` prop on `ChordGrid.tsx`,
+`BeatGridSheet.tsx`, and `App.tsx`'s own state (round-tripped through save/load, with a new
+"Meter" picker in `TopBar.tsx` next to Key). Both grid components split the same fixed page-layout
+constant (`BARS_PER_ROW = 4` bars per line, independent of meter — a chart still reads "4 bars per
+line" in any time signature) from the *beat* math that actually varies:
+`ChordGrid.tsx`'s `beatsPerRowFor`/`totalBeatsFor` and `BeatGridSheet.tsx`'s equivalent local
+`beatsPerRow` computation replace what used to be hardcoded `BEATS_PER_ROW`/`TOTAL_BEATS`
+constants, threaded through every beat↔pixel conversion, drag/resize/scrub handler, and the
+staff's time-signature glyph (no longer hardcoded "4/4"). `MobilePlayer.tsx` reads `beatsPerBar`
+straight from whichever preset is loaded (read-only there, like key/tempo display elsewhere in
+that playback-only view) for its own `BeatGridSheet` instances and its count-in "(N bars)" label.
+Existing chord *placements* aren't retimed by a meter change — they keep whatever `startBeat`/
+`lengthBeats` they already had, so switching a loaded song's meter mid-edit just changes how the
+same beats are grouped into bars/rows, not what's actually placed where.
+
+**Phase 2 (not started, deliberately deferred).** The accompaniment engines still hardcode 4-beat
+bars in several independent places: `instrumentStyles.ts`'s `STEPS_PER_BAR = STEPS_PER_BEAT * 4`,
+`bass.ts`'s `smartWalkBarEvents`/`tumbaoEvents`/`rootFifthPumpEvents`/`tunisiaVampEvents`/
+`noteForBeat`, `keys.ts`'s charleston/virtual-insanity/rising-sun/blues-shuffle/la-pompe rhythm
+cycles, and the drum/bass MIDI importers' own bar-rounding. None of these read the song's
+`beatsPerBar` yet — loading a non-4/4 preset today changes the chart correctly but the backing
+band still comps as if it were 4/4. Scoped as its own follow-up, comparable in size to the MIDI
+editor or sections+arrangement work, not bundled into Phase 1.
+
 ## Explicit non-goals (still true)
 - No AI/generative anything.
 - No user accounts, no server-side anything.
@@ -115,14 +151,14 @@ real key-signature-aware spelling). Good enough to look like a real book at a gl
 - No real notation engraving (beaming, rhythm-accurate note shapes, key-aware enharmonic
   spelling) — see "How melody notation works" above. **Reconsidered for export specifically** —
   see "VexFlow for printable/exported lead sheets" below.
-- **4/4 only — no real time-signature support.** `BEATS_PER_BAR`/`STEPS_PER_BAR`-style constants
-  are load-bearing in at least 8 places (`ChordGrid.tsx`'s bar/beat grid and staff barlines, the
-  hardcoded "4/4" glyph in `SheetMusicHeader.tsx`, the drum/bass/keys pattern-generation engines,
-  MIDI import step math) — not one easily-changed constant. Real support would be its own scoped
-  effort, comparable to the MIDI editor or sections+arrangement work. A cheap fake for a genuinely
-  3/4 tune ("My Favorite Things") — keep the chart in the 4/4 grid, but cycle one rhythm engine's
-  own pattern in 3 beats instead of 4 — was tried and abandoned (didn't work, not narrowed down
-  further); the keys style for that song was pulled back out rather than left half-working.
+- **Compound meters (6/8, 9/8, 12/8) — out of scope.** See "Beats per bar" below for what *is*
+  supported (simple meters, always over a "4" denominator).
+- **Accompaniment engines still assume 4/4 — see "Beats per bar" below.** The chart/notation layer
+  (Phase 1) now supports other meters; the drums/bass/keys pattern generators (Phase 2) don't yet.
+  A cheap fake for a genuinely 3/4 tune ("My Favorite Things") — keep the chart in the 4/4 grid,
+  but cycle one rhythm engine's own pattern in 3 beats instead of 4 — was tried and abandoned
+  (didn't work, not narrowed down further) before Phase 1 existed; the keys style for that song
+  was pulled back out rather than left half-working. Worth revisiting once Phase 2 lands for real.
 
 ## VexFlow for printable/exported lead sheets (idea, not scoped)
 Revisits the "no real notation engraving" non-goal above, but scoped deliberately narrower than
@@ -836,6 +872,9 @@ Highest-leverage next pieces, in order:
    large effort (lick bank/generator, turn scheduler) on top of pieces that now all actually exist
    (monophonic playback, the countdown-cue pattern, scale-rooted note generation, and now a real
    melody editor to build/audition licks against).
+3. **Beats per bar, Phase 2** (see "Beats per bar" above) — Phase 1 (chart/notation) shipped; the
+   drums/bass/keys accompaniment engines still assume 4/4 regardless of the loaded song's actual
+   meter.
 
 The in-browser MIDI editor that used to top this list shipped (v1) — see "In-browser MIDI editor"
 above for what's covered and what's still cut for scope (note resize, multi-select, undo,
