@@ -651,6 +651,22 @@ export function chromaticOptions(
   }));
 }
 
+export type ChordOptionGroup = { label: string; options: ChordOption[] };
+
+/** Every root × every quality — the full chord vocabulary, for a searchable
+ * "browse all chords" picker (ChordPalette.tsx's Magic Chord modal) rather than
+ * one curated list. Just chromaticOptions called once per quality and grouped
+ * the same way QUALITY_GROUPS already groups qualities for the old Chromatic
+ * section's own quality picker, so the picker reads as the same familiar
+ * Triads/Sixths/Sevenths/Extensions/Altered clusters instead of one flat
+ * 12-roots-times-28-qualities list. */
+export function allChordsOptions(key: string, scale: ScaleName): ChordOptionGroup[] {
+  return QUALITY_GROUPS.map((group) => ({
+    label: group.label,
+    options: group.qualities.flatMap((quality) => chromaticOptions(key, scale, quality)),
+  }));
+}
+
 export function resolveSelection(key: string, scale: ScaleName, selection: ChordSelection): Chord {
   switch (selection.type) {
     case 'diatonic':

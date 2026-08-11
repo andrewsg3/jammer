@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChordGrid } from './components/ChordGrid';
+import { ChordGrid, TOTAL_BEATS } from './components/ChordGrid';
 import { BeatGridSheet } from './components/BeatGridSheet';
 import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
@@ -408,6 +408,19 @@ function App() {
     setPlacements((prev) => [...prev, { id: crypto.randomUUID(), selection, startBeat, lengthBeats }]);
   };
 
+  // Click-to-add (ChordPalette.tsx): appends at the end of the current
+  // progression rather than a cursor position -- same "next open slot" formula
+  // ChordGrid.tsx's own paste/add-section handlers already use. No-ops (rather
+  // than clipping the chord short) if there isn't room left for the full
+  // requested length, same as handleAddSectionClick's own bounds check.
+  const handleAddChordAtEnd = (selection: ChordSelection, lengthBeats: number) => {
+    setPlacements((prev) => {
+      const startBeat = prev.length === 0 ? 0 : Math.max(...prev.map((p) => p.startBeat + p.lengthBeats));
+      if (startBeat + lengthBeats > TOTAL_BEATS) return prev;
+      return [...prev, { id: crypto.randomUUID(), selection, startBeat, lengthBeats }];
+    });
+  };
+
   const handleReplaceChord = (placement: ChordPlacement, selection: ChordSelection) => {
     setPlacements((prev) => prev.map((p) => (p.id === placement.id ? { ...p, selection } : p)));
   };
@@ -727,18 +740,16 @@ function App() {
         </div>
       )}
       <main className="app">
+        <ChordPalette
+          musicalKey={musicalKey}
+          scale={scale}
+          notationStyle={notationStyle}
+          onAudition={handleAudition}
+          onAuditionScale={handleAuditionScale}
+          onAuditionExoticScale={handleAuditionExoticScale}
+          onAddChord={handleAddChordAtEnd}
+        />
         <div className="layout">
-          <div className="layout-sidebar">
-            <h2 className="panel-title">Chord Palette</h2>
-            <ChordPalette
-              musicalKey={musicalKey}
-              scale={scale}
-              notationStyle={notationStyle}
-              onAudition={handleAudition}
-              onAuditionScale={handleAuditionScale}
-              onAuditionExoticScale={handleAuditionExoticScale}
-            />
-          </div>
           <div className="layout-grid">
             {compactGridView ? (
               <div className="beat-grid-sheet-page">

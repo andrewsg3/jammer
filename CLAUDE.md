@@ -350,6 +350,55 @@ melody is monophonic and chord-independent, drums/bass are polyphonic-lane and c
 — but if both get built, sharing the underlying grid/drag-resize interaction code is worth
 revisiting rather than building three independent editors from scratch.
 
+## Chord palette: single row, click-to-add, Magic Chord (done)
+`ChordPalette.tsx` used to be a tall sidebar column — five separately-labeled, always-visible
+rows (Diatonic, Diatonic 7ths, Borrowed, Secondary Dominants, Chromatic-with-quality-picker),
+each only reachable by dragging a chord onto the grid. Redesigned Hookpad-style: one row under
+the header, click-to-add as a second way in alongside drag, keyboard-driven duration selection,
+and a "Magic Chord" picker replacing four of the five old rows instead of stacking them
+permanently.
+
+**Layout.** `ChordPalette` moved out of `App.tsx`'s old `.layout-sidebar` column (removed
+entirely — `.layout` went from 3 columns to 2, grid + mixer) and now renders as its own
+full-width row between `TopBar` and `.layout`, freeing up real width for the grid as a side
+effect. The row itself: the 7 diatonic triads (`diatonicOptions`, unchanged) plus a "🔍 Magic
+Chord" button, a duration picker, and the existing "🎵 Audition any scale…" opener.
+
+**Click-to-add.** Every chord button — the diatonic row or anything inside Magic Chord — both
+auditions the chord (existing behavior) and appends it to the end of the current progression.
+"End of the progression" reuses the exact formula `ChordGrid.tsx`'s paste handler and
+`handleAddSectionClick` already computed independently (`placements.length === 0 ? 0 :
+Math.max(...placements.map(p => p.startBeat + p.lengthBeats))`) — App.tsx's new
+`handleAddChordAtEnd` is the one place that now owns it for chords specifically, bailing out
+(no-op) if there's no room left rather than clipping the chord short, same as the section
+version. Drag-and-drop is untouched — click-to-add is additive, not a replacement, so placing a
+chord at a specific non-append position still works exactly as before.
+
+**Keyboard duration selection.** `j`/`k`/`l`/`;` set the duration a click-to-add chord gets — 1,
+2, 4, 8 beats — Hookpad's own bindings, home-row, no modifier. Lives in `ChordPalette.tsx` as
+its own `keydown` listener (same input-tag guard `ChordGrid.tsx`'s own handler already uses, so
+typing in a text field never steals a keystroke) rather than folding into `ChordGrid.tsx`'s
+existing one — different keys, no collision, and the duration state is genuinely the palette's
+own concern. A small pill-button row doubles as both the live indicator and a mouse-friendly
+alternative to the keys.
+
+**Magic Chord.** Diatonic 7ths, Borrowed, and Secondary Dominants kept their existing generator
+functions and roman-numeral labels verbatim — only their location changed, from permanent rows
+to groups inside this on-demand picker. The Chromatic quality/`+bass` mini-picker (all 12 roots
+at one selected quality, `chromaticOptions`) is preserved the same way, at the top of the modal,
+since free-text search alone doesn't cover "build me a specific slash chord." The genuinely new
+piece is `progressions.ts`'s `allChordsOptions(key, scale)` — every root × every `ChordQuality`
+(28 of them), grouped by the existing `QUALITY_GROUPS` (Triads/Sixths/Sevenths/Extensions/
+Altered-Exotic) so it reads as the same familiar clusters rather than one flat 12×28 list — plus
+a plain client-side substring search across chord name, roman-numeral/interval label, and
+quality label, filtering all the groups (curated and generated alike) at once. Selecting a chord
+inside the modal closes it, same "quick lookup and place" feel as a command palette.
+
+**Scope, decided in advance:** v1's "Magic Chord" is a browse/search tool, not real
+harmonic-fit suggestion (Hookpad's own version suggests chords based on what's actually in the
+progression already) — that's a separate, bigger idea overlapping with the not-yet-built chord
+progression analyzer below, deliberately not attempted here.
+
 ## Drum fills into section starts (done)
 Every section marker (see `data/sections.ts`) gets a crash on its downbeat *and* a real lead-in
 fill in the bar before — not just extra hits layered over the groove, an actual interrupt: the main

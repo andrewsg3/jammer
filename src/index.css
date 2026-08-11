@@ -262,15 +262,6 @@ body {
   overflow-y: auto;
 }
 
-.layout-sidebar {
-  flex: 0 0 280px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-height: 0;
-  overflow-y: auto;
-}
-
 h1 {
   font-size: 24px;
   margin: 0;
@@ -355,7 +346,7 @@ select option {
   /* The rail's 3 fixed-width columns (see .channel-strip-rail) don't shrink below
      their own intrinsic width, and its two rows can run taller than the layout row
      has room for — scroll both axes rather than overflow the page, same
-     per-pane-scrolls-itself approach .layout-sidebar/.layout-grid already use. */
+     per-pane-scrolls-itself approach .layout-grid already uses. */
   max-height: 100%;
   overflow: auto;
 }
@@ -696,6 +687,50 @@ button:hover {
   gap: 4px;
 }
 
+/* Top row: the 7 diatonic triads, the Magic Chord opener, the new-chord duration
+   picker, and the audition-any-scale opener, all in one line now that the whole
+   palette lives full-width under the header instead of a narrow sidebar column. */
+.chord-palette-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chord-palette-toolbar .chord-palette-row {
+  flex: 1;
+  min-width: 280px;
+}
+
+.chord-duration-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chord-duration-button {
+  font-size: 12px;
+  font-weight: 700;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.chord-duration-button:hover {
+  border-color: var(--accent);
+}
+
+.chord-duration-button-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* Shows for whichever chord was last clicked/dragged in the palette below —
    suggested chord-scale pairings, each auditionable on its own. */
 .scale-suggestions {
@@ -766,6 +801,148 @@ button:hover {
 
 .exotic-scale-open-button:hover {
   opacity: 0.9;
+}
+
+/* Same solid trigger-button treatment as .exotic-scale-open-button — both are
+   plain modal openers, not a distinct control family that needs its own look. */
+.magic-chord-open-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.magic-chord-open-button:hover {
+  opacity: 0.9;
+}
+
+.magic-chord-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+/* Wider and taller than .exotic-scale-modal -- this one has to hold a search box
+   plus potentially several chord rows at once, not one compact form. */
+.magic-chord-modal {
+  width: 100%;
+  max-width: 760px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  box-sizing: border-box;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  overflow-y: auto;
+}
+
+.magic-chord-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.magic-chord-header h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.magic-chord-close {
+  font-size: 16px;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 5px 8px;
+}
+
+.magic-chord-chromatic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.magic-chord-chromatic-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.55;
+}
+
+.magic-chord-chromatic .chord-palette-row {
+  flex: 1 1 100%;
+  margin-top: 4px;
+}
+
+.magic-chord-search {
+  font-size: 14px;
+  padding: 9px 12px;
+  border-radius: 8px;
+}
+
+.magic-chord-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+/* Accent tick instead of a plain label — same touch the old sidebar's
+   .palette-section-title used, echoing each channel strip's own accent-colored
+   top border so a chord group still reads as "an instrument," not a plain list. */
+.magic-chord-group-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.55;
+  padding-left: 9px;
+  position: relative;
+}
+
+.magic-chord-group-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 1px;
+  bottom: 1px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.7;
+}
+
+.magic-chord-empty {
+  font-size: 13px;
+  opacity: 0.6;
+  font-style: italic;
+  margin: 0;
 }
 
 .exotic-scale-backdrop {
@@ -899,55 +1076,6 @@ button:hover {
 
 .exotic-scale-audition-button:hover {
   filter: brightness(1.08);
-}
-
-.palette-section {
-  padding: 10px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-}
-
-.palette-section:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.palette-section:first-child {
-  padding-top: 0;
-}
-
-.palette-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 8px;
-}
-
-.palette-section-title {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  opacity: 0.55;
-  margin: 0;
-  /* A short accent tick instead of a plain label — echoes each channel strip's
-     own accent-colored top border, so the palette reads as another "instrument"
-     rather than a plain settings list. */
-  padding-left: 9px;
-  position: relative;
-}
-
-.palette-section-title::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 1px;
-  bottom: 1px;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--accent);
-  opacity: 0.7;
 }
 
 .quality-select {
@@ -2412,7 +2540,7 @@ button:hover {
   }
 
   .top-bar,
-  .layout-sidebar,
+  .chord-palette,
   .channel-strip-column,
   .loading-modal-backdrop,
   .chord-grid-hint,
