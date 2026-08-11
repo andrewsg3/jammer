@@ -365,6 +365,7 @@ export function MobilePlayer() {
       melody: preset.melody ?? [],
       sections,
       countInBeats,
+      beatsPerBar,
     });
     setIsPlaying(true);
   }, [
@@ -381,6 +382,7 @@ export function MobilePlayer() {
     sections,
     countInBeats,
     instrumentsLoading,
+    beatsPerBar,
   ]);
 
   const currentChordIndex = isPlaying

@@ -38,13 +38,13 @@ export function setMuted(muted: boolean): void {
   output.mute = muted;
 }
 
-export function scheduleMetronome(): void {
+export function scheduleMetronome(beatsPerBar: number = 4): void {
   disposeMetronome();
   ensureSynth();
   beatCount = 0;
 
   loop = new Tone.Loop((time) => {
-    const isDownbeat = beatCount % 4 === 0;
+    const isDownbeat = beatCount % beatsPerBar === 0;
     synth!.triggerAttackRelease(isDownbeat ? 'C6' : 'C5', '32n', time, isDownbeat ? 1 : 0.6);
     beatCount++;
   }, '4n').start(0);
@@ -58,16 +58,17 @@ export function disposeMetronome(): void {
 /** Clicks leading into the downbeat, before the Transport itself has actually
  * started — scheduled via Tone.now()-relative one-shots (same technique
  * engine.ts's chord/scale auditions use), since the Transport-driven loop above
- * has nothing to schedule against yet. Accents every 4th click the same way the
- * real loop does, so a 2-bar count-in still reads as two bars, not just 8 clicks.
- * Always audible (see countInOutput above) regardless of the Metronome track's
- * own mute/volume — those only govern the click loop that runs during playback. */
-export function playCountIn(beats: number, bpm: number): void {
+ * has nothing to schedule against yet. Accents every beatsPerBar-th click the
+ * same way the real loop does, so a count-in still reads as whole bars in the
+ * song's own meter, not just N undifferentiated clicks. Always audible (see
+ * countInOutput above) regardless of the Metronome track's own mute/volume —
+ * those only govern the click loop that runs during playback. */
+export function playCountIn(beats: number, bpm: number, beatsPerBar: number = 4): void {
   ensureCountInSynth();
   const secondsPerBeat = 60 / bpm;
   const now = Tone.now();
   for (let i = 0; i < beats; i++) {
-    const isDownbeat = i % 4 === 0;
+    const isDownbeat = i % beatsPerBar === 0;
     countInSynth!.triggerAttackRelease(isDownbeat ? 'C6' : 'C5', '32n', now + i * secondsPerBeat, isDownbeat ? 1 : 0.6);
   }
 }

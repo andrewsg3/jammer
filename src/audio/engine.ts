@@ -134,7 +134,11 @@ export async function auditionExoticScale(chord: Chord, scaleRoot: string, inter
   runScaleAudition(chord, scaleRoot, notesFromIntervals(scaleRoot, intervals, AUDITION_OCTAVE));
 }
 
-// 0 = no count-in, 4 = one bar, 8 = two bars (both in 4/4, this app's only time signature).
+// 0 = no count-in, 4 = one bar, 8 = two bars in 4/4 -- not necessarily a whole
+// number of bars in every meter (see MobilePlayer.tsx's own "(N bars)" label,
+// which only shows a bar count when it divides evenly). Fixed regardless of the
+// song's own beatsPerBar; only the click accent pattern (see playCountIn) reads
+// the actual meter.
 export type CountInBeats = 0 | 4 | 8;
 export const COUNT_IN_OPTIONS: CountInBeats[] = [0, 4, 8];
 
@@ -156,6 +160,10 @@ export type PlaybackParams = {
   sections: SectionMarker[];
   tempo: number;
   countInBeats: CountInBeats;
+  // Simple meter only, always over a "4" denominator -- see CLAUDE.md's "Beats
+  // per bar" section. Only the metronome's accent pattern reads this so far
+  // (Phase 2 -- drums/bass/keys pattern generators -- still assumes 4/4).
+  beatsPerBar: number;
 };
 
 export function setTempo(bpm: number): void {
@@ -328,7 +336,7 @@ export async function play(params: PlaybackParams): Promise<void> {
   if (params.melody.length > 0) scheduleMelody(params.melody);
   // Always scheduled — audibility is controlled by its mute state (a track like any
   // other now), not by whether it's running at all.
-  scheduleMetronome();
+  scheduleMetronome(params.beatsPerBar);
 
   // Count-in clicks happen before the Transport's own clock starts ticking at all,
   // so they're scheduled independently (Tone.now()-relative, same as the chord/scale
@@ -339,7 +347,7 @@ export async function play(params: PlaybackParams): Promise<void> {
   // downstream never needs to know a count-in happened at all.
   const secondsPerBeat = 60 / params.tempo;
   const countInSeconds = params.countInBeats * secondsPerBeat;
-  if (params.countInBeats > 0) playCountIn(params.countInBeats, params.tempo);
+  if (params.countInBeats > 0) playCountIn(params.countInBeats, params.tempo, params.beatsPerBar);
 
   // The offset (2nd arg) is where the transport's internal clock begins — lets
   // playback start from wherever the playhead was dragged to, not always bar 1.

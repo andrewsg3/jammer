@@ -656,6 +656,7 @@ function App() {
       melody,
       sections,
       countInBeats,
+      beatsPerBar,
     });
     setIsPlaying(true);
   }, [
@@ -677,6 +678,7 @@ function App() {
     countInBeats,
     sections,
     instrumentsLoading,
+    beatsPerBar,
   ]);
 
   useEffect(() => {

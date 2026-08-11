@@ -6,9 +6,9 @@
   "key": "E",
   "scale": "minor",
   "tempo": 220,
+  "beatsPerBar": 3,
   "metronome": false,
-  "loopStart": 0,
-  "loopEnd": 100,
+  "loopStart": 24,
   "drumStyle": "Hat Foot",
   "bassStyle": "Smart Walking",
   "keysStyle": "Sustained 7ths",
@@ -23,34 +23,42 @@
     {
       "label": "Intro",
       "placements": [
-        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 4 }
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 12 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 3 }
       ]
     },
     {
       "label": "A",
       "placements": [
-        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 0, "quality": "minMaj7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 0, "quality": "minMaj7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 16 },
-        { "selection": { "type": "chromatic", "offset": 5, "quality": "min7" }, "lengthBeats": 4 }
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "minMaj7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "minMaj7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 5, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 5, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 10, "quality": "dom7flat9" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 1, "quality": "maj", "bassOffset": 0 }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 5, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 2, "quality": "m7b5" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7flat9" }, "lengthBeats": 3 }
       ]
 
     },
     {
       "label": "B",
       "placements": [
-        { "selection": { "type": "chromatic", "offset": 10, "quality": "dom7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 2, "quality": "m7b5" }, "lengthBeats": 4 },
-        { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 4 }
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 3 },
+        { "selection": { "type": "chromatic", "offset": 2, "quality": "min7" }, "lengthBeats": 3 }
       ]
     }
   ],

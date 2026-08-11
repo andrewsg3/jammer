@@ -133,6 +133,14 @@ Existing chord *placements* aren't retimed by a meter change — they keep whate
 `lengthBeats` they already had, so switching a loaded song's meter mid-edit just changes how the
 same beats are grouped into bars/rows, not what's actually placed where.
 
+**Metronome (done, not really "Phase 2").** `audio/metronome.ts`'s click accent (`scheduleMetronome`)
+and count-in clicks (`playCountIn`) both now take a `beatsPerBar` param (threaded from
+`PlaybackParams.beatsPerBar` in `audio/engine.ts`'s `play()`, itself passed from `App.tsx`/
+`MobilePlayer.tsx`'s own `beatsPerBar` state) instead of hardcoding `% 4` — the downbeat accent
+(`C6` vs `C5`) now lands on beat 1 of every bar in the song's actual meter. Small and
+self-contained enough to land alongside Phase 1 rather than waiting on the real Phase 2 below —
+it's just a click accent pattern, not a pattern generator with real musical content.
+
 **Phase 2 (not started, deliberately deferred).** The accompaniment engines still hardcode 4-beat
 bars in several independent places: `instrumentStyles.ts`'s `STEPS_PER_BAR = STEPS_PER_BEAT * 4`,
 `bass.ts`'s `smartWalkBarEvents`/`tumbaoEvents`/`rootFifthPumpEvents`/`tunisiaVampEvents`/
