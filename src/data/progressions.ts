@@ -434,10 +434,18 @@ export function bassRootNote(chord: Chord): string {
 }
 
 /** The diatonic chord built on a given scale degree of a key. */
+// Sharp in a sharp key, flat in a flat key -- same reasoning/fix as chromaticChord
+// below: a diatonic chord's root should read consistently with the staff's own
+// key signature (e.g. Bb/Eb in G minor's two flats, not A#/D#), not default to
+// sharp regardless of key. shiftRoot/shiftRootFlat both compute the identical
+// semitone shift, just spelling the result from a different table.
+function shiftRootForKey(key: string, scale: ScaleName, offset: number): string {
+  return keySignatureAccidentals(key, scale).sign === 'sharp' ? shiftRoot(key, offset) : shiftRootFlat(key, offset);
+}
+
 export function diatonicChord(key: string, scale: ScaleName, degree: ScaleDegree): Chord {
-  const root = rootSemitone(key);
-  const shifted = (root + SCALE_INTERVALS[scale][degree]) % 12;
-  return { root: SEMITONE_TO_NOTE[shifted], quality: DEGREE_QUALITIES[scale][degree] };
+  const root = shiftRootForKey(key, scale, SCALE_INTERVALS[scale][degree]);
+  return { root, quality: DEGREE_QUALITIES[scale][degree] };
 }
 
 /** All 7 diatonic chords of a key/scale, in scale-degree order. */
@@ -447,9 +455,8 @@ export function diatonicChords(key: string, scale: ScaleName): Chord[] {
 
 /** The diatonic *seventh* chord built on a given scale degree of a key. */
 export function diatonicSeventhChord(key: string, scale: ScaleName, degree: ScaleDegree): Chord {
-  const root = rootSemitone(key);
-  const shifted = (root + SCALE_INTERVALS[scale][degree]) % 12;
-  return { root: SEMITONE_TO_NOTE[shifted], quality: DEGREE_SEVENTH_QUALITIES[scale][degree] };
+  const root = shiftRootForKey(key, scale, SCALE_INTERVALS[scale][degree]);
+  return { root, quality: DEGREE_SEVENTH_QUALITIES[scale][degree] };
 }
 
 /** e.g. "I", "vii°" */
@@ -600,11 +607,15 @@ export function borrowedOptions(key: string, scale: ScaleName): ChordOption[] {
 }
 
 export function secondaryDominantOptions(key: string, scale: ScaleName): ChordOption[] {
+  // Sign follows the *song's* key signature, not the target chord's own root --
+  // same reasoning as diatonicChord/chromaticChord elsewhere in this file.
+  const sign = keySignatureAccidentals(key, scale).sign;
   return (SECONDARY_DOMINANT_DEGREES[scale] ?? []).map((degree) => {
     const target = diatonicChord(key, scale, degree);
+    const root = sign === 'sharp' ? shiftRoot(target.root, 7) : shiftRootFlat(target.root, 7);
     return {
       selection: { type: 'secondaryDominant', degree },
-      chord: { root: shiftRoot(target.root, 7), quality: 'dom7' },
+      chord: { root, quality: 'dom7' },
       label: `V7/${romanNumeral(scale, degree)}`,
     };
   });
@@ -682,7 +693,9 @@ export function resolveSelection(key: string, scale: ScaleName, selection: Chord
     }
     case 'secondaryDominant': {
       const target = diatonicChord(key, scale, selection.degree);
-      return { root: shiftRoot(target.root, 7), quality: 'dom7' };
+      const sign = keySignatureAccidentals(key, scale).sign;
+      const root = sign === 'sharp' ? shiftRoot(target.root, 7) : shiftRootFlat(target.root, 7);
+      return { root, quality: 'dom7' };
     }
     case 'chromatic':
       return chromaticChord(key, scale, selection.offset, selection.quality, selection.bassOffset);

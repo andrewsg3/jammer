@@ -39,7 +39,6 @@ import {
   play,
   stop,
   auditionChord,
-  auditionScale,
   auditionExoticScale,
   setTempo as setTransportTempo,
   getCurrentBeat,
@@ -396,10 +395,6 @@ function App() {
     auditionChord(chord);
   };
 
-  const handleAuditionScale = (chord: Chord, scaleName: ScaleName) => {
-    auditionScale(chord, scaleName);
-  };
-
   const handleAuditionExoticScale = (chord: Chord, scaleRoot: string, intervals: number[]) => {
     auditionExoticScale(chord, scaleRoot, intervals);
   };
@@ -745,7 +740,6 @@ function App() {
           scale={scale}
           notationStyle={notationStyle}
           onAudition={handleAudition}
-          onAuditionScale={handleAuditionScale}
           onAuditionExoticScale={handleAuditionExoticScale}
           onAddChord={handleAddChordAtEnd}
         />

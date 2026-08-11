@@ -3,7 +3,7 @@ import { SCALE_NAMES, SCALE_LABELS } from '../data/progressions';
 import type { ScaleName } from '../data/progressions';
 import type { SongPreset } from '../data/songPresets';
 import { SongPresetFileControls } from './SongPresetFileControls';
-import { APP_TITLE } from '../appInfo';
+import { APP_NAME, APP_TITLE } from '../appInfo';
 
 const MIN_TEMPO = 40;
 const MAX_TEMPO = 220;
@@ -88,7 +88,7 @@ export function TopBar({
             rel="noopener noreferrer"
             className="coffee-link"
           >
-            ☕ Support Jazzmate
+            ☕ Support {APP_NAME}
           </a>
         </div>
 

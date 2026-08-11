@@ -12,10 +12,8 @@ import {
   shiftRootFlat,
   QUALITY_GROUPS,
   QUALITY_LABELS,
-  SCALE_LABELS,
 } from '../data/progressions';
 import type { Chord, ChordOption, ChordSelection, ChordQuality, NotationStyle, ScaleName } from '../data/progressions';
-import { SCALE_SUGGESTIONS } from '../data/scaleSuggestions';
 import { EXOTIC_SCALE_GROUPS, scaleDegreeLabels, scaleDegreeNoteNames } from '../data/exoticScales';
 
 // Same 12 chromatic roots as the Chromatic mini-picker's row, for its "/bass" dropdown
@@ -40,12 +38,26 @@ const DURATION_BEATS_BY_KEY: Record<string, number> = Object.fromEntries(
   DURATION_OPTIONS.map(({ key, beats }) => [key, beats]),
 );
 
+// Hookpad-style scale-degree coloring: 1-7 -> red-orange-yellow-green-blue-
+// indigo-violet, a plain rainbow rather than this app's own single accent
+// color, so a chord's degree reads at a glance independent of key. Only
+// diatonic/diatonicSeventh selections carry a real scale degree -- borrowed,
+// secondary dominant, and chromatic chords aren't "the Nth degree of the key"
+// in the same sense, so they stay uncolored rather than forcing a fit.
+const DEGREE_COLORS = ['#e53e3e', '#ed8936', '#ecc94b', '#48bb78', '#4299e1', '#4c51bf', '#9f7aea'];
+
+function degreeColorFor(selection: ChordSelection): string | undefined {
+  if (selection.type === 'diatonic' || selection.type === 'diatonicSeventh') {
+    return DEGREE_COLORS[selection.degree];
+  }
+  return undefined;
+}
+
 type Props = {
   musicalKey: string;
   scale: ScaleName;
   notationStyle: NotationStyle;
   onAudition: (chord: Chord) => void;
-  onAuditionScale: (chord: Chord, scale: ScaleName) => void;
   onAuditionExoticScale: (chord: Chord, scaleRoot: string, intervals: number[]) => void;
   // Appends a chord at the end of the current progression (App.tsx computes
   // exactly where "the end" is) -- click-to-add, a second way in alongside
@@ -53,7 +65,7 @@ type Props = {
   onAddChord: (selection: ChordSelection, lengthBeats: number) => void;
 };
 
-/** One chord button, shared by the top row and the Magic Chord picker's lists --
+/** One chord button, shared by the top row and the Chord Finder picker's lists --
  * clicking it both auditions the chord (existing behavior) and appends it to the
  * grid at whatever duration is currently selected; dragging it still places it at
  * a specific position, exactly as before. */
@@ -67,10 +79,12 @@ function ChordButton({
   onSelect: (option: ChordOption) => void;
 }) {
   const { root, core, ext, bass } = chordNameParts(option.chord, notationStyle);
+  const degreeColor = degreeColorFor(option.selection);
   return (
     <button
       type="button"
-      className="chord-palette-button"
+      className={`chord-palette-button${degreeColor ? ' chord-palette-button-degree' : ''}`}
+      style={degreeColor ? { borderTopColor: degreeColor } : undefined}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', serializeSelection(option.selection));
@@ -246,7 +260,7 @@ function optionMatchesQuery(option: ChordOption, query: string, notationStyle: N
  * Chromatic mini-picker (quality + optional /bass, all 12 roots) is preserved
  * as-is too, above the search — search alone doesn't cover "build me a slash
  * chord," so this stays the dedicated way to do that. */
-function MagicChordModal({
+function ChordFinderModal({
   musicalKey,
   scale,
   notationStyle,
@@ -276,17 +290,17 @@ function MagicChordModal({
     .filter((group) => group.options.length > 0);
 
   return (
-    <div className="magic-chord-backdrop" role="dialog" aria-modal="true" aria-label="Magic Chord" onClick={onClose}>
-      <div className="magic-chord-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="magic-chord-header">
-          <h2>🔍 Magic Chord</h2>
-          <button type="button" className="magic-chord-close" onClick={onClose} aria-label="Close">
+    <div className="chord-finder-backdrop" role="dialog" aria-modal="true" aria-label="Chord Finder" onClick={onClose}>
+      <div className="chord-finder-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="chord-finder-header">
+          <h2>🔍 Chord Finder</h2>
+          <button type="button" className="chord-finder-close" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </div>
 
-        <div className="magic-chord-chromatic">
-          <span className="magic-chord-chromatic-label">Chromatic</span>
+        <div className="chord-finder-chromatic">
+          <span className="chord-finder-chromatic-label">Chromatic</span>
           <select
             className="quality-select"
             value={chromaticQuality}
@@ -325,7 +339,7 @@ function MagicChordModal({
 
         <input
           type="text"
-          className="magic-chord-search"
+          className="chord-finder-search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search chords — e.g. “bVII”, “Bb”, “diminished”…"
@@ -333,13 +347,13 @@ function MagicChordModal({
           autoFocus
         />
 
-        <div className="magic-chord-groups">
+        <div className="chord-finder-groups">
           {groups.length === 0 ? (
-            <p className="magic-chord-empty">No chords match "{query}".</p>
+            <p className="chord-finder-empty">No chords match "{query}".</p>
           ) : (
             groups.map((group) => (
-              <div key={group.label} className="magic-chord-group">
-                <h3 className="magic-chord-group-title">{group.label}</h3>
+              <div key={group.label} className="chord-finder-group">
+                <h3 className="chord-finder-group-title">{group.label}</h3>
                 <ChordButtonRow options={group.options} notationStyle={notationStyle} onSelect={onSelect} />
               </div>
             ))
@@ -355,16 +369,15 @@ export function ChordPalette({
   scale,
   notationStyle,
   onAudition,
-  onAuditionScale,
   onAuditionExoticScale,
   onAddChord,
 }: Props) {
-  // Whichever chord was last clicked/dragged — drives the scale-suggestions panel
-  // below. Not the same thing as a chord already placed on the grid; this is
-  // purely "the last one you were just looking at in the palette."
+  // Whichever chord was last clicked/dragged — seeds the Audition-any-scale
+  // modal's initial chord. Not the same thing as a chord already placed on the
+  // grid; this is purely "the last one you were just looking at in the palette."
   const [selectedChord, setSelectedChord] = useState<Chord | null>(null);
   const [exoticModalOpen, setExoticModalOpen] = useState(false);
-  const [magicChordOpen, setMagicChordOpen] = useState(false);
+  const [chordFinderOpen, setChordFinderOpen] = useState(false);
   // What length a click-to-add chord gets — j/k/l/; below, defaulting to a full
   // bar (4 beats), the same length new chords implicitly got before this existed.
   const [selectedDuration, setSelectedDuration] = useState(4);
@@ -382,28 +395,25 @@ export function ChordPalette({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Shared by the top row and the Magic Chord picker: audition it (existing
-  // behavior, also drives the scale-suggestions panel below) and append it to
-  // the grid at the currently-selected duration.
+  // Shared by the top row and the Chord Finder picker: audition it (existing
+  // behavior) and append it to the grid at the currently-selected duration.
   const handleSelect = (option: ChordOption) => {
     setSelectedChord(option.chord);
     onAudition(option.chord);
     onAddChord(option.selection, selectedDuration);
   };
 
-  const handleMagicChordSelect = (option: ChordOption) => {
+  const handleChordFinderSelect = (option: ChordOption) => {
     handleSelect(option);
-    setMagicChordOpen(false);
+    setChordFinderOpen(false);
   };
-
-  const suggestions = selectedChord ? SCALE_SUGGESTIONS[selectedChord.quality] : [];
 
   return (
     <div className="chord-palette">
       <div className="chord-palette-toolbar">
         <ChordButtonRow options={diatonicOptions(musicalKey, scale)} notationStyle={notationStyle} onSelect={handleSelect} />
-        <button type="button" className="magic-chord-open-button" onClick={() => setMagicChordOpen(true)}>
-          🔍 Magic Chord
+        <button type="button" className="chord-finder-open-button" onClick={() => setChordFinderOpen(true)}>
+          🔍 Chord Finder
         </button>
         <div className="chord-duration-picker" role="radiogroup" aria-label="New chord duration">
           {DURATION_OPTIONS.map(({ key, beats }) => (
@@ -429,46 +439,13 @@ export function ChordPalette({
         </button>
       </div>
 
-      {selectedChord && (
-        <div className="scale-suggestions">
-          <span className="scale-suggestions-chord">
-            {(() => {
-              const { root, core, ext, bass } = chordNameParts(selectedChord, notationStyle);
-              return (
-                <>
-                  {root}
-                  {core}
-                  {ext && <sup className="chord-ext">{ext}</sup>}
-                  {bass}
-                </>
-              );
-            })()}
-          </span>
-          {suggestions.length > 0 ? (
-            suggestions.map((suggestedScale) => (
-              <button
-                key={suggestedScale}
-                type="button"
-                className="scale-suggestion-button"
-                onClick={() => onAuditionScale(selectedChord, suggestedScale)}
-                title={`Audition ${SCALE_LABELS[suggestedScale]} over this chord`}
-              >
-                {SCALE_LABELS[suggestedScale]}
-              </button>
-            ))
-          ) : (
-            <span className="scale-suggestions-none">no clean fit in this app's scales</span>
-          )}
-        </div>
-      )}
-
-      {magicChordOpen && (
-        <MagicChordModal
+      {chordFinderOpen && (
+        <ChordFinderModal
           musicalKey={musicalKey}
           scale={scale}
           notationStyle={notationStyle}
-          onSelect={handleMagicChordSelect}
-          onClose={() => setMagicChordOpen(false)}
+          onSelect={handleChordFinderSelect}
+          onClose={() => setChordFinderOpen(false)}
         />
       )}
 

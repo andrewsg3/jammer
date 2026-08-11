@@ -350,12 +350,12 @@ melody is monophonic and chord-independent, drums/bass are polyphonic-lane and c
 — but if both get built, sharing the underlying grid/drag-resize interaction code is worth
 revisiting rather than building three independent editors from scratch.
 
-## Chord palette: single row, click-to-add, Magic Chord (done)
+## Chord palette: single row, click-to-add, Chord Finder (done)
 `ChordPalette.tsx` used to be a tall sidebar column — five separately-labeled, always-visible
 rows (Diatonic, Diatonic 7ths, Borrowed, Secondary Dominants, Chromatic-with-quality-picker),
 each only reachable by dragging a chord onto the grid. Redesigned Hookpad-style: one row under
 the header, click-to-add as a second way in alongside drag, keyboard-driven duration selection,
-and a "Magic Chord" picker replacing four of the five old rows instead of stacking them
+and a "Chord Finder" picker replacing four of the five old rows instead of stacking them
 permanently.
 
 **Layout.** `ChordPalette` moved out of `App.tsx`'s old `.layout-sidebar` column (removed
@@ -364,7 +364,7 @@ full-width row between `TopBar` and `.layout`, freeing up real width for the gri
 effect. The row itself: the 7 diatonic triads (`diatonicOptions`, unchanged) plus a "🔍 Magic
 Chord" button, a duration picker, and the existing "🎵 Audition any scale…" opener.
 
-**Click-to-add.** Every chord button — the diatonic row or anything inside Magic Chord — both
+**Click-to-add.** Every chord button — the diatonic row or anything inside Chord Finder — both
 auditions the chord (existing behavior) and appends it to the end of the current progression.
 "End of the progression" reuses the exact formula `ChordGrid.tsx`'s paste handler and
 `handleAddSectionClick` already computed independently (`placements.length === 0 ? 0 :
@@ -382,7 +382,7 @@ existing one — different keys, no collision, and the duration state is genuine
 own concern. A small pill-button row doubles as both the live indicator and a mouse-friendly
 alternative to the keys.
 
-**Magic Chord.** Diatonic 7ths, Borrowed, and Secondary Dominants kept their existing generator
+**Chord Finder.** Diatonic 7ths, Borrowed, and Secondary Dominants kept their existing generator
 functions and roman-numeral labels verbatim — only their location changed, from permanent rows
 to groups inside this on-demand picker. The Chromatic quality/`+bass` mini-picker (all 12 roots
 at one selected quality, `chromaticOptions`) is preserved the same way, at the top of the modal,
@@ -394,10 +394,26 @@ a plain client-side substring search across chord name, roman-numeral/interval l
 quality label, filtering all the groups (curated and generated alike) at once. Selecting a chord
 inside the modal closes it, same "quick lookup and place" feel as a command palette.
 
-**Scope, decided in advance:** v1's "Magic Chord" is a browse/search tool, not real
+**Scope, decided in advance:** v1's "Chord Finder" is a browse/search tool, not real
 harmonic-fit suggestion (Hookpad's own version suggests chords based on what's actually in the
 progression already) — that's a separate, bigger idea overlapping with the not-yet-built chord
 progression analyzer below, deliberately not attempted here.
+
+**Rainbow scale-degree coloring (done, follow-up).** Every diatonic/diatonic-7th chord button
+(the top row, and Chord Finder's "Diatonic 7ths" group) gets a colored top edge by scale degree —
+1-7 → red-orange-yellow-green-blue-indigo-violet (`ChordPalette.tsx`'s `DEGREE_COLORS`), a plain
+rainbow independent of the app's own single accent color, so a chord's degree reads at a glance
+regardless of key — same idea as Hookpad's own consistent-per-degree coloring. Deliberately only
+a colored top edge (matching each channel strip's own accent-top-border convention) rather than
+recoloring the whole button, and deliberately scoped to true diatonic-degree chords only —
+borrowed, secondary-dominant, and chromatic selections aren't "the Nth degree of the key" in the
+same sense, so they stay uncolored rather than forcing a fit.
+
+**Scale-suggestions panel removed (follow-up).** The auto-popup strip that used to show curated
+scale pills whenever a chord was clicked (`SCALE_SUGGESTIONS`-driven, described in "Chord-scale
+suggestions and auditioning" below) was removed once the palette became a single row — the
+"Audition any scale" modal already covers the same job more generally. `SCALE_SUGGESTIONS` and
+`audio/engine.ts`'s `auditionScale` are both untouched, just no longer wired to any UI.
 
 ## Drum fills into section starts (done)
 Every section marker (see `data/sections.ts`) gets a crash on its downbeat *and* a real lead-in
@@ -501,35 +517,41 @@ existing at all.
 Three related practice-aid ideas. The first two are done; the third is a much
 bigger, and partly non-goal-conflicting, undertaking — see below.
 
-**Suggest scales over chords (done).** `data/scaleSuggestions.ts`'s
-`SCALE_SUGGESTIONS: Record<ChordQuality, ScaleName[]>` maps each chord quality to
-the jazz-theory-standard scale(s) that fit it — e.g. Mixolydian for `dom7`, Dorian
-for `min7`/`m6`, Lydian for `maj7sharp11`. Real constraint worth knowing: this
-app's `ScaleName` only has the 7 diatonic modes of the major scale (see "Current
-shape" above) — no melodic/harmonic minor, whole-tone, or diminished/octatonic
-scales, which several qualities' actual textbook answer needs (altered dominants,
-`aug`, `minMaj7`). Rather than force a wrong single-mode answer onto those, their
-entry is an empty array — `ChordPalette.tsx`'s suggestions panel shows "no clean
-fit in this app's scales" for those rather than a fabricated-sounding one. UI:
-clicking/dragging any palette chord sets it as ChordPalette's own
-`selectedChord` state, which drives a small panel above the palette rows
-showing that chord's name plus a pill button per suggested scale.
+**Suggest scales over chords (data still exists; UI panel removed).**
+`data/scaleSuggestions.ts`'s `SCALE_SUGGESTIONS: Record<ChordQuality, ScaleName[]>`
+maps each chord quality to the jazz-theory-standard scale(s) that fit it — e.g.
+Mixolydian for `dom7`, Dorian for `min7`/`m6`, Lydian for `maj7sharp11`. Real
+constraint worth knowing: this app's `ScaleName` only has the 7 diatonic modes of
+the major scale (see "Current shape" above) — no melodic/harmonic minor,
+whole-tone, or diminished/octatonic scales, which several qualities' actual
+textbook answer needs (altered dominants, `aug`, `minMaj7`). Rather than force a
+wrong single-mode answer onto those, their entry is an empty array. The
+auto-popup panel that used to show these pills whenever a chord was
+clicked/dragged (`ChordPalette.tsx`'s `selectedChord`-driven strip) was removed
+once the chord palette became a single row (see "Chord palette" above) — the
+"Audition any scale" modal covers the same job (any scale over any chord, not
+just this table's curated per-quality picks) without needing a second, narrower
+panel next to it. `SCALE_SUGGESTIONS` itself is untouched and still a real,
+reusable mapping — just not wired into any UI right now.
 
-**Audition different scales over chords (done).** `audio/engine.ts`'s
-`auditionScale(chord, scale)`, a sibling to `auditionChord` — triggers a sustained
-chord pad (one octave down, via `Tone.Sampler.triggerAttack`, no release) then
-runs the scale's own notes (rooted on the chord's root, not the song's key —
-`progressions.ts`'s new `scaleTones()`, same interval-table approach as
-`chordTones`) up and back down over it via `Tone.now()`-relative one-shot
-scheduling, independent of Transport/song playback, same as `auditionChord`. A
-new scale audition releases whatever pad is still ringing from a previous one
-first, so rapid clicking doesn't pile up sustained pads. Wired to each suggestion
-pill button in the panel described above.
+**Audition different scales over chords (engine function still exists; no longer
+wired to any UI).** `audio/engine.ts`'s `auditionScale(chord, scale)`, a sibling
+to `auditionChord` — triggers a sustained chord pad (one octave down, via
+`Tone.Sampler.triggerAttack`, no release) then runs the scale's own notes (rooted
+on the chord's root, not the song's key — `progressions.ts`'s `scaleTones()`,
+same interval-table approach as `chordTones`) up and back down over it via
+`Tone.now()`-relative one-shot scheduling, independent of Transport/song
+playback, same as `auditionChord`. A new scale audition releases whatever pad is
+still ringing from a previous one first, so rapid clicking doesn't pile up
+sustained pads. Used to be wired to each suggestion pill button in the panel
+described above; that panel is gone (see previous entry), and nothing calls
+`auditionScale` right now — left in place as a small, self-contained utility
+rather than deleted, since `runScaleAudition` (its shared core with
+`auditionExoticScale`, which the modal below still uses live) would need
+disentangling for no real benefit.
 
-**"Audition any scale" modal (done).** The suggestions panel above is
-deliberately narrow — only this app's own 7-mode `ScaleName` vocabulary, only the
-qualities `SCALE_SUGGESTIONS` has a real answer for. The "🎵 Audition any
-scale…" button (`ChordPalette.tsx`) opens a free-form companion: any of 12 roots
+**"Audition any scale" modal (done).** Always covered more ground than the
+suggestions panel above — any of 12 roots
 × all `ChordQuality` values for the chord, any of 19 scales from
 `data/exoticScales.ts`'s `EXOTIC_SCALE_GROUPS` (grouped the same way
 `QUALITY_GROUPS` groups chord qualities, into `<optgroup>`s — Diatonic Modes,

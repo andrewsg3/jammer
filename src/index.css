@@ -687,7 +687,7 @@ button:hover {
   gap: 4px;
 }
 
-/* Top row: the 7 diatonic triads, the Magic Chord opener, the new-chord duration
+/* Top row: the 7 diatonic triads, the Chord Finder opener, the new-chord duration
    picker, and the audition-any-scale opener, all in one line now that the whole
    palette lives full-width under the header instead of a narrow sidebar column. */
 .chord-palette-toolbar {
@@ -731,81 +731,13 @@ button:hover {
   color: #fff;
 }
 
-/* Shows for whichever chord was last clicked/dragged in the palette below —
-   suggested chord-scale pairings, each auditionable on its own. */
-.scale-suggestions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 10px;
-  margin-bottom: 6px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
-}
-
-.scale-suggestions-chord {
-  /* Same plain UI font as .chord-palette-button .chord-name, not Architects
-     Daughter — that handwritten font is for chord symbols sitting on the actual
-     manuscript-paper sheet, not for palette/UI text like this. */
-  font-size: 15px;
-  font-weight: 600;
-  margin-right: 2px;
-}
-
-.scale-suggestion-button {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--accent);
-  background: var(--bg);
-  color: var(--accent);
-  cursor: pointer;
-  transition:
-    background-color 0.12s ease,
-    color 0.12s ease;
-}
-
-.scale-suggestion-button:hover {
-  background: var(--accent);
-  color: var(--bg);
-}
-
-.scale-suggestions-none {
-  font-size: 11px;
-  opacity: 0.55;
-  font-style: italic;
-}
-
 /* Solid, same look as every other button in the app (see the bare `button`
    rule) rather than its own outlined pill — this one's just a trigger for the
-   exotic-scale modal, not a distinct control family that needs its own style. */
+   exotic-scale modal, not a distinct control family that needs its own style.
+   No align-self/margin here (that was leftover from when this sat alone in the
+   old column-flex sidebar) — it's a plain row item in .chord-palette-toolbar
+   now, same as .chord-finder-open-button right next to it. */
 .exotic-scale-open-button {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  color: #fff;
-  background: var(--accent);
-  border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
-  margin: 2px 0 10px;
-  cursor: pointer;
-}
-
-.exotic-scale-open-button:hover {
-  opacity: 0.9;
-}
-
-/* Same solid trigger-button treatment as .exotic-scale-open-button — both are
-   plain modal openers, not a distinct control family that needs its own look. */
-.magic-chord-open-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -821,11 +753,33 @@ button:hover {
   white-space: nowrap;
 }
 
-.magic-chord-open-button:hover {
+.exotic-scale-open-button:hover {
   opacity: 0.9;
 }
 
-.magic-chord-backdrop {
+/* Same solid trigger-button treatment as .exotic-scale-open-button — both are
+   plain modal openers, not a distinct control family that needs its own look. */
+.chord-finder-open-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chord-finder-open-button:hover {
+  opacity: 0.9;
+}
+
+.chord-finder-backdrop {
   position: fixed;
   inset: 0;
   z-index: 30;
@@ -839,7 +793,7 @@ button:hover {
 
 /* Wider and taller than .exotic-scale-modal -- this one has to hold a search box
    plus potentially several chord rows at once, not one compact form. */
-.magic-chord-modal {
+.chord-finder-modal {
   width: 100%;
   max-width: 760px;
   max-height: 85vh;
@@ -855,18 +809,18 @@ button:hover {
   overflow-y: auto;
 }
 
-.magic-chord-header {
+.chord-finder-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.magic-chord-header h2 {
+.chord-finder-header h2 {
   margin: 0;
   font-size: 17px;
 }
 
-.magic-chord-close {
+.chord-finder-close {
   font-size: 16px;
   line-height: 1;
   background: transparent;
@@ -877,7 +831,7 @@ button:hover {
   padding: 5px 8px;
 }
 
-.magic-chord-chromatic {
+.chord-finder-chromatic {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -886,7 +840,7 @@ button:hover {
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
-.magic-chord-chromatic-label {
+.chord-finder-chromatic-label {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -894,18 +848,18 @@ button:hover {
   opacity: 0.55;
 }
 
-.magic-chord-chromatic .chord-palette-row {
+.chord-finder-chromatic .chord-palette-row {
   flex: 1 1 100%;
   margin-top: 4px;
 }
 
-.magic-chord-search {
+.chord-finder-search {
   font-size: 14px;
   padding: 9px 12px;
   border-radius: 8px;
 }
 
-.magic-chord-groups {
+.chord-finder-groups {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -915,7 +869,7 @@ button:hover {
 /* Accent tick instead of a plain label — same touch the old sidebar's
    .palette-section-title used, echoing each channel strip's own accent-colored
    top border so a chord group still reads as "an instrument," not a plain list. */
-.magic-chord-group-title {
+.chord-finder-group-title {
   margin: 0 0 8px;
   font-size: 11px;
   font-weight: 700;
@@ -926,7 +880,7 @@ button:hover {
   position: relative;
 }
 
-.magic-chord-group-title::before {
+.chord-finder-group-title::before {
   content: '';
   position: absolute;
   left: 0;
@@ -938,7 +892,7 @@ button:hover {
   opacity: 0.7;
 }
 
-.magic-chord-empty {
+.chord-finder-empty {
   font-size: 13px;
   opacity: 0.6;
   font-style: italic;
@@ -1116,6 +1070,14 @@ button:hover {
   background: color-mix(in srgb, var(--accent) 10%, var(--bg));
   transform: translateY(-1px);
   box-shadow: 0 3px 8px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* Rainbow scale-degree coding (see degreeColorFor in ChordPalette.tsx) — a
+   thicker colored top edge, same convention each channel strip's own
+   accent-colored top border already uses, rather than recoloring the whole
+   button (would clash with the app's mostly-monochrome-plus-one-accent theme). */
+.chord-palette-button-degree {
+  border-top-width: 3px;
 }
 
 .chord-palette-button:active {

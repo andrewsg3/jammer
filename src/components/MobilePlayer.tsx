@@ -16,7 +16,7 @@ import { loadBundledDrumStyles } from '../data/drumLibrary';
 import { loadBundledBassStyles } from '../data/bassLibrary';
 import type { SectionMarker } from '../data/sections';
 import { bundledSongPresets, resolveLoopRange, resolveSongPreset, type SongPreset } from '../data/songPresets';
-import { APP_TITLE } from '../appInfo';
+import { APP_NAME, APP_TITLE } from '../appInfo';
 import {
   getCurrentBeat,
   isBassInstrumentLoaded,
@@ -613,7 +613,7 @@ export function MobilePlayer() {
               rel="noopener noreferrer"
               className="mobile-player__settings-coffee-link"
             >
-              ☕ Support Jazzmate
+              ☕ Support {APP_NAME}
             </a>
           </div>
         </div>
