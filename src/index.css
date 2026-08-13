@@ -2390,32 +2390,57 @@ button:hover {
   font-size: 10px;
 }
 
-.melody-note-modify {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 8px;
+/* Grey placeholder for a rest placed via the '0' key -- always drawn on the
+   tonic row (scale degree 0) regardless of pitch, since a rest has none; see
+   RestMarker in data/melody.ts. Purely visual (aria-hidden, no mouse handler)
+   -- Backspace deletes it via EditGrid's own keydown handler, not a click. */
+.melody-rest-block {
+  position: relative;
+  margin: 2px 1px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+  pointer-events: none;
+  z-index: 2;
 }
 
-.melody-note-modify button {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
+/* Replaces ChordPalette's own toolbar row while the melody grid is active
+   (App.tsx swaps the two based on EditGrid's onMelodyActiveChange) -- same
+   full-width single-row shape, so the swap doesn't shift any layout below it. */
+.melody-note-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.melody-note-toolbar-hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.melody-note-toolbar button {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
   cursor: pointer;
 }
 
-.melody-note-modify button:hover:not(:disabled) {
+.melody-note-toolbar button:hover:not(:disabled) {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 
-.melody-note-modify button:disabled {
+.melody-note-toolbar button:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.melody-note-toolbar-triplet {
+  margin-left: 8px;
 }
 
 /* The activated cell -- where the next 1-7/0 keypress lands -- spans every
@@ -2924,6 +2949,7 @@ button:hover {
 
   .top-bar,
   .chord-palette,
+  .melody-note-toolbar,
   .channel-strip-column,
   .loading-modal-backdrop,
   .chord-grid-hint,

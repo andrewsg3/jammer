@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditGrid } from './components/EditGrid';
-import type { PendingChord } from './components/EditGrid';
+import type { EditGridHandle, PendingChord } from './components/EditGrid';
 import { BeatGridSheet } from './components/BeatGridSheet';
 
 import { LeadSheet } from './components/LeadSheet';
 import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
+import { MelodyNoteToolbar } from './components/MelodyNoteToolbar';
 import { TopBar } from './components/TopBar';
 import { SettingsModal } from './components/SettingsModal';
 import { ChannelStrip } from './components/ChannelStrip';
@@ -43,6 +44,7 @@ import {
   stop,
   auditionChord,
   auditionExoticScale,
+  auditionNote,
   setTempo as setTransportTempo,
   getCurrentBeat,
   setChordsVolume,
@@ -264,6 +266,18 @@ function App() {
   // ChordPalette.tsx's onSelectionChange. Stays set after a placement (not
   // auto-cleared) so repeated clicks "stamp" the same chord across cells.
   const [pendingChord, setPendingChord] = useState<PendingChord | null>(null);
+  // Whether EditGrid's melody cursor/selection is live -- drives the swap
+  // between ChordPalette and MelodyNoteToolbar just below. editGridRef is how
+  // the toolbar's buttons reach back in to actually modify the selected note
+  // (EditGridHandle.modifySelectedNote), since that note lives in EditGrid's
+  // own local state, not here.
+  const [melodyEditActive, setMelodyEditActive] = useState(false);
+  const [melodyHasSelection, setMelodyHasSelection] = useState(false);
+  // Whether one or more chord blocks are currently selected -- when true, a
+  // ChordPalette/Chord Finder pick replaces the selection (via editGridRef's
+  // EditGridHandle.replaceSelectedChords) instead of arming pendingChord.
+  const [chordSelectionActive, setChordSelectionActive] = useState(false);
+  const editGridRef = useRef<EditGridHandle>(null);
   // Bumped on every song load, used as EditGrid's own React `key` -- an
   // explicit remount that resets its internal state (selection, clipboard,
   // visibleOctave) on every song swap, since none of that lives here in App.tsx.
@@ -431,6 +445,10 @@ function App() {
     auditionExoticScale(chord, scaleRoot, intervals);
   };
 
+  const handleAuditionMelodyNote = (midi: number) => {
+    auditionNote(midi);
+  };
+
   const handleDropChord = (selection: ChordSelection, startBeat: number, lengthBeats: number) => {
     setPlacements((prev) => [...prev, { id: crypto.randomUUID(), selection, startBeat, lengthBeats }]);
   };
@@ -439,8 +457,16 @@ function App() {
   // arms it here rather than appending it anywhere itself -- EditGrid's
   // ChordRow places it wherever an empty cell is next clicked, and it stays
   // armed afterward so repeated clicks "stamp" the same chord across several
-  // cells (Hookpad's own behavior).
+  // cells (Hookpad's own behavior). Except when a chord block is already
+  // selected -- then the same click instead replaces every selected block's
+  // chord in place (EditGridHandle.replaceSelectedChords), matching how
+  // picking a chord for a selected melody note edits that note directly
+  // rather than queuing something up.
   const handleSelectionChange = (selection: ChordSelection, lengthBeats: number) => {
+    if (chordSelectionActive) {
+      editGridRef.current?.replaceSelectedChords(selection);
+      return;
+    }
     setPendingChord({ selection, lengthBeats });
   };
 
@@ -815,16 +841,22 @@ function App() {
         </div>
       )}
       <main className="app">
-        {viewMode === 'edit' && (
-          <ChordPalette
-            musicalKey={musicalKey}
-            scale={scale}
-            notationStyle={notationStyle}
-            onAudition={handleAudition}
-            onAuditionExoticScale={handleAuditionExoticScale}
-            onSelectionChange={handleSelectionChange}
-          />
-        )}
+        {viewMode === 'edit' &&
+          (melodyEditActive ? (
+            <MelodyNoteToolbar
+              hasSelectedNote={melodyHasSelection}
+              onModify={(kind) => editGridRef.current?.modifySelectedNote(kind)}
+            />
+          ) : (
+            <ChordPalette
+              musicalKey={musicalKey}
+              scale={scale}
+              notationStyle={notationStyle}
+              onAudition={handleAudition}
+              onAuditionExoticScale={handleAuditionExoticScale}
+              onSelectionChange={handleSelectionChange}
+            />
+          ))}
         <div className="layout">
           <div className="layout-grid">
             {viewMode === 'chordGrid' && (
@@ -883,6 +915,12 @@ function App() {
             {viewMode === 'edit' && (
               <EditGrid
                 key={songLoadNonce}
+                ref={editGridRef}
+                onMelodyActiveChange={(active, hasSelection) => {
+                  setMelodyEditActive(active);
+                  setMelodyHasSelection(hasSelection);
+                }}
+                onChordSelectionChange={setChordSelectionActive}
                 placements={placements}
                 melody={melody}
                 sections={sections}
@@ -911,6 +949,7 @@ function App() {
                 onAddMelodyNote={handleAddMelodyNote}
                 onUpdateMelodyNote={handleUpdateMelodyNote}
                 onRemoveMelodyNote={handleRemoveMelodyNote}
+                onAuditionMelodyNote={handleAuditionMelodyNote}
                 title={songTitle}
                 onTitleChange={setSongTitle}
                 subtitle={songSubtitle}

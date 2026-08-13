@@ -43,11 +43,23 @@ const GAP_A_TRACK = RULER_TRACK + 1; // 3, ruler -> loop
 export const LOOP_TRACK = GAP_A_TRACK + 1; // 4
 const GAP_B_TRACK = LOOP_TRACK + 1; // 5, loop -> melody
 const MELODY_TRACK_TOP = GAP_B_TRACK + 1; // 6
-const GAP_C_TRACK = MELODY_TRACK_TOP + MELODY_ROW_COUNT; // 13, melody -> chords
-export const CHORD_TRACK_BASE = GAP_C_TRACK + 1; // 14
+// No fixed CHORD_TRACK_BASE constant anymore -- the melody block's own height
+// varies per system (see chordTrackBase below), so where the chord lanes
+// start has to vary with it too.
 
-export function melodyTrackForDegree(degree: number): number {
-  return MELODY_TRACK_TOP + MELODY_ROW_COUNT - 1 - degree;
+// octaveOffsetFromTop: 0 for the topmost octave block a system is currently
+// rendering, increasing downward for each octave below it -- see EditGrid's
+// systemOctaveRange, which decides how many octave blocks (normally just 1)
+// a given system actually needs, based on that system's own notes.
+export function melodyTrackForDegree(degree: number, octaveOffsetFromTop: number = 0): number {
+  return MELODY_TRACK_TOP + octaveOffsetFromTop * MELODY_ROW_COUNT + (MELODY_ROW_COUNT - 1 - degree);
+}
+
+/** Where the chord-lane tracks start, given how many octave blocks the melody
+ * grid needs this system (usually 1) -- used to be a fixed CHORD_TRACK_BASE
+ * constant; now a function of the melody block's own (per-system) height. */
+export function chordTrackBase(melodyOctaveSpan: number): number {
+  return MELODY_TRACK_TOP + MELODY_ROW_COUNT * melodyOctaveSpan + 1;
 }
 
 // Every *content* track's height, in a shared unit (ROW_UNIT_PX) -- e.g. a
@@ -64,8 +76,9 @@ export const CHORD_ROW_UNITS = 4;
 const GROUP_GAP_PX = 4;
 
 /** The full `grid-template-rows` value for one system, given how many chord
- * lanes it actually needs (maxLane + 1). */
-export function gridTemplateRowsFor(chordLaneCount: number): string {
+ * lanes it actually needs (maxLane + 1) and how many octave blocks its melody
+ * grid needs (melodyOctaveSpan, usually 1 -- see EditGrid's systemOctaveRange). */
+export function gridTemplateRowsFor(chordLaneCount: number, melodyOctaveSpan: number = 1): string {
   const px = (units: number) => `${units * ROW_UNIT_PX}px`;
   const gap = `${GROUP_GAP_PX}px`;
   return [
@@ -74,7 +87,7 @@ export function gridTemplateRowsFor(chordLaneCount: number): string {
     gap,
     px(LOOP_ROW_UNITS),
     gap,
-    `repeat(${MELODY_ROW_COUNT}, ${px(MELODY_ROW_UNITS)})`,
+    `repeat(${MELODY_ROW_COUNT * melodyOctaveSpan}, ${px(MELODY_ROW_UNITS)})`,
     gap,
     `repeat(${chordLaneCount}, ${px(CHORD_ROW_UNITS)})`,
   ].join(' ');

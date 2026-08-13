@@ -8,6 +8,12 @@ export type MelodyNote = {
   velocity: number; // 0-1
 };
 
+// A rest placed via EditGrid's '0' key -- not real MelodyNote data (nothing to
+// play), just enough to render a grey placeholder block in the grid and let
+// Backspace step back over it the same way it steps back over a real note.
+// Local UI state (EditGrid.tsx), never persisted with the song.
+export type RestMarker = { startBeat: number; lengthBeats: number };
+
 const MIDDLE_C = 60; // C4
 
 // Semitone offset within an octave -> diatonic step (C=0..B=6), naturals only.

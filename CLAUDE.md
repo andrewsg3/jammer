@@ -431,6 +431,104 @@ VexFlow API at all) — verified this doesn't reformat/redraw the whole score on
 swapping the live view) didn't need resolving after all — Lead Sheet as a genuinely separate,
 non-interactive view sidesteps it entirely. `ChordGrid.tsx` was never touched.
 
+## Edit view follow-ups: melody note toolbar, step-entry refinements, chord replace-in-place (done)
+A batch of usability fixes on top of the Hookpad-style grid above, none of them a new milestone —
+mostly closing real gaps in the v1 melody step-entry model, plus one chord-editing gap that turned
+out to share the same underlying pattern (a click-to-place tool that should instead edit whatever's
+currently selected).
+
+**Melody note-editing toolbar (`components/MelodyNoteToolbar.tsx`, new).** Selecting a melody note
+(click, or landing on one with arrow-key navigation — see below) now swaps `ChordPalette`'s row for
+this toolbar instead — same full-width single-row slot under `TopBar`, same "one row, not a
+sidebar" shape. Seven actions: **Raise/Lower** (move to the next/previous scale degree, snapping
+off any existing chromatic offset — `EditGrid.tsx`'s `modifySelectedNote`'s `diatonicUp`/
+`diatonicDown` cases), **Raise/Lower Octave** (±12 semitones), **Raise/Lower Semitone** (±1,
+the chromatic-entry path — place a diatonic note, then nudge it), and **Make Triplet** (rescales
+the note's `lengthBeats` by ×2/3, a one-shot conversion, not a reversible toggle — this app still
+has no real triplet-subdivision *notation*, see "How melody notation works" above; this only
+affects the note's actual timing/duration). Buttons stay visible but disabled (with a "Select a
+note to edit it" hint) once the step-entry cursor is live but nothing's selected yet, rather than
+the whole toolbar flickering in and out as you move the cursor through empty cells.
+
+Wiring: `EditGrid` is now a `forwardRef` exposing `EditGridHandle` (`modifySelectedNote`,
+`replaceSelectedChords` — see below), since the toolbar that needs to drive a note selection lives
+in `App.tsx`, outside `EditGrid`'s own DOM entirely, the same way `ChordPalette` always has.
+`EditGrid`'s own `onMelodyActiveChange(active, hasSelectedNote)` prop reports cursor/selection state
+up on every change so `App.tsx` knows whether to render the toolbar or `ChordPalette` and whether
+the toolbar's buttons should be enabled — `App.tsx` never reads `EditGrid`'s internal selection
+state directly, only through this callback plus the ref's imperative methods.
+
+**Placing or re-pitching a note plays it.** `audio/engine.ts` gained `auditionNote(midi)` — a
+one-shot preview via the same shared `auditionSynth` `auditionChord` already uses, independent of
+Transport playback. Fired from step-entry's 1-7 placement and from every pitch-changing toolbar
+action (not `Make Triplet`, which doesn't change pitch).
+
+**Step-entry keyboard fixes, all in `EditGrid.tsx`'s keydown handler:**
+- **Backspace/Delete during step entry** (cursor active, nothing explicitly selected — an explicit
+  click-selection still just deletes that note directly, unchanged) now deletes whichever note *or*
+  rest sits immediately behind the cursor — whichever of the two was placed more recently, compared
+  by its own end beat — and parks the cursor back at its start, typewriter-style. Falls back to
+  stepping the cursor back by the current duration when there's nothing there to delete.
+- **Left/Right arrows** step the cursor by the current duration (hjkl;'s `noteDuration`) without
+  placing or removing anything. Landing exactly on an existing note's start selects it, same as
+  clicking it directly.
+- **`0` (rest) now renders a visible grey placeholder** (`.melody-rest-block`) instead of just
+  silently advancing the cursor — always drawn on the tonic row of the *visible* octave (`data/
+  melody.ts`'s new `RestMarker` type: `{startBeat, lengthBeats}`, local UI state in `EditGrid`, not
+  persisted with the song — a rest is genuinely just absence of a note; this is a step-entry
+  convenience, not new song data). `pointer-events: none` so clicking directly on a rendered rest
+  still activates the cell underneath it rather than swallowing the click.
+- **`hjkl;` now also resizes the currently-selected note's actual length**, not just the duration
+  future placements get — select a note, press `l`, it becomes a half note. Both effects fire off
+  the same keypress; there was no reason to make them two different gestures.
+- **Alt+1-7 places a sharp** directly, instead of requiring place-then-select-then-Semitone-▲ —
+  reuses the exact modifier `handleNoteMouseDown`'s own drag-to-retarget already used for the
+  identical nudge, so there's one consistent "Alt = sharp" convention app-wide instead of two.
+- **The step-entry cursor's width now reflects the actual selected duration** (`hjkl;`) instead of
+  always being a fixed one-column (eighth-note) highlight — select a half note and the cursor shows
+  4 columns wide. The one duration the grid's own half-beat column resolution can't give a real
+  column span to is `h` (a sixteenth note, `COL_UNIT_BEATS` is 0.5): rather than have it silently
+  round up to look identical to an eighth note's cursor, it renders as a `width: 50%` sliver inside
+  its one column — a real, if approximate, visual distinction, without needing to double the whole
+  grid's column resolution just for this one case.
+
+**Click-to-activate a melody cell / click-outside-to-deactivate, actually symmetric now.**
+Deactivating the melody cursor/selection used to only fire on clicks *inside* `.edit-grid` itself
+(the old `handleWrapperClickCapture`, still there for chord-selection clearing) — so clicking the
+octave-shift buttons, "+ Section", or (once the toolbar above existed) the toolbar's own buttons
+never cleared it, leaving the note-editing toolbar stuck on screen until Escape. Fixed with a real
+`document`-level `mousedown` listener (capture phase, so it isn't skipped by the section-rename/
+drag handlers' own `stopPropagation`) that clears the cursor/selection on any mousedown *except* one
+on `.melody-note-block` (its own handler re-sets the right values in the same synchronous mousedown
+dispatch, so a transient clear-then-reset is harmless) or `.melody-note-toolbar` (whose buttons fire
+on the *separate*, later `click` event — clearing the selection on mousedown here would delete it
+before the button's own `onClick` ever got to read it).
+
+**Per-system melody octave expansion.** Lowering a note an octave or two used to just push it
+off-screen — the grid always rendered exactly `visibleOctave`'s own 7 rows, full stop, with no way
+to see (or interact with) anything outside that. `gridMath.ts`'s `melodyTrackForDegree` now takes an
+`octaveOffsetFromTop` param, and a new `chordTrackBase(melodyOctaveSpan)` function replaces the old
+fixed `CHORD_TRACK_BASE` constant, since the melody block's own height is no longer fixed either.
+`EditGrid.tsx`'s new `systemOctaveRange` helper computes, **per system** (per 8-bar row, not
+song-wide), the octave span actually needed to show every note that system contains — normally just
+`visibleOctave`'s own single block, expanding only for the specific system a moved note landed in,
+never the whole song. `MelodyGrid.tsx` renders that many stacked octave blocks and tags each row
+with `data-octave` (its own absolute octave, not just `data-degree`) so note-dragging
+(`degreeAndOctaveFromPoint`, replacing the old `degreeFromPoint`) reads the correct target pitch
+straight off whichever row the pointer's actually over, rather than assuming `visibleOctave`.
+
+**Chord Finder / palette replaces a selected chord in place.** Previously, selecting a chord block
+and then picking a different chord from `ChordPalette` or Chord Finder just armed `pendingChord`
+for the *next* empty-cell click — the selected chord itself was untouched, which read as broken
+("I selected it, why didn't clicking a new chord change it?"). `App.tsx`'s `handleSelectionChange`
+now checks a new `chordSelectionActive` flag (from `EditGrid`'s `onChordSelectionChange`, the same
+report-state-up pattern the melody toolbar uses) and, when something's selected, calls
+`EditGridHandle.replaceSelectedChords(selection)` instead — swaps every currently-selected
+placement's chord content (root/quality/etc.) in place via the existing `onReplaceChord`, leaving
+its timing untouched, rather than arming anything. Falls back to the original arm-and-place
+behavior when nothing's selected. Applies to *every* selected placement at once if more than one is
+selected (multi-select already existed for Delete; this reuses the same selection set).
+
 ## How to run
 ```
 npm install

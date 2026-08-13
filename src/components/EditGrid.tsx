@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { CSSProperties, DragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import {
   deserializeSelection,
@@ -6,16 +6,18 @@ import {
   scaleDegreeToMidi,
 } from '../data/progressions';
 import type { Chord, ChordPlacement, ChordSelection, NotationStyle, ScaleDegree, ScaleName } from '../data/progressions';
-import type { MelodyNote } from '../data/melody';
+import type { MelodyNote, RestMarker } from '../data/melody';
 import type { SectionMarker } from '../data/sections';
 import { SheetMusicHeader } from './SheetMusicHeader';
 import { GRID_BARS, totalBeatsFor } from '../data/gridLayout';
 import {
+  COL_UNIT_BEATS,
   EDIT_BARS_PER_ROW,
   beatsPerSystemFor,
   canPlace,
   canPlaceSection,
   chordSystemSegments,
+  chordTrackBase,
   clientXToLocalBeat,
   clientXToLocalBeatFloor,
   colsPerSystem,
@@ -29,6 +31,31 @@ import { MelodyGrid } from './editGrid/MelodyGrid';
 import { ChordRow } from './editGrid/ChordRow';
 
 export type PendingChord = { selection: ChordSelection; lengthBeats: number };
+
+// Post-hoc note modification, driven by the top toolbar that replaces
+// ChordPalette while the melody grid is active -- see App.tsx/
+// MelodyNoteToolbar.tsx. 'diatonicUp'/'diatonicDown' move to the next/previous
+// scale degree (snapping off any existing chromatic offset); 'triplet' rescales
+// the note into a triplet subdivision of its current length (3-in-the-space-
+// of-2, i.e. x2/3) -- a one-shot conversion, not a reversible toggle.
+export type MelodyNoteModifyKind =
+  | 'diatonicUp'
+  | 'diatonicDown'
+  | 'octaveUp'
+  | 'octaveDown'
+  | 'semitoneUp'
+  | 'semitoneDown'
+  | 'triplet';
+
+export type EditGridHandle = {
+  modifySelectedNote: (kind: MelodyNoteModifyKind) => void;
+  // Swaps the chord content (root/quality/etc, not timing) of every currently
+  // selected chord block for the given selection -- how App.tsx's
+  // handleSelectionChange routes a ChordPalette/Chord Finder pick when
+  // something's already selected, instead of arming pendingChord for a new
+  // placement.
+  replaceSelectedChords: (selection: ChordSelection) => void;
+};
 
 type Props = {
   placements: ChordPlacement[];
@@ -59,6 +86,20 @@ type Props = {
   onAddMelodyNote: (note: MelodyNote) => void;
   onUpdateMelodyNote: (index: number, patch: Partial<MelodyNote>) => void;
   onRemoveMelodyNote: (index: number) => void;
+  // One-shot preview, independent of Transport playback -- fired whenever a
+  // melody note's pitch is set or changed (step entry, or the toolbar's
+  // Raise/Lower/Octave/Semitone), same "hear what you're doing" idea as
+  // ChordPalette's own onAudition for chords.
+  onAuditionMelodyNote: (midi: number) => void;
+  // Fires whenever the melody cursor/selection state changes, so App.tsx can
+  // swap ChordPalette for the note-editing toolbar and enable/disable its
+  // buttons -- see EditGridHandle above for how that toolbar actually reaches
+  // back in to perform an edit.
+  onMelodyActiveChange?: (active: boolean, hasSelectedNote: boolean) => void;
+  // Fires whenever the set of selected chord blocks changes, so App.tsx knows
+  // whether a ChordPalette/Chord Finder pick should replace the selection
+  // (via EditGridHandle.replaceSelectedChords) instead of arming pendingChord.
+  onChordSelectionChange?: (hasSelection: boolean) => void;
   title: string;
   onTitleChange: (title: string) => void;
   subtitle: string;
@@ -111,12 +152,40 @@ function fineBeatFromPoint(clientX: number, clientY: number, beatsPerSystem: num
   return hit.systemIndex * beatsPerSystem + clientXToLocalBeat(hit.rect, clientX, beatsPerSystem, MELODY_SNAP_BEATS);
 }
 
-function degreeFromPoint(clientX: number, clientY: number): number | null {
+// Reads both off the hovered row's own data attributes (see MelodyGrid.tsx)
+// rather than recomputing which octave block a system is showing -- a row
+// already knows its own absolute octave, no need to re-derive it here.
+function degreeAndOctaveFromPoint(clientX: number, clientY: number): { degree: number; octave: number } | null {
   const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
   const rowEl = el?.closest('.melody-row') as HTMLElement | null;
   if (!rowEl) return null;
   const degree = Number(rowEl.dataset.degree);
-  return Number.isNaN(degree) ? null : degree;
+  const octave = Number(rowEl.dataset.octave);
+  return Number.isNaN(degree) || Number.isNaN(octave) ? null : { degree, octave };
+}
+
+// How many octave blocks (and starting at which absolute octave) a system's
+// melody grid actually needs to show every one of its own notes -- normally
+// just visibleOctave's own single block, expanding only when a note (e.g.
+// after Raise/Lower Octave) has moved outside it, and only for the system
+// that note is actually in, not the whole song.
+function systemOctaveRange(
+  melody: MelodyNote[],
+  systemStart: number,
+  systemEnd: number,
+  visibleOctave: number,
+  musicalKey: string,
+  scale: ScaleName,
+): { top: number; span: number } {
+  let top = visibleOctave;
+  let bottom = visibleOctave;
+  for (const note of melody) {
+    if (note.startBeat < systemStart || note.startBeat >= systemEnd) continue;
+    const { octave } = midiToScaleDegreePosition(note.midi, musicalKey, scale);
+    if (octave > top) top = octave;
+    if (octave < bottom) bottom = octave;
+  }
+  return { top, span: top - bottom + 1 };
 }
 
 function defaultVisibleOctave(melody: MelodyNote[], key: string, scale: ScaleName): number {
@@ -140,8 +209,11 @@ function defaultVisibleOctave(melody: MelodyNote[], key: string, scale: ScaleNam
 /** Hookpad-style Edit view — a column-per-beat grid (8 bars/system) replacing
  * ChordGrid.tsx's staff-based editor. Three stacked row-groups per system: a
  * loop-range row, 7 diatonic melody rows (one visible octave, shiftable), and
- * one-or-more chord-block rows. See CLAUDE.md's "Three desktop views" section. */
-export function EditGrid({
+ * one-or-more chord-block rows. See CLAUDE.md's "Three desktop views" section.
+ * A forwardRef (EditGridHandle) so App.tsx's note-editing toolbar -- which
+ * lives outside this component, up where ChordPalette normally sits -- can
+ * reach in and modify whatever note is currently selected here. */
+export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
   placements,
   melody,
   sections,
@@ -170,6 +242,9 @@ export function EditGrid({
   onAddMelodyNote,
   onUpdateMelodyNote,
   onRemoveMelodyNote,
+  onAuditionMelodyNote,
+  onMelodyActiveChange,
+  onChordSelectionChange,
   title,
   onTitleChange,
   subtitle,
@@ -180,7 +255,7 @@ export function EditGrid({
   onPlayStyleChange,
   tempo,
   beatsPerBar,
-}: Props) {
+}: Props, ref) {
   const beatsPerSystem = beatsPerSystemFor(beatsPerBar);
   const totalBeats = totalBeatsFor(beatsPerBar);
   const colsPerSystemVal = colsPerSystem(beatsPerBar);
@@ -197,6 +272,8 @@ export function EditGrid({
   // hjkl; set this, matching Hookpad's own 1/4-1/2-1-2-4 duration picker.
   const [noteDuration, setNoteDuration] = useState(1);
   const [visibleOctave, setVisibleOctave] = useState(() => defaultVisibleOctave(melody, musicalKey, scale));
+  // Rests placed via '0' -- see RestMarker's own doc comment above.
+  const [restMarkers, setRestMarkers] = useState<RestMarker[]>([]);
   const clipboardRef = useRef<{ selection: ChordSelection; relativeStart: number; lengthBeats: number }[]>([]);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionLabel, setEditingSectionLabel] = useState('');
@@ -236,6 +313,14 @@ export function EditGrid({
       delete document.body.dataset.melodyCursorActive;
     };
   }, [activeCell]);
+
+  useEffect(() => {
+    onMelodyActiveChange?.(activeCell !== null || selectedMelodyIndex !== null, selectedMelodyIndex !== null);
+  }, [activeCell, selectedMelodyIndex, onMelodyActiveChange]);
+
+  useEffect(() => {
+    onChordSelectionChange?.(selectedIds.size > 0);
+  }, [selectedIds, onChordSelectionChange]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -284,6 +369,48 @@ export function EditGrid({
         return;
       }
 
+      // Typewriter-style Backspace during step entry (a cell's activated but
+      // nothing's explicitly selected -- see the branch just above for that
+      // case) -- deletes whichever note or rest sits immediately behind the
+      // cursor (the more recent of the two, by its own end beat) and parks
+      // the cursor back at its start, same as backspacing over the last
+      // character typed. Falls back to just stepping the cursor back by the
+      // current duration when nothing's there to delete.
+      if (activeCell !== null && (e.key === 'Delete' || e.key === 'Backspace')) {
+        e.preventDefault();
+        const prevNote = melody
+          .map((n, i) => ({ startBeat: n.startBeat, end: n.startBeat + n.lengthBeats, i }))
+          .filter(({ end }) => end <= activeCell)
+          .sort((a, b) => b.end - a.end)[0];
+        const prevRest = restMarkers
+          .map((r, i) => ({ startBeat: r.startBeat, end: r.startBeat + r.lengthBeats, i }))
+          .filter(({ end }) => end <= activeCell)
+          .sort((a, b) => b.end - a.end)[0];
+        if (prevNote && (!prevRest || prevNote.end >= prevRest.end)) {
+          onRemoveMelodyNote(prevNote.i);
+          setActiveCell(prevNote.startBeat);
+        } else if (prevRest) {
+          setRestMarkers((rs) => rs.filter((_, i) => i !== prevRest.i));
+          setActiveCell(prevRest.startBeat);
+        } else {
+          setActiveCell(Math.max(0, activeCell - noteDuration));
+        }
+        return;
+      }
+
+      // Left/Right step the cursor by the current duration without placing or
+      // removing anything -- pure navigation. Landing exactly on an existing
+      // note's start selects it, same as clicking it directly.
+      if (activeCell !== null && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        const delta = e.key === 'ArrowRight' ? noteDuration : -noteDuration;
+        const next = clamp(activeCell + delta, 0, totalBeats - COL_UNIT_BEATS);
+        setActiveCell(next);
+        const landed = melody.findIndex((n) => n.startBeat === next);
+        setSelectedMelodyIndex(landed === -1 ? null : landed);
+        return;
+      }
+
       if (e.key === 'Escape' && (activeCell !== null || selectedMelodyIndex !== null)) {
         setActiveCell(null);
         setSelectedMelodyIndex(null);
@@ -292,28 +419,39 @@ export function EditGrid({
 
       // Melody note entry -- only live once a cell's been clicked/activated
       // (see MelodyGrid.tsx's onActivateCell), and the only way notes get
-      // added at all: 1-7 places a diatonic scale degree, 0 rests, hjkl;
-      // set the duration the next placement uses (matching Hookpad's own
-      // 1/4-1/2-1-2-4 picker). Placing/resting always advances the cursor by
-      // the current duration, so a run of keypresses types out a line the
-      // same way Hookpad's own step-entry does.
+      // added at all: 1-7 places a diatonic scale degree (Alt+1-7 sharps it --
+      // same modifier handleNoteMouseDown's own drag already uses for the
+      // identical "make this degree chromatic" nudge, so there's one
+      // consistent convention app-wide, not two), 0 rests, hjkl; set the
+      // duration the next placement uses (matching Hookpad's own 1/4-1/2-1-2-4
+      // picker). Placing/resting always advances the cursor by the current
+      // duration, so a run of keypresses types out a line the same way
+      // Hookpad's own step-entry does.
       if (activeCell !== null) {
         const durationKeyValue = DURATION_KEYS[e.key.toLowerCase()];
         if (durationKeyValue !== undefined) {
           e.preventDefault();
           setNoteDuration(durationKeyValue);
+          // Also resizes whatever note's currently selected, not just the
+          // duration future placements get -- lets hjkl; act as a direct
+          // note-length editor once you've selected something.
+          if (selectedMelodyIndex !== null) onUpdateMelodyNote(selectedMelodyIndex, { lengthBeats: durationKeyValue });
           return;
         }
         if (e.key >= '1' && e.key <= '7') {
           e.preventDefault();
           const degree = (Number(e.key) - 1) as ScaleDegree;
-          const midi = scaleDegreeToMidi(musicalKey, scale, degree, visibleOctave, 0);
+          const midi = scaleDegreeToMidi(musicalKey, scale, degree, visibleOctave, e.altKey ? 1 : 0);
           const overlapping = melody
             .map((n, i) => ({ n, i }))
             .filter(({ n }) => activeCell < n.startBeat + n.lengthBeats && n.startBeat < activeCell + noteDuration)
             .sort((a, b) => b.i - a.i);
           for (const { i } of overlapping) onRemoveMelodyNote(i);
+          setRestMarkers((rs) =>
+            rs.filter((r) => !(activeCell < r.startBeat + r.lengthBeats && r.startBeat < activeCell + noteDuration)),
+          );
           onAddMelodyNote({ startBeat: activeCell, midi, lengthBeats: noteDuration, velocity: 0.8 });
+          onAuditionMelodyNote(midi);
           setActiveCell(activeCell + noteDuration);
           return;
         }
@@ -324,6 +462,10 @@ export function EditGrid({
             .filter(({ n }) => activeCell < n.startBeat + n.lengthBeats && n.startBeat < activeCell + noteDuration)
             .sort((a, b) => b.i - a.i);
           for (const { i } of overlapping) onRemoveMelodyNote(i);
+          setRestMarkers((rs) => [
+            ...rs.filter((r) => !(activeCell < r.startBeat + r.lengthBeats && r.startBeat < activeCell + noteDuration)),
+            { startBeat: activeCell, lengthBeats: noteDuration },
+          ]);
           setActiveCell(activeCell + noteDuration);
           return;
         }
@@ -357,6 +499,9 @@ export function EditGrid({
     scale,
     visibleOctave,
     onAddMelodyNote,
+    onUpdateMelodyNote,
+    onAuditionMelodyNote,
+    restMarkers,
   ]);
 
   const handleWrapperClickCapture = (e: ReactMouseEvent<HTMLDivElement>) => {
@@ -365,13 +510,37 @@ export function EditGrid({
       setSelectedIds(new Set());
       setAnchorId(null);
     }
-    if (!target.closest('.melody-note-block')) setSelectedMelodyIndex(null);
-    // .melody-row is exempted -- that's the activation gesture itself (see
-    // MelodyGrid.tsx's onActivateCell), already applied via the same click's
-    // earlier mousedown; clearing it right back out here would make clicking
-    // to activate a cell a no-op.
-    if (!target.closest('.melody-row') && !target.closest('.melody-note-block')) setActiveCell(null);
   };
+
+  // Deactivating the melody cursor/selection used to only happen on clicks
+  // *inside* .edit-grid (handleWrapperClickCapture above) -- so clicking the
+  // octave-shift buttons, "+ Section", or App.tsx's MelodyNoteToolbar (which
+  // lives outside EditGrid's own DOM entirely, up where ChordPalette normally
+  // sits) never cleared it, leaving the note-editing toolbar stuck on screen
+  // until Escape. A real document-level listener makes "click anywhere else
+  // deactivates" actually true, matching "click to activate" on the other
+  // side. Capture phase so it isn't skipped by an inner handler's own
+  // stopPropagation (section rename/drag both call it on mousedown).
+  useEffect(() => {
+    const handleDocumentMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // .melody-note-block is exempted so clicking an existing note doesn't
+      // transiently clear-then-reselect (its own onMouseDown, also fired on
+      // this same native mousedown, sets the real values right after).
+      // .melody-note-toolbar is exempted for a real reason, not just tidiness
+      // -- its buttons fire on 'click', a later, separate event from this
+      // 'mousedown' one, so if this handler cleared the selection now, it'd
+      // already be gone by the time the button's own onClick runs.
+      // .melody-row (an *empty* cell) is deliberately NOT exempted -- clicking
+      // one to activate it should also drop whatever note was selected
+      // before, same as clicking any other empty space always has.
+      if (target.closest('.melody-note-block') || target.closest('.melody-note-toolbar')) return;
+      setActiveCell(null);
+      setSelectedMelodyIndex(null);
+    };
+    document.addEventListener('mousedown', handleDocumentMouseDown, true);
+    return () => document.removeEventListener('mousedown', handleDocumentMouseDown, true);
+  }, []);
 
   const handleChordClick = (placement: ChordPlacement, chord: Chord) => (e: ReactMouseEvent) => {
     if (e.shiftKey && anchorId) {
@@ -556,16 +725,68 @@ export function EditGrid({
     setActiveCell(systemStart + localBeat);
   };
 
-  // Raise/Lower Octave/Half buttons -- Hookpad-style post-hoc note
-  // modification. Chromatic entry lives here now, not at placement time (the
-  // old Alt+click nudge is gone along with direct-click placement): place a
-  // diatonic note with 1-7, then Half ▲/▼ to make it chromatic.
-  const handleModifySelectedNote = (deltaMidi: number) => {
+  // Raise/Lower (diatonic step) / Octave / Semitone / Triplet -- Hookpad-style
+  // post-hoc note modification, driven by App.tsx's MelodyNoteToolbar (which
+  // replaces ChordPalette while this grid is active) via the imperative handle
+  // below, not by anything rendered inside EditGrid itself. Chromatic entry
+  // lives here, not at placement time: place a diatonic note with 1-7, then
+  // Semitone ▲/▼ to make it chromatic.
+  const modifySelectedNote = (kind: MelodyNoteModifyKind) => {
     if (selectedMelodyIndex === null) return;
     const note = melody[selectedMelodyIndex];
     if (!note) return;
-    onUpdateMelodyNote(selectedMelodyIndex, { midi: note.midi + deltaMidi });
+    switch (kind) {
+      case 'semitoneUp':
+        onUpdateMelodyNote(selectedMelodyIndex, { midi: note.midi + 1 });
+        onAuditionMelodyNote(note.midi + 1);
+        break;
+      case 'semitoneDown':
+        onUpdateMelodyNote(selectedMelodyIndex, { midi: note.midi - 1 });
+        onAuditionMelodyNote(note.midi - 1);
+        break;
+      case 'octaveUp':
+        onUpdateMelodyNote(selectedMelodyIndex, { midi: note.midi + 12 });
+        onAuditionMelodyNote(note.midi + 12);
+        break;
+      case 'octaveDown':
+        onUpdateMelodyNote(selectedMelodyIndex, { midi: note.midi - 12 });
+        onAuditionMelodyNote(note.midi - 12);
+        break;
+      case 'diatonicUp': {
+        const pos = midiToScaleDegreePosition(note.midi, musicalKey, scale);
+        const degree = ((pos.degree + 1) % 7) as ScaleDegree;
+        const octave = pos.degree === 6 ? pos.octave + 1 : pos.octave;
+        const newMidi = scaleDegreeToMidi(musicalKey, scale, degree, octave, 0);
+        onUpdateMelodyNote(selectedMelodyIndex, { midi: newMidi });
+        onAuditionMelodyNote(newMidi);
+        break;
+      }
+      case 'diatonicDown': {
+        const pos = midiToScaleDegreePosition(note.midi, musicalKey, scale);
+        const degree = ((pos.degree + 6) % 7) as ScaleDegree;
+        const octave = pos.degree === 0 ? pos.octave - 1 : pos.octave;
+        const newMidi = scaleDegreeToMidi(musicalKey, scale, degree, octave, 0);
+        onUpdateMelodyNote(selectedMelodyIndex, { midi: newMidi });
+        onAuditionMelodyNote(newMidi);
+        break;
+      }
+      case 'triplet':
+        onUpdateMelodyNote(selectedMelodyIndex, { lengthBeats: (note.lengthBeats * 2) / 3 });
+        break;
+    }
   };
+
+  const replaceSelectedChords = (selection: ChordSelection) => {
+    for (const placement of placements) {
+      if (selectedIds.has(placement.id)) onReplaceChord(placement, selection);
+    }
+  };
+
+  useImperativeHandle(
+    ref,
+    () => ({ modifySelectedNote, replaceSelectedChords }),
+    [selectedMelodyIndex, melody, musicalKey, scale, onUpdateMelodyNote, onAuditionMelodyNote, placements, selectedIds, onReplaceChord],
+  );
 
   const handleNoteMouseDown = (index: number) => (e: ReactMouseEvent) => {
     e.preventDefault();
@@ -579,10 +800,10 @@ export function EditGrid({
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const beat = fineBeatFromPoint(moveEvent.clientX, moveEvent.clientY, beatsPerSystem);
-      const degree = degreeFromPoint(moveEvent.clientX, moveEvent.clientY);
-      if (beat === null || degree === null) return;
+      const hit = degreeAndOctaveFromPoint(moveEvent.clientX, moveEvent.clientY);
+      if (beat === null || hit === null) return;
       const startBeat = clamp(beat, 0, totalBeats - note.lengthBeats);
-      const midi = scaleDegreeToMidi(musicalKey, scale, degree as ScaleDegree, visibleOctave, moveEvent.altKey ? 1 : 0);
+      const midi = scaleDegreeToMidi(musicalKey, scale, hit.degree as ScaleDegree, hit.octave, moveEvent.altKey ? 1 : 0);
       onUpdateMelodyNote(index, { startBeat, midi });
     };
     const handleMouseUp = () => {
@@ -663,49 +884,28 @@ export function EditGrid({
               ▲
             </button>
           </div>
-          <div className="melody-note-modify" role="group" aria-label="Modify selected note">
-            <button
-              type="button"
-              disabled={selectedMelodyIndex === null}
-              onClick={() => handleModifySelectedNote(-12)}
-              title="Lower selected note an octave"
-            >
-              Octave ▼
-            </button>
-            <button
-              type="button"
-              disabled={selectedMelodyIndex === null}
-              onClick={() => handleModifySelectedNote(-1)}
-              title="Lower selected note a half step"
-            >
-              Half ▼
-            </button>
-            <button
-              type="button"
-              disabled={selectedMelodyIndex === null}
-              onClick={() => handleModifySelectedNote(1)}
-              title="Raise selected note a half step"
-            >
-              Half ▲
-            </button>
-            <button
-              type="button"
-              disabled={selectedMelodyIndex === null}
-              onClick={() => handleModifySelectedNote(12)}
-              title="Raise selected note an octave"
-            >
-              Octave ▲
-            </button>
-          </div>
         </div>
         <div className="edit-grid" onClickCapture={handleWrapperClickCapture}>
           {Array.from({ length: systemCount }, (_, systemIndex) => {
             const systemStart = systemIndex * beatsPerSystem;
+            const systemEnd = systemStart + beatsPerSystem;
             const segmentsInSystem = placements
               .flatMap((p) => chordSystemSegments(p, beatsPerSystem))
               .filter((s) => s.system === systemIndex);
             const laned = laneChordSegments(segmentsInSystem, beatsPerBar);
             const maxLane = laned.reduce((m, s) => Math.max(m, s.lane), 0);
+            // Only this system's own melody grid grows to fit a note that's
+            // moved outside visibleOctave (e.g. via Lower Octave) -- every
+            // other system stays the normal single-octave height.
+            const { top: topOctave, span: melodyOctaveSpan } = systemOctaveRange(
+              melody,
+              systemStart,
+              systemEnd,
+              visibleOctave,
+              musicalKey,
+              scale,
+            );
+            const chordTrackBaseVal = chordTrackBase(melodyOctaveSpan);
             const playheadSystem = clamp(Math.floor(playheadBeat / beatsPerSystem), 0, systemCount - 1);
             const loopStartSystem = Math.floor(loopStart / beatsPerSystem);
             const loopEndHomeSystem = Math.floor(Math.max(0, loopEnd - 1) / beatsPerSystem);
@@ -721,7 +921,7 @@ export function EditGrid({
                     '--cols': colsPerSystemVal,
                     '--bars': EDIT_BARS_PER_ROW,
                     '--beats': beatsPerSystem,
-                    gridTemplateRows: gridTemplateRowsFor(maxLane + 1),
+                    gridTemplateRows: gridTemplateRowsFor(maxLane + 1, melodyOctaveSpan),
                   } as CSSProperties
                 }
                 onDragOver={handleDragOver}
@@ -754,9 +954,13 @@ export function EditGrid({
                   systemStart={systemStart}
                   beatsPerSystem={beatsPerSystem}
                   melody={melody}
+                  restMarkers={restMarkers}
                   musicalKey={musicalKey}
                   scale={scale}
                   visibleOctave={visibleOctave}
+                  topOctave={topOctave}
+                  octaveSpan={melodyOctaveSpan}
+                  noteDuration={noteDuration}
                   selectedMelodyIndex={selectedMelodyIndex}
                   activeCell={activeCell}
                   onActivateCell={handleActivateCell(systemStart)}
@@ -764,6 +968,7 @@ export function EditGrid({
                 />
                 <ChordRow
                   beatsPerSystem={beatsPerSystem}
+                  chordTrackBase={chordTrackBaseVal}
                   laned={laned}
                   maxLane={maxLane}
                   musicalKey={musicalKey}
@@ -783,4 +988,4 @@ export function EditGrid({
       </div>
     </div>
   );
-}
+});

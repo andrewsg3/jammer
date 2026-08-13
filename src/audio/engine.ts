@@ -78,6 +78,16 @@ export async function auditionChord(chord: Chord): Promise<void> {
   auditionSynth.triggerAttackRelease(chordTones(chord, AUDITION_OCTAVE), '4n');
 }
 
+/** Plays a single note once, independent of the Transport loop — for EditGrid's
+ * melody step entry/Raise-Lower-Octave-Semitone, so what you type or click is
+ * audible immediately, not just visible. Reuses the same one-shot preview
+ * synth as auditionChord rather than the Transport-scheduled melody synth in
+ * audio/melody.ts, which is busy with actual song playback. */
+export async function auditionNote(midi: number): Promise<void> {
+  await Tone.start();
+  auditionSynth.triggerAttackRelease(Tone.Frequency(midi, 'midi').toFrequency(), '8n');
+}
+
 // Holds the sustained chord pad's release, so a new scale audition can cut off
 // whatever pad is still ringing from a previous one rather than piling up.
 let stopCurrentScaleAuditionPad: (() => void) | null = null;

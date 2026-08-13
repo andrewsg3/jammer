@@ -1,11 +1,12 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { chordNameParts, resolveSelection } from '../../data/progressions';
 import type { Chord, ChordPlacement, NotationStyle, ScaleName } from '../../data/progressions';
-import { CHORD_TRACK_BASE, clientXToLocalBeatFloor, colLine } from './gridMath';
+import { clientXToLocalBeatFloor, colLine } from './gridMath';
 import type { LanedChordSegment } from './gridMath';
 
 type Props = {
   beatsPerSystem: number;
+  chordTrackBase: number;
   laned: LanedChordSegment[];
   maxLane: number;
   musicalKey: string;
@@ -26,6 +27,7 @@ type Props = {
  * caller). */
 export function ChordRow({
   beatsPerSystem,
+  chordTrackBase,
   laned,
   maxLane,
   musicalKey,
@@ -44,7 +46,7 @@ export function ChordRow({
         <div
           key={`chord-lane-${lane}`}
           className={`chord-lane${hasPendingChord ? ' chord-lane-armed' : ''}`}
-          style={{ gridRow: CHORD_TRACK_BASE + lane, gridColumn: '1 / -1' }}
+          style={{ gridRow: chordTrackBase + lane, gridColumn: '1 / -1' }}
           onMouseDown={(e) => {
             if (e.target !== e.currentTarget) return;
             const rect = e.currentTarget.getBoundingClientRect();
@@ -62,7 +64,7 @@ export function ChordRow({
             key={`${seg.placement.id}-${seg.system}`}
             className={`chord-block${selected ? ' chord-block-selected' : ''}`}
             style={{
-              gridRow: CHORD_TRACK_BASE + seg.lane,
+              gridRow: chordTrackBase + seg.lane,
               gridColumn: `${colLine(seg.localStart)} / ${colLine(seg.localStart + seg.span)}`,
             }}
             onMouseDown={seg.isFirst ? onChordMouseDown(seg.placement) : undefined}
