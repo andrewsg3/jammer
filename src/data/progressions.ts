@@ -439,7 +439,7 @@ export function bassRootNote(chord: Chord): string {
 // key signature (e.g. Bb/Eb in G minor's two flats, not A#/D#), not default to
 // sharp regardless of key. shiftRoot/shiftRootFlat both compute the identical
 // semitone shift, just spelling the result from a different table.
-function shiftRootForKey(key: string, scale: ScaleName, offset: number): string {
+export function shiftRootForKey(key: string, scale: ScaleName, offset: number): string {
   return keySignatureAccidentals(key, scale).sign === 'sharp' ? shiftRoot(key, offset) : shiftRootFlat(key, offset);
 }
 

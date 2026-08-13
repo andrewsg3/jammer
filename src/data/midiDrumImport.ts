@@ -1,5 +1,5 @@
 import { parseMidi } from 'midi-file';
-import { STEPS_PER_BEAT, STEPS_PER_BAR } from './instrumentStyles';
+import { STEPS_PER_BEAT, patternStepsPerBar } from './instrumentStyles';
 import type { DrumPattern, DrumStep } from './instrumentStyles';
 
 const PERCUSSION_CHANNEL = 9;
@@ -47,11 +47,32 @@ const BUZZ_ROLL_LENGTH_STEPS = STEPS_PER_BEAT / 2; // half a beat flourish
 // 0 would be silent, defeating the point of having a roll there at all.
 const BUZZ_ROLL_VELOCITY_SCALE = 0.1;
 
-/** Parses raw MIDI bytes into a drum pattern, plus the file's track name if it has one. */
-export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; pattern: DrumPattern } {
+/**
+ * Parses raw MIDI bytes into a drum pattern, plus the file's track name if it has one.
+ * `fallbackBeatsPerBar` is used only when the file has no embedded time-signature meta
+ * event (or one this app doesn't model — compound meters, anything not over a "4"
+ * denominator, see CLAUDE.md's "Beats per bar") — the caller's best guess otherwise
+ * (the song currently loaded, for a live upload; the containing per-meter subfolder,
+ * for a bundled file — see drumLibrary.ts). Defaults to 4 if neither is available.
+ */
+export function parseMidiDrumBytes(
+  buffer: ArrayBuffer,
+  fallbackBeatsPerBar?: number,
+): { name: string | null; pattern: DrumPattern } {
   const midi = parseMidi(new Uint8Array(buffer));
-  const nameEvent = midi.tracks.flat().find((event) => event.type === 'trackName');
+  const flatEvents = midi.tracks.flat();
+  const nameEvent = flatEvents.find((event) => event.type === 'trackName');
   const name = nameEvent && 'text' in nameEvent ? nameEvent.text : null;
+  // Only trusted when denominator is 4 — this app has no notion of compound meter or
+  // any other denominator at all (see CLAUDE.md), so a file declaring e.g. 6/8 falls
+  // through to the fallback exactly like a file with no time signature at all, rather
+  // than being misread as "6 beats per bar."
+  const timeSigEvent = flatEvents.find((event) => event.type === 'timeSignature');
+  const fileBeatsPerBar =
+    timeSigEvent && 'denominator' in timeSigEvent && timeSigEvent.denominator === 4
+      ? timeSigEvent.numerator
+      : undefined;
+  const beatsPerBar = fileBeatsPerBar ?? fallbackBeatsPerBar ?? 4;
   const ppq = midi.header.ticksPerBeat ?? 128;
   // STEPS_PER_BEAT ticks per beat — fine enough to quantize both straight 16th
   // notes and 8th-note triplets (shuffle feel) without rounding one onto the other.
@@ -96,8 +117,9 @@ export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; 
     throw new Error('No recognizable drum hits found in this MIDI file.');
   }
 
-  const bars = Math.max(1, Math.ceil((maxStep + 1) / STEPS_PER_BAR));
-  const totalSteps = bars * STEPS_PER_BAR;
+  const stepsPerBar = patternStepsPerBar({ beatsPerBar });
+  const bars = Math.max(1, Math.ceil((maxStep + 1) / stepsPerBar));
+  const totalSteps = bars * stepsPerBar;
 
   // A few GM notes still share one lane here (crash/chinese/splash all -> 'crash';
   // both tom notes at a given pitch -> one tomX bucket). If two of those land on the
@@ -114,10 +136,10 @@ export function parseMidiDrumBytes(buffer: ArrayBuffer): { name: string | null; 
     }
   }
 
-  return { name, pattern: { bars, steps: [...deduped.values()] } };
+  return { name, pattern: { bars, beatsPerBar, steps: [...deduped.values()] } };
 }
 
-export async function parseMidiDrumPattern(file: File): Promise<DrumPattern> {
+export async function parseMidiDrumPattern(file: File, fallbackBeatsPerBar?: number): Promise<DrumPattern> {
   const buffer = await file.arrayBuffer();
-  return parseMidiDrumBytes(buffer).pattern;
+  return parseMidiDrumBytes(buffer, fallbackBeatsPerBar).pattern;
 }

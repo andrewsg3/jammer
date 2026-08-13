@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { STEPS_PER_BAR, STEPS_PER_BEAT } from '../data/instrumentStyles';
+import { STEPS_PER_BEAT, patternStepsPerBar } from '../data/instrumentStyles';
 import type { DrumPattern, DrumVoice, TimeFeel } from '../data/instrumentStyles';
 import { getSampleUrl } from '../data/drumSamples';
 import { loadBundledDrumFills, type DrumFill } from '../data/drumFills';
@@ -435,7 +435,7 @@ function triggerVoice(note: DrumVoice, time: number, velocity: number): void {
 
 export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal', sections: SectionMarker[] = []): void {
   ensureSynths();
-  const totalSteps = pattern.bars * STEPS_PER_BAR;
+  const totalSteps = pattern.bars * patternStepsPerBar(pattern);
   let step = 0;
   fillWindows = [];
 

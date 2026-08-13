@@ -38,14 +38,27 @@ export async function loadBundledDrumStyles(): Promise<DrumStyle[]> {
   const styles = await Promise.all(
     Object.entries(drumMidiUrls).map(async ([path, url]) => {
       const buffer = await fetch(url).then((res) => res.arrayBuffer());
-      const { name, pattern } = parseMidiDrumBytes(buffer);
       const parts = path.split('/');
       const fileBase = parts.pop()!.replace(/\.mid$/, '');
       // parts is now [".", "drumPatterns", ...subfolders] -- a file directly in
       // drumPatterns/ has no subfolder component at all.
       const subfolder = parts[parts.length - 1];
-      const beatsPerBar =
+      const folderBeatsPerBar =
         subfolder && subfolder !== 'drumPatterns' ? (beatsPerBarFromFolderName(subfolder) ?? 4) : 4;
+      // The subfolder is only a hint now, not the final answer — parseMidiDrumBytes
+      // prefers the file's own embedded time-signature meta event when it has one
+      // (see its own doc comment), falling back to this only when the file doesn't
+      // declare a meter itself.
+      const { name, pattern } = parseMidiDrumBytes(buffer, folderBeatsPerBar);
+      const beatsPerBar = pattern.beatsPerBar ?? 4;
+      if (subfolder && subfolder !== 'drumPatterns' && beatsPerBar !== folderBeatsPerBar) {
+        // The file's own declared meter disagrees with the folder it's sitting in —
+        // a real authoring mistake (misfiled asset or mistagged folder), not
+        // something to silently paper over by picking one.
+        console.warn(
+          `${path}: file declares ${beatsPerBar}/4 but lives in a "${subfolder}" (${folderBeatsPerBar}/4) folder`,
+        );
+      }
       const hidden = fileBase.startsWith('_');
       const fallbackName = titleCase(hidden ? fileBase.slice(1) : fileBase);
       // For a private pattern the filename is the deliberate identity — a track-name

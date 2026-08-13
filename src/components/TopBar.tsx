@@ -4,6 +4,13 @@ import type { ScaleName } from '../data/progressions';
 import type { SongPreset } from '../data/songPresets';
 import { SongPresetFileControls } from './SongPresetFileControls';
 import { APP_NAME, APP_TITLE } from '../appInfo';
+import type { ViewMode } from '../App';
+
+const VIEW_MODE_OPTIONS: { value: ViewMode; label: string }[] = [
+  { value: 'edit', label: 'Edit' },
+  { value: 'chordGrid', label: 'Chord Grid' },
+  { value: 'leadSheet', label: 'Lead Sheet' },
+];
 
 const MIN_TEMPO = 40;
 const MAX_TEMPO = 220;
@@ -29,6 +36,8 @@ type Props = {
   onTempoChange: (tempo: number) => void;
   beatsPerBar: number;
   onBeatsPerBarChange: (beatsPerBar: number) => void;
+  viewMode: ViewMode;
+  onViewModeChange: (viewMode: ViewMode) => void;
   isPlaying: boolean;
   onTogglePlay: () => void;
   instrumentsLoading: boolean;
@@ -59,6 +68,8 @@ export function TopBar({
   onTempoChange,
   beatsPerBar,
   onBeatsPerBarChange,
+  viewMode,
+  onViewModeChange,
   isPlaying,
   onTogglePlay,
   instrumentsLoading,
@@ -194,6 +205,23 @@ export function TopBar({
               </option>
             ))}
           </select>
+        </TopBarField>
+
+        <TopBarField label="View">
+          <div className="view-mode-switch" role="tablist" aria-label="View">
+            {VIEW_MODE_OPTIONS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={viewMode === value}
+                className={`view-mode-button${viewMode === value ? ' view-mode-button-active' : ''}`}
+                onClick={() => onViewModeChange(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </TopBarField>
 
         <TopBarField label="Tempo">

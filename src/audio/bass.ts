@@ -8,7 +8,7 @@ import {
   type Chord,
   type ScaleName,
 } from '../data/progressions';
-import { STEPS_PER_BEAT, timeFeelFactor } from '../data/instrumentStyles';
+import { STEPS_PER_BEAT, patternStepsPerBar, timeFeelFactor } from '../data/instrumentStyles';
 import type { BassRule, BassPattern, TimeFeel } from '../data/instrumentStyles';
 import { REFERENCE_ROOT_MIDI } from '../data/midiBassImport';
 import { UPRIGHT_MULTISAMPLE_URLS, ELECTRIC_SAMPLE_URLS } from '../data/bassSamples';
@@ -365,7 +365,7 @@ function tunisiaVampEvents(chord: Chord, placement: ChordPlacement): BassEvent[]
 /** Transposes a pattern's steps to a chord, tiling the pattern across the placement's length. */
 function patternEvents(chord: Chord, pattern: BassPattern, placement: ChordPlacement): BassEvent[] {
   const rootMidi = Tone.Frequency(chordTones(chord, BASS_OCTAVE)[0]).toMidi();
-  const patternLengthSteps = pattern.bars * STEPS_PER_BEAT * 4;
+  const patternLengthSteps = pattern.bars * patternStepsPerBar(pattern);
   const totalSteps = placement.lengthBeats * STEPS_PER_BEAT;
 
   const events: BassEvent[] = [];
@@ -395,7 +395,7 @@ function patternEvents(chord: Chord, pattern: BassPattern, placement: ChordPlace
  * sounding" would just repitch a take that was already correct.
  */
 function wholeProgressionEvents(placements: ChordPlacement[], pattern: BassPattern): BassEvent[] {
-  const patternLengthSteps = pattern.bars * STEPS_PER_BEAT * 4;
+  const patternLengthSteps = pattern.bars * patternStepsPerBar(pattern);
   const spanStart = Math.min(...placements.map((p) => p.startBeat));
   const spanEnd = Math.max(...placements.map((p) => p.startBeat + p.lengthBeats));
   const totalSteps = (spanEnd - spanStart) * STEPS_PER_BEAT;
@@ -600,7 +600,9 @@ function smartWalkAllEvents(
         ? resolveSelection(key, scale, next.selection)
         : null;
     events.push(
-      ...withTimeFeel(placement, factor, (vp) => smartWalkPlacementEvents(chord, nextChord, vp, pointer, beatsPerBar)),
+      ...withTimeFeel(placement, factor, beatsPerBar, (vp) =>
+        smartWalkPlacementEvents(chord, nextChord, vp, pointer, beatsPerBar),
+      ),
     );
   }
   return events;
@@ -613,21 +615,39 @@ function smartWalkAllEvents(
  * scaled-but-still-integer-beat virtual placement (rather than feeding fractional
  * beats straight into a generator) keeps every existing rule's `beat % 4` bar-relative
  * logic working correctly — they never need to know time-feel exists at all.
+ *
+ * Half-time specifically has no clean meaning for an odd `beatsPerBar`: there's no way
+ * to evenly halve an odd number of beats into a whole virtual one (`Math.round(3 *
+ * 0.5) = 2`, not 1.5). A rule with its own internal per-bar cycle — Smart Walking is
+ * the one currently exposed to this, since it's the only meter-generic bass rule with
+ * one — can silently lose its last beat's worth of content when that rounding comes up
+ * short (confirmed: a single 3-beat placement at half-time in 3/4 drops the approach
+ * tone entirely and leaves a gap on beat 2). Rather than risk that per-placement (a
+ * song mixes short and long placements, so some would break and some wouldn't even
+ * within the same track), half/double fall back to normal whenever the song's own
+ * meter can't be evenly halved at all — the same "disabled rather than
+ * offered-and-wrong" choice already made for the time-feel picker itself (see
+ * App.tsx's visibleTimeFeelOptions) and for every other beatsPerBar-tagged style. This
+ * is the safety net for that: it holds even if a preset's own JSON carries an
+ * incompatible combination directly (as the bundled "My Favorite Things" briefly did),
+ * not just when the picker was actually used.
  */
 function withTimeFeel(
   placement: ChordPlacement,
   factor: number,
+  beatsPerBar: number,
   generate: (virtualPlacement: ChordPlacement) => BassEvent[],
 ): BassEvent[] {
-  if (factor === 1) return generate(placement);
+  const effectiveFactor = beatsPerBar % 2 === 0 ? factor : 1;
+  if (effectiveFactor === 1) return generate(placement);
   const virtualPlacement: ChordPlacement = {
     ...placement,
     startBeat: 0,
-    lengthBeats: Math.max(1, Math.round(placement.lengthBeats * factor)),
+    lengthBeats: Math.max(1, Math.round(placement.lengthBeats * effectiveFactor)),
   };
   return generate(virtualPlacement).map((event) => ({
     ...event,
-    time: beatToTime(placement.startBeat + parseBeat(event.time) / factor),
+    time: beatToTime(placement.startBeat + parseBeat(event.time) / effectiveFactor),
   }));
 }
 
@@ -646,7 +666,7 @@ export function scheduleBass(
   const events: BassEvent[] = [];
   if (pattern) {
     const totalBeats = placements.reduce((sum, p) => sum + p.lengthBeats, 0);
-    if (pattern.bars * 4 === totalBeats) {
+    if (pattern.bars * (pattern.beatsPerBar ?? 4) === totalBeats) {
       // A finished, already-composed bassline played back verbatim — time-feel
       // doesn't apply, same reason transposition doesn't either (see the doc comment
       // on wholeProgressionEvents).
@@ -654,7 +674,7 @@ export function scheduleBass(
     } else {
       for (const placement of placements) {
         const chord = resolveSelection(key, scale, placement.selection);
-        events.push(...withTimeFeel(placement, factor, (vp) => patternEvents(chord, pattern, vp)));
+        events.push(...withTimeFeel(placement, factor, beatsPerBar, (vp) => patternEvents(chord, pattern, vp)));
       }
     }
   } else if (rule && rule.style === 'smart-walk') {
@@ -667,19 +687,19 @@ export function scheduleBass(
       if (rule.style === 'tumbao') {
         const next = placements.find((p) => p.startBeat === placement.startBeat + placement.lengthBeats);
         const nextChord = next ? resolveSelection(key, scale, next.selection) : null;
-        events.push(...withTimeFeel(placement, factor, (vp) => tumbaoEvents(chord, nextChord, vp)));
+        events.push(...withTimeFeel(placement, factor, beatsPerBar, (vp) => tumbaoEvents(chord, nextChord, vp)));
         continue;
       }
       if (rule.style === 'root-fifth-pump') {
-        events.push(...withTimeFeel(placement, factor, (vp) => rootFifthPumpEvents(chord, vp)));
+        events.push(...withTimeFeel(placement, factor, beatsPerBar, (vp) => rootFifthPumpEvents(chord, vp)));
         continue;
       }
       if (rule.style === 'tunisia-vamp') {
-        events.push(...withTimeFeel(placement, factor, (vp) => tunisiaVampEvents(chord, vp)));
+        events.push(...withTimeFeel(placement, factor, beatsPerBar, (vp) => tunisiaVampEvents(chord, vp)));
         continue;
       }
       events.push(
-        ...withTimeFeel(placement, factor, (vp) => {
+        ...withTimeFeel(placement, factor, beatsPerBar, (vp) => {
           const beatEvents: BassEvent[] = [];
           for (let beat = 0; beat < vp.lengthBeats; beat++) {
             const note = noteForBeat(chord, rule, beat);

@@ -26,10 +26,26 @@ export type DrumStep = {
   velocity: number;
 };
 
+// The number of beats in *this pattern's own* bar — undefined means 4, the same
+// default STEPS_PER_BAR always assumed before this field existed. `bars` stays a
+// pure count either way; this is just the conversion factor back to real beats/
+// steps, resolved once at import/load time (see midiDrumImport.ts's own comment
+// on where it comes from: the file's own embedded time-signature meta event,
+// then a caller-supplied hint, then 4) rather than re-derived from context every
+// time a pattern is read. See CLAUDE.md's "Beats per bar" section.
 export type DrumPattern = {
   steps: DrumStep[];
   bars: number;
+  beatsPerBar?: number;
 };
+
+/** How many STEPS_PER_BEAT-steps make up one bar of `pattern`'s *own* meter —
+ * use this instead of the old flat STEPS_PER_BAR constant anywhere `.bars` gets
+ * converted back to steps/beats, so a pattern authored in a non-4/4 meter loops
+ * at its own true length instead of always being padded/truncated to a 4-beat bar. */
+export function patternStepsPerBar(pattern: { beatsPerBar?: number }): number {
+  return (pattern.beatsPerBar ?? 4) * STEPS_PER_BEAT;
+}
 
 // Plays a track at half or double speed relative to the song's actual tempo — twice
 // (or half) as many notes fit in the same real-time span. A playback-time choice
@@ -69,6 +85,9 @@ export type BassPatternStep = {
 export type BassPattern = {
   steps: BassPatternStep[];
   bars: number;
+  // Same field, same reasoning as DrumPattern.beatsPerBar above — use
+  // patternStepsPerBar(pattern) wherever `.bars` gets converted back to steps/beats.
+  beatsPerBar?: number;
 };
 
 export type KeysRule = {
@@ -105,13 +124,34 @@ export type KeysRule = {
 export type DrumStyle = { name: string; pattern: DrumPattern | null; hidden?: boolean; beatsPerBar?: number };
 // A bass style is either algorithmic (rule, generated per-chord at render time) or a
 // fixed imported pattern (transposed to each chord's root at render time) — never both.
+// beatsPerBar here means the same thing it does on DrumStyle above, but for a different
+// reason: a bass *rule* isn't a recorded groove that could simply drift out of sync, it's
+// generated live — so in principle any rule could read the song's beatsPerBar the way
+// Smart Walking's own root-on-beat-1/approach-on-last-beat math already does (see
+// audio/bass.ts). Tumbao, Root-Fifth Pump, and Tunisia Vamp specifically can't, though:
+// each is a real idiomatic figure with fixed sixteenth-note-level internal timing (the
+// clave pickup, the montuno cell, the vamp's arc), not an abstract shape that scales to
+// any bar length — the same reason Charleston (data/instrumentStyles.ts's keysStyles) is
+// tied to 4/4. Stretching their fixed offsets to fit a different beat count was tried in
+// spirit for "My Favorite Things"'s keys rhythm (see CLAUDE.md's "Beats per bar" —
+// abandoned, didn't sound right) — tagging them 4 and hiding them outside 4/4, same as a
+// drum groove, avoids repeating that mistake rather than reparameterizing by formula.
 export type BassStyle = {
   name: string;
   rule: BassRule | null;
   pattern?: BassPattern | null;
   hidden?: boolean;
+  beatsPerBar?: number;
 };
-export type KeysStyle = { name: string; rule: KeysRule | null };
+// beatsPerBar here is the same tag/reason as BassStyle's above: `sustained`, `comped`,
+// and `arpeggio-up`/`arpeggio-updown` have no internal bar-boundary logic at all (no
+// `% 4`, no `barStart += 4` stride — they just iterate the placement's own length), so
+// they're genuinely meter-generic and stay untagged. La Pompe, Charleston, Rising Sun,
+// Bossa Nova (both), Blues Shuffle (both), and Virtual Insanity all hardcode a 4-beat (or
+// 2-bar-of-4, for bossa nova) cycle in scheduleKeys — real idiomatic figures, not a shape
+// that scales to any bar length, the same reasoning that keeps Tumbao/Root-Fifth Pump/
+// Tunisia Vamp tagged 4 on BassStyle above. See CLAUDE.md's "Beats per bar" section.
+export type KeysStyle = { name: string; rule: KeysRule | null; beatsPerBar?: number };
 
 // The rest of the drum library is loaded at runtime from the .mid files in
 // ./drumPatterns/ — see drumLibrary.ts. "None" is the only style that can't be
@@ -128,10 +168,10 @@ export const baseBassStyles: BassStyle[] = [
   { name: 'Octaves', rule: { style: 'octaves' } },
   { name: 'Pedal', rule: { style: 'pedal' } },
   { name: 'Walk Up & Down', rule: { style: 'walk-updown' } },
-  { name: 'Tumbao', rule: { style: 'tumbao' } },
-  { name: 'Root-Fifth Pump', rule: { style: 'root-fifth-pump' } },
+  { name: 'Tumbao', rule: { style: 'tumbao' }, beatsPerBar: 4 },
+  { name: 'Root-Fifth Pump', rule: { style: 'root-fifth-pump' }, beatsPerBar: 4 },
   { name: 'Smart Walking', rule: { style: 'smart-walk' } },
-  { name: 'Tunisia Vamp', rule: { style: 'tunisia-vamp' } },
+  { name: 'Tunisia Vamp', rule: { style: 'tunisia-vamp' }, beatsPerBar: 4 },
 ];
 
 export const keysStyles: KeysStyle[] = [
@@ -142,17 +182,17 @@ export const keysStyles: KeysStyle[] = [
   { name: 'Comped Power Chords', rule: { voicing: 'power-chord', rhythm: 'comped' } },
   { name: 'Sustained Triads', rule: { voicing: 'triad', rhythm: 'sustained' } },
   { name: 'Comped 7ths', rule: { voicing: 'seventh', rhythm: 'comped' } },
-  { name: 'La Pompe', rule: { voicing: 'seventh', rhythm: 'la-pompe' } },
-  { name: 'Charleston', rule: { voicing: 'seventh', rhythm: 'charleston' } },
+  { name: 'La Pompe', rule: { voicing: 'seventh', rhythm: 'la-pompe' }, beatsPerBar: 4 },
+  { name: 'Charleston', rule: { voicing: 'seventh', rhythm: 'charleston' }, beatsPerBar: 4 },
   { name: 'Arpeggiated (Triads)', rule: { voicing: 'triad', rhythm: 'arpeggio-up' } },
   { name: 'Arpeggiated (7ths)', rule: { voicing: 'seventh', rhythm: 'arpeggio-up' } },
   { name: 'Broken Chord (Up-Down)', rule: { voicing: 'seventh', rhythm: 'arpeggio-updown' } },
-  { name: 'Rising Sun Arpeggio', rule: { voicing: 'triad', rhythm: 'rising-sun' } },
-  { name: 'Bossa Nova', rule: { voicing: 'seventh', rhythm: 'bossa-nova' } },
-  { name: 'Bossa Nova 2', rule: { voicing: 'seventh', rhythm: 'bossa-nova-2' } },
-  { name: 'Blues Shuffle', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle' } },
-  { name: 'Blues Shuffle (Swing)', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle-swing' } },
-  { name: 'Virtual Insanity', rule: { voicing: 'seventh', rhythm: 'virtual-insanity' } },
+  { name: 'Rising Sun Arpeggio', rule: { voicing: 'triad', rhythm: 'rising-sun' }, beatsPerBar: 4 },
+  { name: 'Bossa Nova', rule: { voicing: 'seventh', rhythm: 'bossa-nova' }, beatsPerBar: 4 },
+  { name: 'Bossa Nova 2', rule: { voicing: 'seventh', rhythm: 'bossa-nova-2' }, beatsPerBar: 4 },
+  { name: 'Blues Shuffle', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle' }, beatsPerBar: 4 },
+  { name: 'Blues Shuffle (Swing)', rule: { voicing: 'power-chord', rhythm: 'blues-shuffle-swing' }, beatsPerBar: 4 },
+  { name: 'Virtual Insanity', rule: { voicing: 'seventh', rhythm: 'virtual-insanity' }, beatsPerBar: 4 },
 ];
 
 // Instrument/timbre variants — an axis independent of the rhythmic style above.

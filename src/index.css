@@ -158,6 +158,40 @@ body {
   width: auto;
 }
 
+/* Three-way Edit/Chord Grid/Lead Sheet switch — same pill-button visual language
+   as .melody-edit-toggle, just grouped as a single bordered segmented control
+   rather than three independent buttons. */
+.view-mode-switch {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-mode-button {
+  font-size: 11px;
+  padding: 6px 10px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.view-mode-button:last-child {
+  border-right: none;
+}
+
+.view-mode-button:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.view-mode-button-active {
+  background: var(--accent);
+  color: #fff;
+}
+
 #song-preset-quick {
   min-width: 140px;
 }
@@ -2025,6 +2059,50 @@ button:hover {
   opacity: 0.75;
 }
 
+/* Same "paper" treatment as .beat-grid-sheet-page — see that rule's own comment. */
+.lead-sheet-page {
+  overflow-y: auto;
+  background: #fdfdfb;
+  color: #1a1a1a;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  padding: 8px;
+}
+
+/* VexFlow's own SVG (positioned) plus a plain-React overlay on top of it for
+   chord symbols/section badges/the playhead — see LeadSheet.tsx's own doc
+   comment for why these are two separate render layers. */
+.lead-sheet {
+  position: relative;
+}
+
+.lead-sheet-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Positioned against a real VexFlow tickable's own rendered x — see
+   LeadSheet.tsx's forced-boundary construction — not a percentage/beat-width
+   estimate the way ChordGrid.tsx's/BeatGridSheet.tsx's chord labels are.
+   .chord-label-name (shared class) already carries the Architects Daughter
+   typography; this just adds the absolute positioning. */
+.lead-sheet-chord-label {
+  position: absolute;
+  white-space: nowrap;
+}
+
+.lead-sheet-section {
+  z-index: 2;
+}
+
+.lead-sheet-playhead {
+  position: absolute;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0.7;
+}
+
 .mobile-player__controls {
   display: flex;
   flex-direction: column;
@@ -2515,6 +2593,7 @@ button:hover {
   .playhead-flag,
   .loop-handle,
   .loop-dim,
+  .lead-sheet-playhead,
   .chord-grid-row-group-print-tail {
     display: none !important;
   }

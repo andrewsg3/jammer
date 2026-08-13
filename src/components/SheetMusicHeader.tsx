@@ -11,7 +11,9 @@ type Props = {
   playStyle: string;
   onPlayStyleChange: (playStyle: string) => void;
   tempo: number;
-  onClear: () => void;
+  // Only Edit mode passes this — Chord Grid and Lead Sheet are read-only views, so
+  // there's no Clear button to wire up (and nothing to clear from there anyway).
+  onClear?: () => void;
   // The decorative blank staff exists to read as a continuation of ChordGrid's
   // own staff below it (see the comment on .sheet-header-band's children) — true
   // there since the two share left/right insets. The beat-grid compact view has
@@ -107,9 +109,11 @@ export function SheetMusicHeader({
 }: Props) {
   return (
     <div className="sheet-header">
-      <button type="button" className="clear-button sheet-clear-button" onClick={onClear}>
-        Clear
-      </button>
+      {onClear && (
+        <button type="button" className="clear-button sheet-clear-button" onClick={onClear}>
+          Clear
+        </button>
+      )}
       {/* Tempo/title/author sit on top of a blank staff — same STAFF_HEIGHT/
           STAFF_LINE_GAP as every row in ChordGrid.tsx (shared via staffLayout.ts),
           and the same left/right inset as .chord-grid's padding, so this staff

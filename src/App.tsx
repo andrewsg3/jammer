@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChordGrid, totalBeatsFor } from './components/ChordGrid';
 import { BeatGridSheet } from './components/BeatGridSheet';
+import { LeadSheet } from './components/LeadSheet';
 import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
 import { TopBar } from './components/TopBar';
@@ -124,7 +125,19 @@ function setSongInUrl(name: string | null): void {
 // storage key/shape rather than sharing mobile's — the two views' settings are
 // independent (grid style in particular is desktop-only; mobile has no editor).
 const DESKTOP_PREFS_STORAGE_KEY = 'jazzmate-desktop-prefs';
-type DesktopStoredPrefs = { notationStyle?: NotationStyle; compactGridView?: boolean; accentColor?: string };
+// 'edit' = ChordGrid.tsx (the only view where chords/melody can be added, moved, resized, or
+// deleted); 'chordGrid' = the same read-only BeatGridSheet.tsx MobilePlayer.tsx uses; 'leadSheet' =
+// a real-engraved, VexFlow-rendered view for printing/practicing. Playback and the mixer work in
+// all three — only editing is Edit-mode-exclusive.
+export type ViewMode = 'edit' | 'chordGrid' | 'leadSheet';
+type DesktopStoredPrefs = {
+  notationStyle?: NotationStyle;
+  viewMode?: ViewMode;
+  // Legacy key from before the three-way split — still read (see the migration in useState below)
+  // so an existing user's "Beat Grid" choice carries over, but never written again.
+  compactGridView?: boolean;
+  accentColor?: string;
+};
 
 function loadStoredDesktopPrefs(): DesktopStoredPrefs {
   try {
@@ -154,10 +167,13 @@ function App() {
   const [notationStyle, setNotationStyle] = useState<NotationStyle>(
     () => loadStoredDesktopPrefs().notationStyle ?? 'symbol',
   );
-  // Swaps the grid panel for the same beat-grid chart the mobile companion view
-  // uses (BeatGridSheet.tsx) — see that file's own doc comment for the current
-  // state of editing parity with the normal ChordGrid view.
-  const [compactGridView, setCompactGridView] = useState(() => loadStoredDesktopPrefs().compactGridView ?? false);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const stored = loadStoredDesktopPrefs();
+    if (stored.viewMode) return stored.viewMode;
+    // One-time migration from the old boolean pref — an existing user who had
+    // "Beat Grid" selected lands on the new Chord Grid mode, not back on Edit.
+    return stored.compactGridView ? 'chordGrid' : 'edit';
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Falls back to whatever --accent already resolved to (light/dark default) if
   // nothing's stored yet — a manual pick simply overrides that CSS variable at
@@ -173,8 +189,8 @@ function App() {
   }, [accentColor]);
 
   useEffect(() => {
-    saveStoredDesktopPrefs({ notationStyle, compactGridView, accentColor });
-  }, [notationStyle, compactGridView, accentColor]);
+    saveStoredDesktopPrefs({ notationStyle, viewMode, accentColor });
+  }, [notationStyle, viewMode, accentColor]);
 
   const handleResetAccent = () => {
     document.documentElement.style.removeProperty('--accent');
@@ -596,9 +612,13 @@ function App() {
 
   const handleMidiUpload = async (file: File) => {
     try {
-      const pattern = await parseMidiDrumPattern(file);
+      // The song's own currently-loaded meter is the fallback hint here — only used
+      // if the file has no embedded time-signature meta event of its own (see
+      // parseMidiDrumBytes' doc comment). A live upload has no per-meter-subfolder
+      // convention to fall back to the way a bundled file does.
+      const pattern = await parseMidiDrumPattern(file, beatsPerBar);
       const name = `Custom: ${file.name.replace(/\.(mid|midi)$/i, '')}`;
-      const style: DrumStyle = { name, pattern };
+      const style: DrumStyle = { name, pattern, beatsPerBar: pattern.beatsPerBar ?? 4 };
       setCustomDrumStyle(style);
       setDrumStyle(style);
       setMidiError(null);
@@ -709,7 +729,39 @@ function App() {
       (!s.hidden || s.name === drumStyle.name) &&
       (s.beatsPerBar === undefined || s.beatsPerBar === beatsPerBar || s.name === drumStyle.name),
   );
-  const visibleBassStyles = bassStyles.filter((s) => !s.hidden || s.name === bassStyle.name);
+  // Same meter filtering as visibleDrumStyles above, and for the same reason: Tumbao,
+  // Root-Fifth Pump, and Tunisia Vamp are fixed 4/4 idioms (see instrumentStyles.ts's
+  // BassStyle.beatsPerBar comment), not a formula that scales to any bar length, so they're
+  // hidden rather than offered-and-wrong outside 4/4.
+  const visibleBassStyles = bassStyles.filter(
+    (s) =>
+      (!s.hidden || s.name === bassStyle.name) &&
+      (s.beatsPerBar === undefined || s.beatsPerBar === beatsPerBar || s.name === bassStyle.name),
+  );
+  // Same meter filtering again, for keysStyles — see instrumentStyles.ts's KeysStyle.beatsPerBar
+  // comment for which rhythms are tagged 4 and why (La Pompe, Charleston, Rising Sun, both Bossa
+  // Novas, both Blues Shuffles, Virtual Insanity) vs genuinely meter-generic (sustained, comped,
+  // both arpeggios). keysStyles has no `hidden` concept, unlike drum/bass styles, so there's no
+  // first filter term to preserve here.
+  const visibleKeysStyles = keysStyles.filter(
+    (s) => s.beatsPerBar === undefined || s.beatsPerBar === beatsPerBar || s.name === keysStyle.name,
+  );
+
+  // Half/double time-feel scale a placement's own beat count by 2x/0.5x — genuinely
+  // ambiguous for an odd beatsPerBar (no way to evenly halve an odd number of beats).
+  // Bass-only: Smart Walking is the one meter-generic rule (on any track) with its own
+  // internal per-bar cycle, and can silently drop its last beat's content when that
+  // rounding comes up short (see bass.ts's withTimeFeel). Drums' time-feel just changes
+  // a continuous loop's tick rate — no placement-length rounding at all — and keys'
+  // meter-generic rhythms (sustained/comped/both arpeggios) have no internal bar-reset
+  // logic either, so neither can actually produce the same bug; restricting them too
+  // would just hide a legitimately safe option. Same "hidden rather than
+  // offered-and-wrong" filtering as the style pickers above, and the same "keep
+  // whatever's already selected visible" exception, so switching meter never hides an
+  // option bass is still (incorrectly, per bass.ts's own safety-net clamp) set to.
+  const visibleBassTimeFeelOptions = TIME_FEEL_OPTIONS.filter(
+    (o) => o.value === 'normal' || beatsPerBar % 2 === 0 || o.value === bassTimeFeel.value,
+  );
 
   return (
     <>
@@ -725,6 +777,8 @@ function App() {
         onTempoChange={setTempo}
         beatsPerBar={beatsPerBar}
         onBeatsPerBarChange={setBeatsPerBar}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
         isPlaying={isPlaying}
         onTogglePlay={handleTogglePlay}
         instrumentsLoading={instrumentsLoading}
@@ -738,8 +792,6 @@ function App() {
         onClose={() => setSettingsOpen(false)}
         notationStyle={notationStyle}
         onNotationStyleChange={setNotationStyle}
-        compactGridView={compactGridView}
-        onCompactGridViewChange={setCompactGridView}
         countInBeats={countInBeats}
         onCountInBeatsChange={setCountInBeats}
         accentColor={accentColor}
@@ -755,17 +807,19 @@ function App() {
         </div>
       )}
       <main className="app">
-        <ChordPalette
-          musicalKey={musicalKey}
-          scale={scale}
-          notationStyle={notationStyle}
-          onAudition={handleAudition}
-          onAuditionExoticScale={handleAuditionExoticScale}
-          onAddChord={handleAddChordAtEnd}
-        />
+        {viewMode === 'edit' && (
+          <ChordPalette
+            musicalKey={musicalKey}
+            scale={scale}
+            notationStyle={notationStyle}
+            onAudition={handleAudition}
+            onAuditionExoticScale={handleAuditionExoticScale}
+            onAddChord={handleAddChordAtEnd}
+          />
+        )}
         <div className="layout">
           <div className="layout-grid">
-            {compactGridView ? (
+            {viewMode === 'chordGrid' && (
               <div className="beat-grid-sheet-page">
                 <SheetMusicHeader
                   title={songTitle}
@@ -777,7 +831,6 @@ function App() {
                   playStyle={songPlayStyle}
                   onPlayStyleChange={setSongPlayStyle}
                   tempo={tempo}
-                  onClear={handleClear}
                   showStaff={false}
                 />
                 <BeatGridSheet
@@ -791,7 +844,35 @@ function App() {
                   beatsPerBar={beatsPerBar}
                 />
               </div>
-            ) : (
+            )}
+            {viewMode === 'leadSheet' && (
+              <div className="lead-sheet-page">
+                <SheetMusicHeader
+                  title={songTitle}
+                  onTitleChange={setSongTitle}
+                  subtitle={songSubtitle}
+                  onSubtitleChange={setSongSubtitle}
+                  author={songAuthor}
+                  onAuthorChange={setSongAuthor}
+                  playStyle={songPlayStyle}
+                  onPlayStyleChange={setSongPlayStyle}
+                  tempo={tempo}
+                  showStaff={false}
+                />
+                <LeadSheet
+                  placements={placements}
+                  melody={melody}
+                  sections={sections}
+                  musicalKey={musicalKey}
+                  scale={scale}
+                  notationStyle={notationStyle}
+                  beatsPerBar={beatsPerBar}
+                  playheadBeat={playheadBeat}
+                  isPlaying={isPlaying && !countInActive}
+                />
+              </div>
+            )}
+            {viewMode === 'edit' && (
               <ChordGrid
                 placements={placements}
                 melody={melody}
@@ -908,7 +989,7 @@ function App() {
               instrumentOptions={bassInstruments}
               selectedInstrument={bassInstrument}
               onInstrumentChange={setBassInstrumentState}
-              feelOptions={TIME_FEEL_OPTIONS}
+              feelOptions={visibleBassTimeFeelOptions}
               selectedFeel={bassTimeFeel}
               onFeelChange={setBassTimeFeel}
               volume={bassVolume}
@@ -927,7 +1008,7 @@ function App() {
             <ChannelStrip
               label="Harmony"
               accent="harmony"
-              styleOptions={keysStyles}
+              styleOptions={visibleKeysStyles}
               selectedStyle={keysStyle}
               onStyleChange={setKeysStyle}
               instrumentOptions={keysInstruments}

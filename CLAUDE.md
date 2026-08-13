@@ -23,8 +23,10 @@ actually here now.
 - `midi-file` for parsing imported `.mid` files (drum/bass/melody).
 
 ## Current shape
-- **Chord grid** (`components/ChordGrid.tsx`) — a 48-bar (12 rows × 4 bars) drag/drop lead-sheet
-  page, not a text field. Chord symbols sit above a real 5-line staff per row; row 0 also carries
+- **Chord grid** (`components/ChordGrid.tsx`) — desktop's **Edit** view (see "Three desktop views"
+  below for the other two, read-only ones, and the mode switcher itself) — a 48-bar (12 rows × 4
+  bars) drag/drop lead-sheet page, not a text field. Chord symbols sit above a real 5-line staff per
+  row; row 0 also carries
   the clef, a computed key signature, and the song's time signature (see `data/progressions.ts`'s
   `keySignatureAccidentals`, and "Beats per bar" below for the time signature itself). Placements
   support multi-row spans, resize/move/select/copy-paste,
@@ -107,7 +109,7 @@ real key-signature-aware spelling). Good enough to look like a real book at a gl
 - **Playback** (`audio/melody.ts`): a single monophonic `Tone.Synth`, scheduled straight from
   the imported notes — no chord-tracking logic needed at all, unlike bass/keys.
 
-## Beats per bar (Phase 1 done — chart/notation; Phase 2 not started — accompaniment engines)
+## Beats per bar (Phase 1 done — chart/notation; Phase 2 done — accompaniment engines)
 Time-signature support, scoped in two deliberately separate phases so the bigger, riskier half
 (rewriting the accompaniment engines) didn't have to land before the chart itself could show
 anything other than 4/4. **Simple meters only, always over a "4" denominator** — a preset with
@@ -141,41 +143,120 @@ and count-in clicks (`playCountIn`) both now take a `beatsPerBar` param (threade
 self-contained enough to land alongside Phase 1 rather than waiting on the real Phase 2 below —
 it's just a click accent pattern, not a pattern generator with real musical content.
 
-**Phase 2 (started, narrow slice done; the rest deliberately deferred).** The accompaniment
-engines mostly still hardcode 4-beat bars — `instrumentStyles.ts`'s `STEPS_PER_BAR =
-STEPS_PER_BEAT * 4` is unchanged, and most of `bass.ts` (`tumbaoEvents`/`rootFifthPumpEvents`/
-`tunisiaVampEvents`), all of `keys.ts`'s charleston/virtual-insanity/rising-sun/blues-shuffle/
-la-pompe rhythm cycles, and the drum/bass MIDI importers' own bar-rounding don't read the song's
-`beatsPerBar` yet. Two pieces are done, for different reasons:
-- **`bass.ts`'s Smart Walking (`smartWalkBarEvents`/`smartWalkPlacementEvents`/
-  `smartWalkAllEvents`) is genuinely meter-generic now** — it's pure algorithmic generation (root
-  on beat 1, a chromatic approach tone on the last beat, chord tones spread evenly across whatever
-  beats fall in between), so parameterizing it on `beatsPerBar` was just a math change, not new
-  musical content. `beatsPerBar=4` reproduces the original fixed beat-2/beat-3 shape exactly
-  (verified: `middleBeats = beatsPerBar - 2` gives the same two fractions, 1/3 and 2/3, landing on
-  the same two sixteenth-offsets as before) — existing 4/4 songs are unaffected.
-- **`keys.ts`'s `sustained` rhythm ("Sustained 7ths" etc.) turned out to already be meter-generic**
-  — it just holds the voicing for `placement.lengthBeats`, with no internal beat-position logic at
-  all, so no change was needed there. Also true of every "one voicing per placement" rule in
-  general (`noteForBeat`-driven bass rules loop `beat < vp.lengthBeats` already, not a hardcoded
-  4) — it's specifically the rules with their own internal *rhythmic cycle* (Charleston, La Pompe,
-  the walking-bass bar shape before the fix above) that assume 4/4, not accompaniment in general.
-- **Drums are structurally different and can't be "generalized" the same way** — a drum style is
-  either "None" or a real recorded/imported `.mid` groove (`DrumPattern`), never an algorithmic
-  rule, so there's no formula to reparameterize the way Smart Walking's was. A groove actually
-  written in 4/4 (kick-on-1-and-3 feel, etc.) just *is* a 4/4 performance; naively changing what
-  `STEPS_PER_BAR` rounds its loop length to would either truncate real content or loop it at the
-  wrong length, drifting against a non-4/4 chart's bars exactly the way an unconverted groove does
-  today. The fix that actually works is a **new recording per meter**, not a formula — see
-  `drumLibrary.ts`'s per-meter subfolder convention (`drumPatterns/<beatsPerBar>-4/`, tagging each
-  loaded `DrumStyle.beatsPerBar`) and the style-picker filtering in `App.tsx`'s
-  `visibleDrumStyles`. No 3/4 (or other non-4/4) grooves are bundled yet — the mechanism is built,
-  content isn't.
+**Phase 2 (started, most of it now done; one piece deliberately deferred).** The accompaniment
+engines' relationship to `beatsPerBar` splits into exactly two categories, and knowing which one a
+given rule/pattern falls into is the actual design decision here — **this is the target pattern for
+any future accompaniment work, not just what happened to get done first**:
 
-The rest (drum/bass MIDI importers' bar-rounding, `keys.ts`'s remaining rhythm cycles, `bass.ts`'s
-tumbao/root-fifth-pump/Tunisia-vamp) stays deferred — same reasoning as before, scoped as its own
-follow-up rather than bundled in here, tackled piece by piece as specific songs need it rather
-than as one big rewrite.
+1. **Pure algorithmic generation, no fixed internal timing** — a rule that only ever asks "what
+   chord tone, how far into this placement" and never hardcodes a bar length, so making it read
+   `beatsPerBar` is a real math change, genuinely meter-generic, no new musical content. **Fix:
+   parameterize the math.**
+2. **A real idiomatic figure with fixed sixteenth-note-level (or beat-level) internal timing** — a
+   clave pickup, a comping accent tied to "beat 2 and 4," a stride that hardcodes `+= 4` — where the
+   figure *is* a specific 4-beat performance, not an abstract shape. Stretching its fixed offsets to
+   fit a different beat count was tried once, in spirit, for "My Favorite Things"'s keys rhythm (see
+   the non-goals section below — abandoned, didn't sound right), and isn't attempted again anywhere
+   below. **Fix: tag it `beatsPerBar: 4` (an optional field now on `DrumStyle`, `BassStyle`, and
+   `KeysStyle` alike) and let the style picker (`App.tsx`'s `visibleDrumStyles`/`visibleBassStyles`/
+   `visibleKeysStyles`) filter it out of the dropdown outside 4/4** — hidden-and-correct rather than
+   offered-and-wrong. A style already selected keeps playing (and keeps sounding wrong) through a
+   live meter change on any of the three tracks — no auto-reset, same accepted tradeoff on all of
+   them, consistently.
+
+Applying that split:
+- **Category 1 — done.** `bass.ts`'s Smart Walking (`smartWalkBarEvents`/`smartWalkPlacementEvents`/
+  `smartWalkAllEvents`): root on beat 1, a chromatic approach tone on the last beat, chord tones
+  spread evenly across whatever beats fall in between — parameterizing it on `beatsPerBar` was just
+  a math change. `beatsPerBar=4` reproduces the original fixed beat-2/beat-3 shape exactly (verified:
+  `middleBeats = beatsPerBar - 2` gives the same two fractions, 1/3 and 2/3, landing on the same two
+  sixteenth-offsets as before) — existing 4/4 songs are unaffected. `keys.ts`'s `sustained` rhythm
+  ("Sustained 7ths" etc.), `comped`, and `arpeggio-up`/`arpeggio-updown` all turned out to already be
+  in this category — no `% 4` or `+= 4` stride anywhere in their loops, just iterating the
+  placement's own length — so no code change was needed for them at all, just leaving them untagged.
+  **One real gap found and fixed after the fact**: being meter-generic isn't the same as being
+  time-feel-generic. Half/double time-feel (`bass.ts`'s `withTimeFeel`) scales a placement's own
+  beat count by 2x/0.5x, which has no clean meaning for an odd `beatsPerBar` — there's no way to
+  evenly halve an odd number of beats into a whole virtual one (`Math.round(3 * 0.5) = 2`, not 1.5).
+  Smart Walking's own per-bar cycle silently lost its last beat's content when that rounding came up
+  short (confirmed by direct simulation: a single 3-beat placement at half-time in 3/4 drops the
+  approach tone and leaves an audible gap on beat 2 — "plays on 1 and 3"). Fixed at the shared
+  choke point rather than in Smart Walking specifically: `withTimeFeel` now takes `beatsPerBar` and
+  clamps to normal time whenever it's odd, protecting every current and future bass rule that
+  routes through it, not just Smart Walking. `App.tsx`'s bass channel strip also hides half/double
+  from its own picker under an odd meter (`visibleBassTimeFeelOptions`, same "keep the current
+  selection visible" exception the style pickers use) — but the `withTimeFeel` clamp is what
+  actually holds the guarantee, since a preset's JSON can set an incompatible combination directly
+  (the bundled "My Favorite Things" briefly did: `bassTimeFeel: "half"` in 3/4, since fixed before
+  the clamp existed — corrected to `"normal"` once the clamp made the stored value inert but
+  misleading). Deliberately **not** applied to drums or keys: drums' time-feel only changes a
+  continuous loop's tick rate (no placement-length rounding at all), and keys' meter-generic
+  rhythms (`sustained`/`comped`/both arpeggios) have no internal bar-reset logic either — neither
+  can actually produce this bug, so gating them too would just hide a legitimately safe option.
+- **Category 2 — done.** `bass.ts`'s Tumbao/Root-Fifth Pump/Tunisia Vamp (`tumbaoEvents`/
+  `rootFifthPumpEvents`/`tunisiaVampEvents` — the clave pickup, the montuno cell, the vamp's
+  ascending/descending arc) and `keys.ts`'s La Pompe, Charleston, Rising Sun, both Bossa Novas, both
+  Blues Shuffles, and Virtual Insanity (all hardcode a `+= 4` bar stride, or `+= 8` for bossa nova's
+  2-bar cycle, in `scheduleKeys`) are all tagged `beatsPerBar: 4` on their `BassStyle`/`KeysStyle`
+  entries in `instrumentStyles.ts` and filtered out of the picker outside 4/4 by `App.tsx`'s
+  `visibleBassStyles`/`visibleKeysStyles` — the same mechanism `visibleDrumStyles` already used for
+  meter-mismatched drum grooves, below.
+- **Drums are a third, structurally different case — not really "category 1 or 2," a style is either
+  "None" or a real recorded/imported `.mid` groove (`DrumPattern`), never an algorithmic rule at all,
+  so there's no math to parameterize even in principle.** A groove actually written in 4/4
+  (kick-on-1-and-3 feel, etc.) just *is* a 4/4 performance; naively changing what `STEPS_PER_BAR`
+  rounds its loop length to would either truncate real content or loop it at the wrong length,
+  drifting against a non-4/4 chart's bars exactly the way an unconverted groove does today. The fix
+  that actually works is a **new recording per meter**, not a formula — see `drumLibrary.ts`'s
+  per-meter subfolder convention (`drumPatterns/<beatsPerBar>-4/`, tagging each loaded
+  `DrumStyle.beatsPerBar`) and `App.tsx`'s `visibleDrumStyles`. No 3/4 (or other non-4/4) grooves are
+  bundled yet — the mechanism is built, content isn't. This is where the `beatsPerBar`-tag-and-filter
+  half of the pattern above actually originated, before bass/keys reused it for category 2.
+
+**MIDI importer bar-rounding (done).** `DrumPattern`/`BassPattern` gained their own
+`beatsPerBar?: number` (defaults to 4) — a pure bar *count* stays in `.bars`; `beatsPerBar` is the
+conversion factor back to real beats/steps, resolved once at import time rather than assumed
+globally. `instrumentStyles.ts`'s new `patternStepsPerBar(pattern)` helper (`(pattern.beatsPerBar ??
+4) * STEPS_PER_BEAT`) replaces the old flat `STEPS_PER_BAR` constant everywhere a pattern's own
+`.bars` gets converted back to steps: `midiDrumImport.ts`/`midiBassImport.ts`'s own bar-rounding math,
+`drums.ts`'s `scheduleDrums`, and `bass.ts`'s `patternEvents`/`wholeProgressionEvents`/the
+whole-progression-length heuristic in `scheduleBass`. This is a category-1 fix (pure math
+parameterization, unlike Tumbao/Charleston above) — nothing here is a fixed idiom, it's just "how
+many beats is one bar of this specific file."
+
+Where the resolved `beatsPerBar` actually comes from, in priority order: **the file's own embedded
+`timeSignature` meta event** (`midi-file` parses `numerator`/`denominator`; only trusted when
+`denominator === 4`, per this app's simple-meters-only constraint — a compound-meter or
+unsupported-denominator file falls through to the next option exactly like a file with no time
+signature at all) → **a caller-supplied fallback hint** (the song's currently-loaded `beatsPerBar`,
+for a live drum upload in `App.tsx`'s `handleMidiUpload`; the containing per-meter subfolder, for a
+bundled file in `drumLibrary.ts` — `bassLibrary.ts` has no subfolder convention yet, so it has no
+hint to offer and relies on the file's own declared meter or nothing) → **4**. `DrumStyle.beatsPerBar`/
+`BassStyle.beatsPerBar` (the picker-filtering tag from the section above) are now *derived* from the
+resolved `pattern.beatsPerBar` rather than set independently, so they can't silently disagree with
+what the pattern's own step math actually does — and `drumLibrary.ts` `console.warn`s if a file's own
+declared meter disagrees with the per-meter subfolder it's sitting in, since that's a real authoring
+mistake (misfiled asset or mistagged folder) worth surfacing rather than silently picking one.
+
+**Meter reflow for an existing progression (idea, not scoped, deliberately not attempted above).**
+Everything in this section makes a song playable correctly *in whatever meter it's already in* —
+it doesn't help retime an *existing* chart into a *different* meter (e.g. taking Autumn Leaves,
+written in 4/4, and reworking it into 3/4). That's a genuinely separate, harder feature, and a
+deliberate non-goal of the work above, not an oversight: `ChordPlacement.startBeat`/`lengthBeats`
+are stored as absolute beats-from-song-start, which is the right model to keep — a chord lasting 2
+beats is a fact about the music, independent of how those beats get grouped into bars for display
+(that grouping is already correctly derived at render time from `beatsPerBar` — see
+`beatsPerRowFor`/`totalBeatsFor` in `ChordGrid.tsx`). Changing the Meter picker today deliberately
+leaves every placement's beats untouched, which is exactly right for *starting* a song fresh in a
+given meter (how "My Favorite Things" was actually done) — the open problem is only "retime
+something already written." And that's genuinely hard, not just unbuilt: there's no canonical
+answer for where a chord that started on beat 3 of a 4-beat bar should land once bars are 3 beats
+long — preserve total beat count and let barlines fall where they may (today's behavior, if the
+picker were ever used this way), preserve bar count and stretch/compress content to fit, pad every
+bar up to the new length, or hand-retime chord by chord are all different, equally defensible
+answers, the same problem real notation software (Sibelius/Finale-style "reinterpret" tools) punts
+to the user rather than solving generically. If ever built, this should be its own explicit,
+opt-in transform — not a side effect of touching the Meter dropdown.
 
 ## Explicit non-goals (still true)
 - No AI/generative anything.
@@ -188,57 +269,95 @@ than as one big rewrite.
   see "VexFlow for printable/exported lead sheets" below.
 - **Compound meters (6/8, 9/8, 12/8) — out of scope.** See "Beats per bar" below for what *is*
   supported (simple meters, always over a "4" denominator).
-- **Accompaniment engines still assume 4/4 — see "Beats per bar" below.** The chart/notation layer
-  (Phase 1) now supports other meters; the drums/bass/keys pattern generators (Phase 2) don't yet.
-  A cheap fake for a genuinely 3/4 tune ("My Favorite Things") — keep the chart in the 4/4 grid,
-  but cycle one rhythm engine's own pattern in 3 beats instead of 4 — was tried and abandoned
-  (didn't work, not narrowed down further) before Phase 1 existed; the keys style for that song
-  was pulled back out rather than left half-working. Worth revisiting once Phase 2 lands for real.
+- **Some accompaniment styles are still 4/4-only, and stay that way on purpose — see "Beats per
+  bar" below.** Phase 2 turned most of the drums/bass/keys pattern generators meter-generic, but
+  every style built around a real fixed idiomatic figure (a drum groove, Tumbao, Charleston, etc.)
+  is tagged `beatsPerBar: 4` and hidden from the picker outside 4/4 rather than reparameterized —
+  a deliberate, permanent design choice for that category, not a gap waiting to close. A cheap
+  fake for a genuinely 3/4 tune ("My Favorite Things") — keep the chart in the 4/4 grid, but cycle
+  one rhythm engine's own pattern in 3 beats instead of 4 — was tried and abandoned (didn't work,
+  not narrowed down further) before Phase 1 existed, and is exactly the mistake the tag-and-filter
+  approach exists to avoid repeating.
 
-## VexFlow for printable/exported lead sheets (idea, not scoped)
-Revisits the "no real notation engraving" non-goal above, but scoped deliberately narrower than
-"replace the hand-rolled renderer" — the idea is a **printable/exportable** lead sheet, generated
-through VexFlow, sitting alongside the existing live editable grid rather than necessarily
-replacing it.
+## Three desktop views: Edit / Chord Grid / Lead Sheet (Milestone 1 done; Milestone 2 not started)
+Desktop used to have one always-editable view (`ChordGrid.tsx`, a staff with drag/resize/select
+chord placements and a click/drag melody editor) plus a little-used `compactGridView` toggle that
+swapped it for `BeatGridSheet.tsx` (the same read-only cell chart `MobilePlayer.tsx` uses). That's
+now three explicit, purpose-built modes, switched via a segmented control in `TopBar.tsx`
+(`App.tsx`'s `viewMode: 'edit' | 'chordGrid' | 'leadSheet'`, persisted the same way
+`compactGridView` used to be, with a one-time migration from that old boolean). **Editing chord
+placements and melody notes is exclusive to Edit mode** — Chord Grid and Lead Sheet are read-only
+views of the same underlying song, but playback (Play/Stop) and the full mixer (`ChannelStrip`
+volume/mute/instrument/style pickers, a sibling panel outside whichever view renders — nothing
+about it needed to change) work identically in all three.
 
-**Why export is the natural scope, not the live view.** `ChordGrid.tsx`'s staff isn't just a
-picture of notation — it's the live editing surface for drag/resize/select/copy-paste on chord
-placements, a scrubbable playhead, a draggable loop range (rendered as repeat-barline glyphs), the
-section-marker overlay, and now the melody editor (`melodyEditMode`, see "In-browser MIDI editor"
-above) with click-to-place/drag-to-move notes directly on the rendered staff. VexFlow is an
-engraving library, not an interaction framework — it renders notation, it doesn't host drag
-gestures or click-to-edit on what it draws. Retrofitting all of that interactivity onto/into
-VexFlow-rendered output would be a substantial rework with real risk of regressing everything
-"Current shape" above describes as already working, for a payoff (nicer-looking *live* notation)
-this app hasn't actually been missing. A **separate, static/printable export path** sidesteps all
-of that: feed the same underlying data (`ChordPlacement[]`, `MelodyNote[]`, `SectionMarker[]`,
-key/scale) into VexFlow's own note/voice/formatter API to produce a real-engraved, non-interactive
-page — nothing about the live grid has to change at all.
+- **Edit** — `ChordGrid.tsx`, byte-for-byte unchanged. A deliberate bridge: the eventual
+  ground-up Hookpad-style rebuild (bar/subdivision grid, a real diatonic/chromatic note editor —
+  see "Direction" below) is real future work, **not started**, scoped separately from the
+  three-view split itself.
+- **Chord Grid** — `BeatGridSheet.tsx`, also unchanged (confirmed with the user directly: "Beat
+  grid is perfect as-is"). Purely a re-gating of the exact JSX `compactGridView` used to render.
+- **Lead Sheet** — new (`components/LeadSheet.tsx`), real engraved notation via VexFlow (new
+  dependency, `vexflow` in `package.json`). This is what the rest of this section used to describe
+  as an unscoped export idea — now built as a first-class in-app *view* instead, passive-only by
+  the user's explicit choice (a playhead that follows playback, no click-to-scrub, no draggable
+  loop range — matching Chord Grid's own restrained, non-interactive character rather than
+  reproducing Edit's scrub/loop UI a third time).
 
-**What VexFlow would newly deliver that the hand-rolled renderer explicitly doesn't** (see "How
-melody notation works" above for why each was accepted as a trade-off, not an oversight): real
-beaming, rhythm-accurate note-duration shapes (today's renderer only ever draws a notehead at
-`startBeat`, never a length), and real key-signature-aware enharmonic spelling (today's
-`spellPitch` always spells a black key as "the natural below it, sharp," regardless of key —
-wrong in flat-heavy keys). All three are exactly the gaps "How melody notation works" lists as
-*accepted*, not fixable-later — an export path is where fixing them for real would actually
-belong, since export doesn't also need to stay live-editable the way the grid does.
+**Why a separate read-only view, not swapping `ChordGrid.tsx`'s own rendering.** Still true, and
+is exactly why Lead Sheet is a new *view* rather than a new renderer for the existing one:
+`ChordGrid.tsx`'s staff is also the live drag/resize/select/copy-paste surface for chords and the
+click/drag melody editor. VexFlow is an engraving library, not an interaction framework — retrofitting
+that interactivity onto VexFlow-rendered output would be a substantial, risky rework for a payoff
+(nicer *live* editing notation) nothing asked for. Making Lead Sheet a separate, genuinely
+non-interactive view sidesteps the whole question: VexFlow only ever has to render a passive chart,
+never host a drag gesture.
 
-**Hybrid chord symbols, not VexFlow's own text/annotation API.** This app's chord-symbol rendering
-is a deliberate, already-documented choice — Architects Daughter specifically chosen over a plain
-default for legibility on dense symbols like "F#m7b5" (see "Fonts / notation rendering" above).
-The plan here is a hybrid: VexFlow owns the staff/clef/key-signature/noteheads/beaming, but this
-app's own chord-symbol layer (same font, same positioning logic) renders as an overlay on top of
-whatever coordinates VexFlow's formatter hands back for each measure/beat, the same way
-`staffLayout.ts` today shares one set of staff-geometry constants between `ChordGrid.tsx` and
-`SheetMusicHeader.tsx` so two independently-rendered staves still line up exactly — same idea,
-just reconciling this app's own layout math against VexFlow's instead of against itself.
+**What VexFlow actually delivers that the hand-rolled renderer explicitly doesn't** (see "How
+melody notation works" above for why each was accepted there as a trade-off, not an oversight):
+real beaming, rhythm-accurate note-duration shapes, and real key-signature-aware enharmonic
+spelling. Concretely, in `LeadSheet.tsx`:
+- **Beats → VexFlow duration mapping** (`beatsToDurations`): a greedy decomposition against a
+  fixed duration table (whole down to 16th, including dotted values), tied together via
+  `StaveTie` when a note needs more than one token. Deliberately simple, not a full
+  rhythm-notation algorithm — `MELODY_SNAP_BEATS` (0.5, the hand-drawn melody editor's own snap
+  grid) means hand-drawn notes always decompose in ≤2 tokens; a sub-16th remainder (only
+  realistically reachable via an oddly-timed MIDI import) is dropped with a `console.warn` rather
+  than represented. Verified against a deliberately irregular test file (a 1.1-beat note, a
+  4-beat note crossing a bar line) — the cap/tie/cross-bar-tie paths all render correctly, no
+  crash, warnings fire exactly where expected.
+- **Key-signature-aware pitch spelling** (`spellMelodyNote`): reuses `progressions.ts`'s own
+  `shiftRootForKey` (now exported for this) — the same sharp-in-a-sharp-key/flat-in-a-flat-key
+  convention diatonic chord roots already use elsewhere in this app — applied to *every* pitch
+  class a melody note might need, not just diatonic ones, so it doesn't need a separate
+  diatonic-or-not branch. A per-bar "active accidental per letter" map (reset from the key
+  signature at each bar boundary) decides whether an `Accidental` modifier actually needs
+  drawing, standard engraving practice (an accidental holds for the rest of the measure). Not
+  melodic-contour-aware — purely key-signature-relative, a deliberate v1 simplification.
+- **Forced-boundary construction** — the actual mechanism behind the hybrid chord-symbol overlay
+  described below: walks the whole song once, splitting tickables at bar lines (always forced —
+  each bar needs its own VexFlow `Voice`) and, only when nothing's currently sustaining, at
+  chord/section starts too (so a real tickable is guaranteed to begin exactly there). A melody
+  note already sustaining across a chord/section boundary is *not* split for it — confirmed via
+  the same test file (a note deliberately spanning both a bar line and a chord change) — the
+  label falls back to the start of whichever note/rest segment contains that beat instead.
 
-**Open question, not yet resolved:** whether "possibly the lead sheet view on desktop app" (as
-raised) means export-only, or eventually swapping the *live* view's rendering to VexFlow too once
-an export path proves the hybrid chord-symbol approach works. Given the interactivity risk above,
-export-first with the live grid untouched is the safer order either way — a live-view swap, if
-ever attempted, should come after, not alongside.
+**Hybrid chord symbols, not VexFlow's own text/annotation API — as planned, now built.** This
+app's chord-symbol rendering stays the deliberate, already-documented choice it always was —
+Architects Daughter, `chordNameParts`, the same `.chord-label-name`/`.chord-ext` classes
+`ChordGrid.tsx`'s own chord labels use (see "Fonts / notation rendering" above) — rendered as a
+plain-React absolutely-positioned overlay on top of VexFlow's own SVG, not inside it. Because the
+forced-boundary construction above guarantees a real tickable starts at (almost) every chord/
+section beat, positioning the overlay is just reading that tickable's own `getAbsoluteX()` after
+`Formatter.format()` — no interpolation needed, the "coordinates VexFlow's formatter hands back"
+this section originally described. Two render layers, kept deliberately separate: the VexFlow SVG
+(imperative, only rebuilt when the song's actual content changes) and the overlay (plain React
+state, re-rendered every animation frame during playback for the playhead line, touching no
+VexFlow API at all) — verified this doesn't reformat/redraw the whole score on every frame.
+
+**Resolved:** the "open question" this section used to end on (export-only vs. eventually
+swapping the live view) didn't need resolving after all — Lead Sheet as a genuinely separate,
+non-interactive view sidesteps it entirely. `ChordGrid.tsx` was never touched.
 
 ## How to run
 ```
@@ -913,9 +1032,12 @@ Highest-leverage next pieces, in order:
    large effort (lick bank/generator, turn scheduler) on top of pieces that now all actually exist
    (monophonic playback, the countdown-cue pattern, scale-rooted note generation, and now a real
    melody editor to build/audition licks against).
-3. **Beats per bar, Phase 2** (see "Beats per bar" above) — Phase 1 (chart/notation) shipped; the
-   drums/bass/keys accompaniment engines still assume 4/4 regardless of the loaded song's actual
-   meter.
+3. **Milestone 2 of "Three desktop views"** (see above) — the ground-up Hookpad-style rewrite of
+   the Edit view itself (bar/subdivision grid, a real diatonic/chromatic note editor). Milestone 1
+   (the three-view split, Chord Grid, and a real VexFlow-rendered Lead Sheet) shipped; Edit is
+   still `ChordGrid.tsx` unchanged, a deliberate bridge rather than the intended end state.
+
+"Beats per bar" (see above) that used to top this list is now fully done, importers included.
 
 The in-browser MIDI editor that used to top this list shipped (v1) — see "In-browser MIDI editor"
 above for what's covered and what's still cut for scope (note resize, multi-select, undo,

@@ -19,12 +19,18 @@ export async function loadBundledBassStyles(): Promise<BassStyle[]> {
   const styles = await Promise.all(
     Object.entries(bassMidiUrls).map(async ([path, url]) => {
       const buffer = await fetch(url).then((res) => res.arrayBuffer());
+      // No per-meter subfolder convention here yet (unlike drumLibrary.ts) — there's
+      // nothing to fall back to, so this only picks up a meter when the file itself
+      // declares one via an embedded time-signature meta event (see
+      // parseMidiBassBytes' own doc comment); otherwise it's assumed 4/4, same as
+      // before this field existed.
       const { name, pattern } = parseMidiBassBytes(buffer);
+      const beatsPerBar = pattern.beatsPerBar ?? 4;
       const fileBase = path.split('/').pop()!.replace(/\.mid$/, '');
       const hidden = fileBase.startsWith('_');
       const fallbackName = titleCase(hidden ? fileBase.slice(1) : fileBase);
       const resolvedName = hidden ? fallbackName : (name ?? fallbackName);
-      const style: BassStyle = { name: resolvedName, rule: null, pattern, hidden };
+      const style: BassStyle = { name: resolvedName, rule: null, pattern, hidden, beatsPerBar };
       return style;
     }),
   );

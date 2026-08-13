@@ -8,8 +8,6 @@ type Props = {
   onClose: () => void;
   notationStyle: NotationStyle;
   onNotationStyleChange: (style: NotationStyle) => void;
-  compactGridView: boolean;
-  onCompactGridViewChange: (compact: boolean) => void;
   countInBeats: CountInBeats;
   onCountInBeatsChange: (beats: CountInBeats) => void;
   accentColor: string;
@@ -27,8 +25,6 @@ export function SettingsModal({
   onClose,
   notationStyle,
   onNotationStyleChange,
-  compactGridView,
-  onCompactGridViewChange,
   countInBeats,
   onCountInBeatsChange,
   accentColor,
@@ -56,18 +52,6 @@ export function SettingsModal({
         </div>
 
         <h3 className="settings-modal-subheading">Appearance</h3>
-        <label className="settings-modal-row">
-          <span>Chord Grid</span>
-          <select
-            className="settings-modal-select"
-            value={compactGridView ? 'compact' : 'sheet'}
-            onChange={(e) => onCompactGridViewChange(e.target.value === 'compact')}
-            aria-label="Chord grid style"
-          >
-            <option value="sheet">Sheet Music</option>
-            <option value="compact">Beat Grid</option>
-          </select>
-        </label>
         <label className="settings-modal-row">
           <span>Notation</span>
           <select
