@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "name": "Virtual Insanity",
+  "author": "Jamiroquai",
+  "playStyle": "Funk",
+  "key": "Eb",
+  "scale": "minor",
+  "tempo": 95,
+  "beatsPerBar": 4,
+  "metronome": false,
+  "loopStart": 0,
+  "drumStyle": "Virtual Insanity",
+  "bassStyle": "Pedal",
+  "keysStyle": "Virtual Insanity",
+  "drumsTimeFeel": "normal",
+  "bassTimeFeel": "normal",
+  "keysTimeFeel": "normal",
+  "chordsInstrument": "Acoustic Piano",
+  "bassInstrument": "Upright",
+  "drumsInstrument": "Acoustic",
+  "customDrumPattern": null,
+  "sectionDefs": [
+    {
+      "label": "A",
+      "placements": [
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 5, "quality": "dom7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 10, "quality": "add9" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 9, "quality": "m7b5" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7sharp5" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 5, "quality": "dom7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 10, "quality": "add9" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 9, "quality": "m7b5" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7sharp5" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 2 }
+      ]
+    },
+    {
+      "label": "B",
+      "placements": [
+        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 11, "quality": "dim7" }, "lengthBeats": 2 },
+        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 1 },
+        { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "lengthBeats": 1 },
+        { "selection": { "type": "chromatic", "offset": 5, "quality": "min7" }, "lengthBeats": 1 },
+        { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 1 }
+      ]
+    }
+  ],
+  "arrangement": [
+    "Intro",
+    "A",
+    "B"
+  ]
+}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { NotationStyle } from '../data/progressions';
-import { COUNT_IN_OPTIONS, type CountInBeats } from '../audio/engine';
+import { COUNT_IN_OPTIONS, type CountInBars } from '../audio/engine';
 import { AttributionsModal } from './AttributionsModal';
 
 type Props = {
@@ -8,8 +8,8 @@ type Props = {
   onClose: () => void;
   notationStyle: NotationStyle;
   onNotationStyleChange: (style: NotationStyle) => void;
-  countInBeats: CountInBeats;
-  onCountInBeatsChange: (beats: CountInBeats) => void;
+  countInBars: CountInBars;
+  onCountInBarsChange: (bars: CountInBars) => void;
   accentColor: string;
   onAccentColorChange: (color: string) => void;
   onResetAccent: () => void;
@@ -25,8 +25,8 @@ export function SettingsModal({
   onClose,
   notationStyle,
   onNotationStyleChange,
-  countInBeats,
-  onCountInBeatsChange,
+  countInBars,
+  onCountInBarsChange,
   accentColor,
   onAccentColorChange,
   onResetAccent,
@@ -83,13 +83,13 @@ export function SettingsModal({
           <span>Count-in</span>
           <select
             className="settings-modal-select"
-            value={countInBeats}
-            onChange={(e) => onCountInBeatsChange(Number(e.target.value) as CountInBeats)}
+            value={countInBars}
+            onChange={(e) => onCountInBarsChange(Number(e.target.value) as CountInBars)}
             aria-label="Count-in before play starts"
           >
-            {COUNT_IN_OPTIONS.map((beats) => (
-              <option key={beats} value={beats}>
-                {beats === 0 ? 'Off' : `${beats} beats (${beats / 4} bar${beats === 4 ? '' : 's'})`}
+            {COUNT_IN_OPTIONS.map((bars) => (
+              <option key={bars} value={bars}>
+                {bars === 0 ? 'Off' : `${bars} bar${bars === 1 ? '' : 's'}`}
               </option>
             ))}
           </select>

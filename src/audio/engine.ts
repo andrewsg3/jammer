@@ -134,13 +134,13 @@ export async function auditionExoticScale(chord: Chord, scaleRoot: string, inter
   runScaleAudition(chord, scaleRoot, notesFromIntervals(scaleRoot, intervals, AUDITION_OCTAVE));
 }
 
-// 0 = no count-in, 4 = one bar, 8 = two bars in 4/4 -- not necessarily a whole
-// number of bars in every meter (see MobilePlayer.tsx's own "(N bars)" label,
-// which only shows a bar count when it divides evenly). Fixed regardless of the
-// song's own beatsPerBar; only the click accent pattern (see playCountIn) reads
-// the actual meter.
-export type CountInBeats = 0 | 4 | 8;
-export const COUNT_IN_OPTIONS: CountInBeats[] = [0, 4, 8];
+// 0/1/2 bars, not a raw beat count -- actual click count is countInBars *
+// beatsPerBar (computed in play() below), so a count-in is always whole bars
+// in the song's own meter (5 clicks for one bar in 5/4, not a hardcoded 4).
+// Was previously a fixed 0/4/8 *beats*, silently assuming 4/4 -- correct only
+// by coincidence there, and cut a 5/4 count-in short mid-bar.
+export type CountInBars = 0 | 1 | 2;
+export const COUNT_IN_OPTIONS: CountInBars[] = [0, 1, 2];
 
 export type PlaybackParams = {
   key: string;
@@ -159,7 +159,7 @@ export type PlaybackParams = {
   melody: MelodyNote[];
   sections: SectionMarker[];
   tempo: number;
-  countInBeats: CountInBeats;
+  countInBars: CountInBars;
   // Simple meter only, always over a "4" denominator -- see CLAUDE.md's "Beats
   // per bar" section. Only the metronome's accent pattern reads this so far
   // (Phase 2 -- drums/bass/keys pattern generators -- still assumes 4/4).
@@ -347,8 +347,9 @@ export async function play(params: PlaybackParams): Promise<void> {
   // params.startBeat, unaffected by the count-in, so the playhead/loop/section math
   // downstream never needs to know a count-in happened at all.
   const secondsPerBeat = 60 / params.tempo;
-  const countInSeconds = params.countInBeats * secondsPerBeat;
-  if (params.countInBeats > 0) playCountIn(params.countInBeats, params.tempo, params.beatsPerBar);
+  const countInBeats = params.countInBars * params.beatsPerBar;
+  const countInSeconds = countInBeats * secondsPerBeat;
+  if (countInBeats > 0) playCountIn(countInBeats, params.tempo, params.beatsPerBar);
 
   // The offset (2nd arg) is where the transport's internal clock begins — lets
   // playback start from wherever the playhead was dragged to, not always bar 1.
@@ -383,10 +384,19 @@ export function onAutoStop(callback: () => void): () => void {
 // up burst (the "sounds insane" bug). There's no reliable way to resync that clock,
 // and this app has no resume-in-place model to begin with — Play always starts
 // fresh via stop() above — so treat backgrounding as an implicit Stop rather than
-// trying to survive it.
+// trying to survive it. Desktop browsers don't have this problem (a backgrounded
+// desktop tab with active audio output is specifically exempted from the
+// throttling that causes it), so this only fires when a caller opts in --
+// MobilePlayer.tsx does, on mount; App.tsx (desktop) never does, so switching
+// tabs or minimizing there just keeps playing, same as any other audio app.
+let autoStopOnHideEnabled = false;
+export function setAutoStopOnHide(enabled: boolean): void {
+  autoStopOnHideEnabled = enabled;
+}
+
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && Tone.Transport.state === 'started') {
+    if (autoStopOnHideEnabled && document.hidden && Tone.Transport.state === 'started') {
       stop();
       autoStopListeners.forEach((cb) => cb());
     }

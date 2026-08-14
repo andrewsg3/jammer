@@ -36,14 +36,25 @@ import {
   setMetronomeVolume,
   setTempo as setTransportTempo,
   onAutoStop,
+  setAutoStopOnHide,
   stop,
   COUNT_IN_OPTIONS,
-  type CountInBeats,
+  type CountInBars,
 } from '../audio/engine';
 
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const DEFAULT_KEYS_STYLE = keysStyles.find((s) => s.name === 'Sustained 7ths')!;
 const DEFAULT_BASS_STYLE = baseBassStyles.find((s) => s.name === 'Walking')!;
+
+// Same tap-tempo timing as TopBar.tsx's own desktop implementation (a gap
+// this long resets the tap sequence; only the last N taps count toward the
+// estimate) -- min/max stay this file's own existing slider range (40-240),
+// not desktop's, so the Tap button can't push tempo somewhere the slider
+// itself couldn't reach.
+const TAP_RESET_GAP_MS = 2000;
+const TAP_HISTORY_SIZE = 8;
+const MIN_TEMPO = 40;
+const MAX_TEMPO = 240;
 
 type Track = 'drums' | 'bass' | 'keys';
 
@@ -62,7 +73,7 @@ type StoredPrefs = {
   volumes?: typeof DEFAULT_VOLUMES;
   accentColor?: string;
   notationStyle?: NotationStyle;
-  countInBeats?: CountInBeats;
+  countInBars?: CountInBars;
   nowPlayingStyle?: NowPlayingStyle;
 };
 
@@ -147,7 +158,7 @@ export function MobilePlayer() {
   const [notationStyle, setNotationStyle] = useState<NotationStyle>(
     () => loadStoredPrefs().notationStyle ?? 'symbol',
   );
-  const [countInBeats, setCountInBeats] = useState<CountInBeats>(() => loadStoredPrefs().countInBeats ?? 0);
+  const [countInBars, setCountInBars] = useState<CountInBars>(() => loadStoredPrefs().countInBars ?? 0);
   // 'countdown': the existing Current + Next chord readout. 'grid': the same
   // BeatGridSheet chart the scrolling chart above already uses, fullscreen —
   // closer to what the desktop compact grid view looks like during playback.
@@ -166,8 +177,8 @@ export function MobilePlayer() {
   }, [accentColor]);
 
   useEffect(() => {
-    saveStoredPrefs({ volumes, notationStyle, accentColor, countInBeats, nowPlayingStyle });
-  }, [volumes, notationStyle, accentColor, countInBeats, nowPlayingStyle]);
+    saveStoredPrefs({ volumes, notationStyle, accentColor, countInBars, nowPlayingStyle });
+  }, [volumes, notationStyle, accentColor, countInBars, nowPlayingStyle]);
 
   const handleResetAccent = () => {
     document.documentElement.style.removeProperty('--accent');
@@ -313,6 +324,15 @@ export function MobilePlayer() {
   // Stop the transport on unmount rather than leaving it running behind a torn-down view.
   useEffect(() => () => stop(), []);
 
+  // Opt into engine.ts's backgrounding-stops-playback behavior -- desktop
+  // (App.tsx) deliberately never does, since only mobile browsers actually
+  // suspend the AudioContext on backgrounding (see setAutoStopOnHide's own
+  // doc comment).
+  useEffect(() => {
+    setAutoStopOnHide(true);
+    return () => setAutoStopOnHide(false);
+  }, []);
+
   // Backgrounding the page (screen lock, minimizing, even just the notification
   // shade being pulled down) can force the engine to stop itself — see onAutoStop's
   // doc comment in audio/engine.ts. Sync the UI rather than leaving the now-playing
@@ -327,6 +347,43 @@ export function MobilePlayer() {
     setPlayheadBeat(0);
   }), []);
 
+  // Unlike desktop's TopBar.tsx, changing tempo here always stops playback
+  // first if it's running -- both the slider (a continuous touch drag, which
+  // would otherwise scrub the tempo audibly on every tick) and this Tap
+  // button (see tapTimesRef below) route through this, matching the desktop/
+  // mobile split the user asked for: Tap keeps playing on desktop, stops on
+  // mobile.
+  const stopIfPlaying = () => {
+    if (!isPlaying) return;
+    if (countInTimeoutRef.current !== null) {
+      window.clearTimeout(countInTimeoutRef.current);
+      countInTimeoutRef.current = null;
+    }
+    stop();
+    setIsPlaying(false);
+    setCountInActive(false);
+    setPlayheadBeat(0);
+  };
+
+  const tapTimesRef = useRef<number[]>([]);
+  const handleTapTempo = () => {
+    const now = performance.now();
+    const times = tapTimesRef.current;
+    const last = times[times.length - 1];
+    if (last !== undefined && now - last > TAP_RESET_GAP_MS) {
+      times.length = 0;
+    }
+    times.push(now);
+    if (times.length > TAP_HISTORY_SIZE) times.shift();
+    if (times.length < 2) return;
+
+    const intervals = times.slice(1).map((t, i) => t - times[i]);
+    const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    const bpm = Math.round(60000 / avgMs);
+    setTempoState(Math.max(MIN_TEMPO, Math.min(MAX_TEMPO, bpm)));
+    stopIfPlaying();
+  };
+
   const handleTogglePlay = useCallback(async () => {
     if (countInTimeoutRef.current !== null) {
       window.clearTimeout(countInTimeoutRef.current);
@@ -340,12 +397,12 @@ export function MobilePlayer() {
       return;
     }
     if (!preset || placements.length === 0 || instrumentsLoading) return;
-    if (countInBeats > 0) {
+    if (countInBars > 0) {
       setCountInActive(true);
       countInTimeoutRef.current = window.setTimeout(() => {
         setCountInActive(false);
         countInTimeoutRef.current = null;
-      }, (countInBeats * 60 * 1000) / tempo);
+      }, (countInBars * beatsPerBar * 60 * 1000) / tempo);
     }
     await play({
       key: musicalKey,
@@ -364,7 +421,7 @@ export function MobilePlayer() {
       keysTimeFeel: preset.keysTimeFeel ?? 'normal',
       melody: preset.melody ?? [],
       sections,
-      countInBeats,
+      countInBars,
       beatsPerBar,
     });
     setIsPlaying(true);
@@ -380,7 +437,7 @@ export function MobilePlayer() {
     bassStyle,
     keysStyle,
     sections,
-    countInBeats,
+    countInBars,
     instrumentsLoading,
     beatsPerBar,
   ]);
@@ -475,12 +532,22 @@ export function MobilePlayer() {
             <span>Tempo {tempo}</span>
             <input
               type="range"
-              min={40}
-              max={240}
+              min={MIN_TEMPO}
+              max={MAX_TEMPO}
               value={tempo}
-              onChange={(e) => setTempoState(Number(e.target.value))}
+              onChange={(e) => {
+                // A continuous touch-drag slider -- letting it live-update
+                // playback would scrub the tempo audibly on every drag tick,
+                // unlike desktop's discrete Tap button. Stop instead, and let
+                // the user resume once they've settled on a tempo.
+                setTempoState(Number(e.target.value));
+                stopIfPlaying();
+              }}
             />
           </label>
+          <button type="button" className="mobile-player__tap-tempo" onClick={handleTapTempo} title="Tap to set tempo">
+            Tap
+          </button>
         </div>
 
         <button
@@ -568,23 +635,15 @@ export function MobilePlayer() {
               <span>Count-in</span>
               <select
                 className="mobile-player__settings-select"
-                value={countInBeats}
-                onChange={(e) => setCountInBeats(Number(e.target.value) as CountInBeats)}
+                value={countInBars}
+                onChange={(e) => setCountInBars(Number(e.target.value) as CountInBars)}
                 aria-label="Count-in before play starts"
               >
-                {COUNT_IN_OPTIONS.map((beats) => {
-                  // COUNT_IN_OPTIONS is fixed at 4/8 beats regardless of the loaded
-                  // song's own meter -- only show the "(N bars)" parenthetical when
-                  // that's a whole number of bars in the current time signature
-                  // (e.g. 4 beats in 3/4 is one bar plus a beat, not worth a label).
-                  const bars = beats / beatsPerBar;
-                  const barsLabel = Number.isInteger(bars) ? ` (${bars} bar${bars === 1 ? '' : 's'})` : '';
-                  return (
-                    <option key={beats} value={beats}>
-                      {beats === 0 ? 'Off' : `${beats} beats${barsLabel}`}
-                    </option>
-                  );
-                })}
+                {COUNT_IN_OPTIONS.map((bars) => (
+                  <option key={bars} value={bars}>
+                    {bars === 0 ? 'Off' : `${bars} bar${bars === 1 ? '' : 's'}`}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="mobile-player__settings-row">
