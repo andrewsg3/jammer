@@ -14,12 +14,12 @@ type Props = {
   // Only Edit mode passes this — Chord Grid and Lead Sheet are read-only views, so
   // there's no Clear button to wire up (and nothing to clear from there anyway).
   onClear?: () => void;
-  // The decorative blank staff exists to read as a continuation of ChordGrid's
-  // own staff below it (see the comment on .sheet-header-band's children) — true
-  // there since the two share left/right insets. The beat-grid compact view has
-  // no staff of its own for this to continue, so App.tsx passes false there.
-  // Defaults true so every existing caller (ChordGrid.tsx) keeps its staff
-  // without having to pass this explicitly.
+  // The decorative blank staff exists to read as a continuation of a real staff
+  // rendered below it (see the comment on .sheet-header-band's children) — was
+  // true for the old staff-based ChordGrid.tsx Edit view; none of the three
+  // current views (EditGrid, BeatGridSheet, LeadSheet) render a staff of their
+  // own for this to continue, so all three call sites now pass false. Defaults
+  // true only so a future staff-based caller wouldn't need to pass it explicitly.
   showStaff?: boolean;
 };
 

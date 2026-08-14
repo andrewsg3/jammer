@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChordGrid, totalBeatsFor } from './components/ChordGrid';
+import { EditGrid } from './components/EditGrid';
+import type { PendingChord } from './components/EditGrid';
 import { BeatGridSheet } from './components/BeatGridSheet';
+
 import { LeadSheet } from './components/LeadSheet';
 import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
@@ -75,7 +77,7 @@ import {
   isKeysInstrumentLoaded,
   isBassInstrumentLoaded,
   onAutoStop,
-  type CountInBeats,
+  type CountInBars,
 } from './audio/engine';
 
 // Fallback only — used if bundledSongPresets is somehow empty (e.g. all preset
@@ -207,7 +209,7 @@ function App() {
   // BeatGridSheet.tsx); the accompaniment engines (drums/bass/keys pattern
   // generators) don't read this yet -- see CLAUDE.md for that deferred scope.
   const [beatsPerBar, setBeatsPerBar] = useState(DEFAULT_BEATS_PER_BAR);
-  const [countInBeats, setCountInBeats] = useState<CountInBeats>(4);
+  const [countInBars, setCountInBars] = useState<CountInBars>(1);
   const [drumStyles, setDrumStyles] = useState<DrumStyle[]>(baseDrumStyles);
   const [drumStyle, setDrumStyle] = useState<DrumStyle>(baseDrumStyles[0]);
   const [drumsTimeFeel, setDrumsTimeFeel] = useState<TimeFeelOption>(
@@ -258,6 +260,14 @@ function App() {
   const [loopStart, setLoopStart] = useState(DEFAULT_LOOP_RANGE.loopStart);
   const [loopEnd, setLoopEnd] = useState(DEFAULT_LOOP_RANGE.loopEnd);
   const [playheadBeat, setPlayheadBeat] = useState(0);
+  // Which chord (if any) is armed for EditGrid's click-to-place flow -- see
+  // ChordPalette.tsx's onSelectionChange. Stays set after a placement (not
+  // auto-cleared) so repeated clicks "stamp" the same chord across cells.
+  const [pendingChord, setPendingChord] = useState<PendingChord | null>(null);
+  // Bumped on every song load, used as EditGrid's own React `key` -- an
+  // explicit remount that resets its internal state (selection, clipboard,
+  // visibleOctave) on every song swap, since none of that lives here in App.tsx.
+  const [songLoadNonce, setSongLoadNonce] = useState(0);
   // The four main track faders start at 70%, not 100 — headroom to boost
   // whichever track needs it, rather than already maxed out with nowhere to go.
   const [chordsVolume, setChordsVolumeState] = useState(70);
@@ -425,17 +435,13 @@ function App() {
     setPlacements((prev) => [...prev, { id: crypto.randomUUID(), selection, startBeat, lengthBeats }]);
   };
 
-  // Click-to-add (ChordPalette.tsx): appends at the end of the current
-  // progression rather than a cursor position -- same "next open slot" formula
-  // ChordGrid.tsx's own paste/add-section handlers already use. No-ops (rather
-  // than clipping the chord short) if there isn't room left for the full
-  // requested length, same as handleAddSectionClick's own bounds check.
-  const handleAddChordAtEnd = (selection: ChordSelection, lengthBeats: number) => {
-    setPlacements((prev) => {
-      const startBeat = prev.length === 0 ? 0 : Math.max(...prev.map((p) => p.startBeat + p.lengthBeats));
-      if (startBeat + lengthBeats > totalBeatsFor(beatsPerBar)) return prev;
-      return [...prev, { id: crypto.randomUUID(), selection, startBeat, lengthBeats }];
-    });
+  // Click-to-place (ChordPalette.tsx -> EditGrid.tsx): picking a palette chord
+  // arms it here rather than appending it anywhere itself -- EditGrid's
+  // ChordRow places it wherever an empty cell is next clicked, and it stays
+  // armed afterward so repeated clicks "stamp" the same chord across several
+  // cells (Hookpad's own behavior).
+  const handleSelectionChange = (selection: ChordSelection, lengthBeats: number) => {
+    setPendingChord({ selection, lengthBeats });
   };
 
   const handleReplaceChord = (placement: ChordPlacement, selection: ChordSelection) => {
@@ -511,6 +517,8 @@ function App() {
       setIsPlaying(false);
     }
     setPlayheadBeat(0);
+    setPendingChord(null);
+    setSongLoadNonce((n) => n + 1);
     // Only bundled presets are addressable by name — an imported one-off file has
     // nothing for a refresh to look up, so it just falls back to the default song.
     setSongInUrl(bundledSongPresets.some((p) => p.name === preset.name) ? preset.name : null);
@@ -651,12 +659,12 @@ function App() {
     }
     if (placements.length === 0) return;
     if (instrumentsLoading) return; // still loading sample buffers — see the modal below
-    if (countInBeats > 0) {
+    if (countInBars > 0) {
       setCountInActive(true);
       countInTimeoutRef.current = window.setTimeout(() => {
         setCountInActive(false);
         countInTimeoutRef.current = null;
-      }, (countInBeats * 60 * 1000) / tempo);
+      }, (countInBars * beatsPerBar * 60 * 1000) / tempo);
     }
     await play({
       key: musicalKey,
@@ -675,7 +683,7 @@ function App() {
       keysTimeFeel: keysTimeFeel.value,
       melody,
       sections,
-      countInBeats,
+      countInBars,
       beatsPerBar,
     });
     setIsPlaying(true);
@@ -695,7 +703,7 @@ function App() {
     keysStyle,
     keysTimeFeel,
     melody,
-    countInBeats,
+    countInBars,
     sections,
     instrumentsLoading,
     beatsPerBar,
@@ -792,8 +800,8 @@ function App() {
         onClose={() => setSettingsOpen(false)}
         notationStyle={notationStyle}
         onNotationStyleChange={setNotationStyle}
-        countInBeats={countInBeats}
-        onCountInBeatsChange={setCountInBeats}
+        countInBars={countInBars}
+        onCountInBarsChange={setCountInBars}
         accentColor={accentColor}
         onAccentColorChange={setAccentColor}
         onResetAccent={handleResetAccent}
@@ -814,7 +822,7 @@ function App() {
             notationStyle={notationStyle}
             onAudition={handleAudition}
             onAuditionExoticScale={handleAuditionExoticScale}
-            onAddChord={handleAddChordAtEnd}
+            onSelectionChange={handleSelectionChange}
           />
         )}
         <div className="layout">
@@ -873,7 +881,8 @@ function App() {
               </div>
             )}
             {viewMode === 'edit' && (
-              <ChordGrid
+              <EditGrid
+                key={songLoadNonce}
                 placements={placements}
                 melody={melody}
                 sections={sections}
@@ -885,6 +894,7 @@ function App() {
                 playheadBeat={playheadBeat}
                 isPlaying={isPlaying}
                 onPlayheadChange={handlePlayheadChange}
+                pendingChord={pendingChord}
                 onDropChord={handleDropChord}
                 onReplaceChord={handleReplaceChord}
                 onResize={handleResize}

@@ -23,25 +23,23 @@ actually here now.
 - `midi-file` for parsing imported `.mid` files (drum/bass/melody).
 
 ## Current shape
-- **Chord grid** (`components/ChordGrid.tsx`) — desktop's **Edit** view (see "Three desktop views"
-  below for the other two, read-only ones, and the mode switcher itself) — a 48-bar (12 rows × 4
-  bars) drag/drop lead-sheet page, not a text field. Chord symbols sit above a real 5-line staff per
-  row; row 0 also carries
-  the clef, a computed key signature, and the song's time signature (see `data/progressions.ts`'s
-  `keySignatureAccidentals`, and "Beats per bar" below for the time signature itself). Placements
-  support multi-row spans, resize/move/select/copy-paste,
-  a scrubbable playhead, and a draggable loop range (rendered as 𝄆/𝄇 repeat-barline glyphs, not
-  the exact loop beat — see the row's edge, not mid-measure). Chromatic chords can carry an
-  optional slash bass note (`Chord.bass`, `ChordSelection`'s chromatic variant `bassOffset` —
-  both offsets from the key, not absolute note names, so they transpose correctly) — e.g. "D7/F#".
-  Only the bottom note changes for playback: `progressions.ts`'s `bassRootNote()` is what bass.ts
-  and keys.ts's bossa-nova/blues-shuffle "root" hits use instead of `chord.root`, while every
-  voicing's 3rd/5th/7th still comes from the chord's real root/quality. Picked via the second
-  dropdown next to Chromatic's quality picker in `ChordPalette.tsx`.
+- **Edit grid** (`components/EditGrid.tsx`) — desktop's **Edit** view (see "Three desktop views"
+  below for the other two, read-only ones, and the mode switcher itself) — a Hookpad-style
+  column-per-beat grid, 8 bars per row × 6 rows (48 bars total), not a text field or staff. See
+  "Edit view: the Hookpad-style grid" below for the full mechanics (loop row, diatonic melody rows,
+  chord blocks, click-to-place). Chromatic chords can carry an optional slash bass note (`Chord.bass`,
+  `ChordSelection`'s chromatic variant `bassOffset` — both offsets from the key, not absolute note
+  names, so they transpose correctly) — e.g. "D7/F#". Only the bottom note changes for playback:
+  `progressions.ts`'s `bassRootNote()` is what bass.ts and keys.ts's bossa-nova/blues-shuffle
+  "root" hits use instead of `chord.root`, while every voicing's 3rd/5th/7th still comes from the
+  chord's real root/quality. Picked via the second dropdown next to Chromatic's quality picker in
+  `ChordPalette.tsx`.
 - **Sheet header** (`components/SheetMusicHeader.tsx`) — real-book-style masthead: tempo
   (left)/title (centered, underlined)/author (right, wraps in a `<textarea>` — a single-line
-  `<input>` cannot wrap its own text, learned that the hard way), all caps, over its own blank
-  staff aligned with the grid's.
+  `<input>` cannot wrap its own text, learned that the hard way), all caps. Can render its own
+  decorative blank staff below it (`showStaff`, for continuity with a staff-based grid below) —
+  none of the three current views need this (`EditGrid.tsx` has no staff at all; Chord Grid/Lead
+  Sheet pass `showStaff={false}` too), so all three currently pass it off.
 - **Drums/bass/keys** — each has multiple selectable styles (`data/drumLibrary.ts` loads
   `.mid` files from `data/drumPatterns/`; `data/bassLibrary.ts` similarly from
   `data/bassPatterns/`; keys styles are rule-based, defined in `data/instrumentStyles.ts`), each
@@ -279,30 +277,104 @@ opt-in transform — not a side effect of touching the Meter dropdown.
   not narrowed down further) before Phase 1 existed, and is exactly the mistake the tag-and-filter
   approach exists to avoid repeating.
 
-## Three desktop views: Edit / Chord Grid / Lead Sheet (Milestone 1 done; Milestone 2 not started)
-Desktop used to have one always-editable view (`ChordGrid.tsx`, a staff with drag/resize/select
-chord placements and a click/drag melody editor) plus a little-used `compactGridView` toggle that
-swapped it for `BeatGridSheet.tsx` (the same read-only cell chart `MobilePlayer.tsx` uses). That's
-now three explicit, purpose-built modes, switched via a segmented control in `TopBar.tsx`
-(`App.tsx`'s `viewMode: 'edit' | 'chordGrid' | 'leadSheet'`, persisted the same way
+## Three desktop views: Edit / Chord Grid / Lead Sheet (both milestones done)
+Desktop used to have one always-editable view (the old `ChordGrid.tsx`, a staff with drag/resize/
+select chord placements and a click/drag melody editor) plus a little-used `compactGridView`
+toggle that swapped it for `BeatGridSheet.tsx` (the same read-only cell chart `MobilePlayer.tsx`
+uses). That's now three explicit, purpose-built modes, switched via a segmented control in
+`TopBar.tsx` (`App.tsx`'s `viewMode: 'edit' | 'chordGrid' | 'leadSheet'`, persisted the same way
 `compactGridView` used to be, with a one-time migration from that old boolean). **Editing chord
 placements and melody notes is exclusive to Edit mode** — Chord Grid and Lead Sheet are read-only
 views of the same underlying song, but playback (Play/Stop) and the full mixer (`ChannelStrip`
 volume/mute/instrument/style pickers, a sibling panel outside whichever view renders — nothing
 about it needed to change) work identically in all three.
 
-- **Edit** — `ChordGrid.tsx`, byte-for-byte unchanged. A deliberate bridge: the eventual
-  ground-up Hookpad-style rebuild (bar/subdivision grid, a real diatonic/chromatic note editor —
-  see "Direction" below) is real future work, **not started**, scoped separately from the
-  three-view split itself.
-- **Chord Grid** — `BeatGridSheet.tsx`, also unchanged (confirmed with the user directly: "Beat
-  grid is perfect as-is"). Purely a re-gating of the exact JSX `compactGridView` used to render.
-- **Lead Sheet** — new (`components/LeadSheet.tsx`), real engraved notation via VexFlow (new
-  dependency, `vexflow` in `package.json`). This is what the rest of this section used to describe
-  as an unscoped export idea — now built as a first-class in-app *view* instead, passive-only by
-  the user's explicit choice (a playhead that follows playback, no click-to-scrub, no draggable
-  loop range — matching Chord Grid's own restrained, non-interactive character rather than
-  reproducing Edit's scrub/loop UI a third time).
+- **Edit** — `EditGrid.tsx` (Milestone 2's Hookpad-style rebuild; the staff-based `ChordGrid.tsx`
+  it replaced no longer exists — see below).
+- **Chord Grid** — `BeatGridSheet.tsx`, unchanged since Milestone 1 (confirmed with the user
+  directly: "Beat grid is perfect as-is"). Purely a re-gating of the exact JSX `compactGridView`
+  used to render.
+- **Lead Sheet** — `components/LeadSheet.tsx`, real engraved notation via VexFlow (`vexflow` in
+  `package.json`). This is what used to be an unscoped export idea — built as a first-class in-app
+  *view* instead, passive-only by the user's explicit choice (a playhead that follows playback, no
+  click-to-scrub, no draggable loop range — matching Chord Grid's own restrained, non-interactive
+  character rather than reproducing Edit's scrub/loop UI a third time).
+
+## Edit view: the Hookpad-style grid (`EditGrid.tsx`, Milestone 2, done)
+Replaced the old `ChordGrid.tsx` (a staff-based drag/resize/select editor, described in past-tense
+detail further down this file's edit history) with a column-per-beat grid, per the user's own
+description: *"Hookpad has a column for each beat, dividing lines between bars, 3 rows of cells:
+top row is used to highlight beats to loop, middle row has 7 rows by default and is where diatonic
+melodies can be programmed, bottom row has chord blocks."* Chord Grid and Lead Sheet were untouched
+by this — only what renders for `viewMode === 'edit'` changed.
+
+**Layout.** **8 bars per row** (`components/editGrid/gridMath.ts`'s `EDIT_BARS_PER_ROW`) — a fixed
+choice for this grid specifically, independent of Chord Grid/Lead Sheet's own `BARS_PER_ROW = 4`
+(now in `data/gridLayout.ts`, alongside the shared `GRID_BARS = 48`/`totalBeatsFor`, moved out of
+the old `ChordGrid.tsx` so both grids can share the same whole-song beat coordinate space without
+one importing the other). Each 8-bar "system" is one real CSS grid (`display: grid`, columns at
+half-beat resolution — `COL_UNIT_BEATS = 0.5`, shared by melody and chords/loop alike so nothing
+needs two coordinate systems), stacked six per song (`GRID_BARS / EDIT_BARS_PER_ROW`). Three
+row-groups share that one grid rather than each owning its own: track 1 is the loop row, tracks
+2-8 are the seven melody rows (top = scale degree 6, bottom = degree 0 — pitch-up-is-row-up), track
+9 (+10 for a rare second lane) holds chord blocks. Bar lines are a `repeating-linear-gradient`
+background on the system div, not per-cell DOM divs.
+
+- **Loop row** (`components/editGrid/LoopRow.tsx`) — click-drag across empty cells to define the
+  loop range from scratch; drag the 𝄆/𝄇 handles to adjust an existing range's edges. Also renders
+  the (grid-row-spanning) playhead line and the section badges (A/B/C… — same `SectionMarker` CRUD
+  as before, reusing `.section-marker-label`/`.section-marker-label-input`/`.section-marker-remove`
+  styling from the old view but as real grid items rather than percentage-of-row absolute
+  positioning).
+- **Melody grid** (`components/editGrid/MelodyGrid.tsx`) — one visible octave, 7 diatonic rows.
+  Plain click adds a note at the nearest half-beat on that row; **Alt+click (Option on Mac) nudges
+  it +1 semitone** (a small "+" badge marks it chromatic). Only ever `+1`, not a signed nudge in
+  either direction — proven sufficient for every `ScaleName` this app has: every mode is a rotation
+  of the major scale's whole/half-step pattern, so an off-scale note always has exactly one
+  chromatic neighbor, always equidistant from its two diatonic neighbors, and ties resolve toward
+  the lower one (see `progressions.ts`'s `midiToScaleDegreePosition`, whose own `semitoneOffset`
+  field is still a real signed value — the "always +1" behavior lives in the UI layer, not baked
+  into the math, so it won't silently break if the scale vocabulary ever grows an unequal-gap
+  mode). A register-shift control (▲/▼ in the section toolbar) moves which octave the 7 rows show;
+  notes outside the visible octave don't render, but a small "▲N"/"▼N" hint next to the octave
+  label shows how many exist off in each direction (display-only in v1 — not click-to-jump).
+- **Chord row** (`components/editGrid/ChordRow.tsx`) — **click-to-place, not drag-and-drop-only**:
+  clicking a palette chord (`ChordPalette.tsx`) no longer appends it anywhere by itself — it arms
+  `App.tsx`'s `pendingChord` state (`onSelectionChange`, replacing the old `onAddChord`/
+  `handleAddChordAtEnd`), and `ChordRow`'s own empty-cell click places it there via the same
+  `onDropChord` primitive drag-and-drop already used. Staying armed after a placement (not
+  auto-cleared) lets repeated clicks "stamp" the same chord across several cells, matching
+  Hookpad's own behavior. Clicking an *occupied* cell instead runs the existing select/
+  multi-select/shift-range logic; native drag-and-drop from the palette still works too, just
+  reading its drop position off the new column math. Overlapping-in-time placements can't happen
+  (unchanged `canPlace` invariant), but a short chord right before another in the same bar gets
+  bumped to a second lane purely for label legibility (`laneChordSegments`'s crowd heuristic) — a
+  system only grows a second chord-row track when something in it actually used that lane.
+
+**Cross-system pointer math.** Drag gestures (move/resize a chord, move a section, drag a loop
+handle, drag an existing melody note) need to resolve a mouse position to a beat/degree regardless
+of which system's DOM the pointer is currently over — `EditGrid.tsx` does this via
+`document.elementFromPoint` + `closest('.edit-grid-system')`/`closest('.melody-row')` (reading
+`data-system-index`/`data-degree` attributes) rather than a single fixed-height wrapperRef the way
+the old `ChordGrid.tsx` did — systems can have a variable chord-lane row count, so their heights
+aren't uniform/predictable the way the old view's fixed `ROW_HEIGHT` was.
+
+**A real bug this surfaced, now fixed:** entering a section's rename input on `mousedown` (so a
+drag can start on the very first pointer-down, same as the old view) raced against the browser's
+own default mousedown focus handling — `autoFocus` on the freshly-mounted `<input>` would focus it
+during React's commit, then the browser's default mousedown post-processing would immediately blur
+it again, firing the input's `onBlur` (`commitEditingSection`) before the input was ever visibly
+interactive. Fixed the same way this class of bug is always fixed: `e.preventDefault()` in the
+mousedown handler that triggers the focus swap, so the browser's own default focus/selection
+handling for that mousedown never runs. Caught by driving the grid with Playwright and holding the
+mouse down mid-gesture to inspect the DOM — invisible in every faster, click-only manual test.
+
+**Explicitly cut from v1** (real gaps, not deliberate non-goals): no multi-lane melody chords drawn
+diagonally overlapping in a genuinely ambiguous way beyond the crowd heuristic above; no
+drag-and-drop-driven register-shift (click only); the register-shift edge hint is display-only, not
+click-to-jump; print CSS for `.edit-grid*` (the old view had dedicated `.chord-grid*` print rules —
+this is a fast follow-up, not done yet, same "manual check, not required" stance Lead Sheet's own
+print behavior got in Milestone 1).
 
 **Why a separate read-only view, not swapping `ChordGrid.tsx`'s own rendering.** Still true, and
 is exactly why Lead Sheet is a new *view* rather than a new renderer for the existing one:
@@ -1032,13 +1104,9 @@ Highest-leverage next pieces, in order:
    large effort (lick bank/generator, turn scheduler) on top of pieces that now all actually exist
    (monophonic playback, the countdown-cue pattern, scale-rooted note generation, and now a real
    melody editor to build/audition licks against).
-3. **Milestone 2 of "Three desktop views"** (see above) — the ground-up Hookpad-style rewrite of
-   the Edit view itself (bar/subdivision grid, a real diatonic/chromatic note editor). Milestone 1
-   (the three-view split, Chord Grid, and a real VexFlow-rendered Lead Sheet) shipped; Edit is
-   still `ChordGrid.tsx` unchanged, a deliberate bridge rather than the intended end state.
 
-"Beats per bar" (see above) that used to top this list is now fully done, importers included.
-
-The in-browser MIDI editor that used to top this list shipped (v1) — see "In-browser MIDI editor"
-above for what's covered and what's still cut for scope (note resize, multi-select, undo,
-velocity editing).
+Both milestones of "Three desktop views" (see above) are now done — the Edit view is the real
+Hookpad-style `EditGrid.tsx` rewrite, not a bridge; the old `ChordGrid.tsx` was deleted once the new
+grid was verified. "Beats per bar" and the in-browser MIDI editor (v1) that used to top this list
+are both fully done too — see their own sections above for what's covered and what's still cut for
+scope.

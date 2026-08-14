@@ -66,6 +66,12 @@ export const SCALE_LABELS: Record<ScaleName, string> = {
   locrian: 'Locrian',
 };
 
+// Hookpad-style scale-degree rainbow: 1-7 -> red-orange-yellow-green-blue-
+// indigo-violet, independent of the app's own single accent color, so a
+// scale degree reads the same color everywhere it's shown -- diatonic chord
+// buttons (ChordPalette.tsx) and diatonic melody notes (MelodyGrid.tsx) alike.
+export const DEGREE_COLORS = ['#e53e3e', '#ed8936', '#ecc94b', '#48bb78', '#4299e1', '#4c51bf', '#9f7aea'];
+
 const NOTE_TO_SEMITONE: Record<string, number> = {
   C: 0, 'C#': 1, Db: 1,
   D: 2, 'D#': 3, Eb: 3,
@@ -264,7 +270,7 @@ export const CHORD_QUALITIES = Object.keys(QUALITY_LABELS) as ChordQuality[];
 // is "the white keys starting on D." Intervals below are that rotation worked out
 // from the tonic, and DEGREE_QUALITIES/ROMAN_NUMERALS follow from stacking thirds
 // within each mode's own scale (not compared against major/minor).
-const SCALE_INTERVALS: Record<ScaleName, number[]> = {
+export const SCALE_INTERVALS: Record<ScaleName, number[]> = {
   major: [0, 2, 4, 5, 7, 9, 11],
   minor: [0, 2, 3, 5, 7, 8, 10], // natural minor (aeolian)
   dorian: [0, 2, 3, 5, 7, 9, 10],
@@ -318,7 +324,18 @@ export function keySignatureAccidentals(
 ): { sign: 'sharp' | 'flat'; letters: string[] } {
   const rootSemitone = NOTE_TO_SEMITONE[key] ?? 0;
   const parentMajorSemitone = (((rootSemitone - MODE_OFFSET_FROM_PARENT_MAJOR[scale]) % 12) + 12) % 12;
-  const { sign, count } = MAJOR_KEY_SIGNATURE[parentMajorSemitone];
+  let { sign, count } = MAJOR_KEY_SIGNATURE[parentMajorSemitone];
+  // MAJOR_KEY_SIGNATURE's tritone entry (F#/Gb, semitone 6) picks sharp
+  // unconditionally -- a real tie, since both spellings take 6 accidentals.
+  // But rootSemitone already erased which spelling the *original* key was
+  // given in (NOTE_TO_SEMITONE maps "Eb" and "D#" to the same 3) -- without
+  // breaking the tie some other way, a flat-spelled minor key whose parent
+  // major happens to land on the tritone (e.g. Eb minor -> Gb major) would
+  // silently flip to sharps mid-calculation. Break it using the original
+  // key string's own spelling instead: a key literally written with a "b"
+  // stays flat through to its parent major too, matching how a real chart
+  // in that key is actually written.
+  if (parentMajorSemitone === 6 && key.includes('b')) sign = 'flat';
   const order = sign === 'sharp' ? SHARP_ORDER : FLAT_ORDER;
   return { sign, letters: order.slice(0, count) };
 }
@@ -700,4 +717,50 @@ export function resolveSelection(key: string, scale: ScaleName, selection: Chord
     case 'chromatic':
       return chromaticChord(key, scale, selection.offset, selection.quality, selection.bassOffset);
   }
+}
+
+/** MIDI pitch for a given scale degree, octave, and optional chromatic nudge (in
+ * semitones — see EditGrid's Alt+click "+1" convention). octave follows the same
+ * convention as data/melody.ts's MIDDLE_C = 60 (C4). */
+export function scaleDegreeToMidi(
+  key: string,
+  scale: ScaleName,
+  degree: ScaleDegree,
+  octave: number,
+  semitoneOffset: number = 0,
+): number {
+  const absolute = rootSemitone(key) + SCALE_INTERVALS[scale][degree] + semitoneOffset;
+  const octaveOffset = Math.floor(absolute / 12);
+  const pitchClass = ((absolute % 12) + 12) % 12;
+  return (octave + octaveOffset + 1) * 12 + pitchClass;
+}
+
+export type ScaleDegreePosition = { degree: ScaleDegree; octave: number; semitoneOffset: number };
+
+/** Inverse of scaleDegreeToMidi — finds the nearest scale degree (+ octave + a
+ * semitone nudge for anything off-scale) for an existing MIDI pitch, so a
+ * MelodyNote (hand-placed or MIDI-imported, possibly genuinely chromatic) renders
+ * at a sensible row/octave/nudge in the grid rather than only ever supporting
+ * newly-placed notes. */
+export function midiToScaleDegreePosition(midi: number, key: string, scale: ScaleName): ScaleDegreePosition {
+  const root = rootSemitone(key);
+  const pitchOctave = Math.floor(midi / 12) - 1;
+  const offset = (((midi - root) % 12) + 12) % 12;
+  const intervals = SCALE_INTERVALS[scale];
+  const candidates = [
+    ...intervals.map((interval, d) => ({ degree: d as ScaleDegree, interval })),
+    { degree: 0 as ScaleDegree, interval: 12 },
+  ];
+  let best = candidates[0];
+  let bestAbs = Math.abs(offset - best.interval);
+  for (const c of candidates.slice(1)) {
+    const abs = Math.abs(offset - c.interval);
+    if (abs < bestAbs) {
+      best = c;
+      bestAbs = abs;
+    }
+  }
+  const semitoneOffset = offset - best.interval;
+  const octaveOffset = Math.floor((root + best.interval) / 12);
+  return { degree: best.degree, octave: pitchOctave - octaveOffset, semitoneOffset };
 }

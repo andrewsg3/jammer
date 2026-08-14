@@ -14,6 +14,7 @@ import {
   QUALITY_LABELS,
 } from '../data/progressions';
 import type { Chord, ChordOption, ChordSelection, ChordQuality, NotationStyle, ScaleName } from '../data/progressions';
+import { DEGREE_COLORS } from '../data/progressions';
 import { EXOTIC_SCALE_GROUPS, scaleDegreeLabels, scaleDegreeNoteNames } from '../data/exoticScales';
 
 // Same 12 chromatic roots as the Chromatic mini-picker's row, for its "/bass" dropdown
@@ -38,14 +39,14 @@ const DURATION_BEATS_BY_KEY: Record<string, number> = Object.fromEntries(
   DURATION_OPTIONS.map(({ key, beats }) => [key, beats]),
 );
 
-// Hookpad-style scale-degree coloring: 1-7 -> red-orange-yellow-green-blue-
-// indigo-violet, a plain rainbow rather than this app's own single accent
-// color, so a chord's degree reads at a glance independent of key. Only
-// diatonic/diatonicSeventh selections carry a real scale degree -- borrowed,
-// secondary dominant, and chromatic chords aren't "the Nth degree of the key"
-// in the same sense, so they stay uncolored rather than forcing a fit.
-const DEGREE_COLORS = ['#e53e3e', '#ed8936', '#ecc94b', '#48bb78', '#4299e1', '#4c51bf', '#9f7aea'];
-
+// Hookpad-style scale-degree coloring (DEGREE_COLORS, data/progressions.ts):
+// 1-7 -> red-orange-yellow-green-blue-indigo-violet, a plain rainbow rather
+// than this app's own single accent color, so a chord's degree reads at a
+// glance independent of key. Only diatonic/diatonicSeventh selections carry a
+// real scale degree -- borrowed, secondary dominant, and chromatic chords
+// aren't "the Nth degree of the key" in the same sense, so they stay
+// uncolored rather than forcing a fit. Melody notes reuse the same table
+// (MelodyGrid.tsx) so a degree reads the same color everywhere in the app.
 function degreeColorFor(selection: ChordSelection): string | undefined {
   if (selection.type === 'diatonic' || selection.type === 'diatonicSeventh') {
     return DEGREE_COLORS[selection.degree];
@@ -59,10 +60,12 @@ type Props = {
   notationStyle: NotationStyle;
   onAudition: (chord: Chord) => void;
   onAuditionExoticScale: (chord: Chord, scaleRoot: string, intervals: number[]) => void;
-  // Appends a chord at the end of the current progression (App.tsx computes
-  // exactly where "the end" is) -- click-to-add, a second way in alongside
-  // drag-and-drop, not a replacement for it.
-  onAddChord: (selection: ChordSelection, lengthBeats: number) => void;
+  // Arms this chord as the "pending" chord for EditGrid's click-to-place flow --
+  // clicking a palette chord no longer appends it anywhere itself; App.tsx stores
+  // it as pendingChord, and EditGrid.tsx's ChordRow places it wherever an empty
+  // cell is next clicked (repeatable -- stays armed after placing, matching
+  // Hookpad's own "stamp" behavior). Drag-and-drop from the palette is untouched.
+  onSelectionChange: (selection: ChordSelection, lengthBeats: number) => void;
 };
 
 /** One chord button, shared by the top row and the Chord Finder picker's lists --
@@ -370,7 +373,7 @@ export function ChordPalette({
   notationStyle,
   onAudition,
   onAuditionExoticScale,
-  onAddChord,
+  onSelectionChange,
 }: Props) {
   // Whichever chord was last clicked/dragged — seeds the Audition-any-scale
   // modal's initial chord. Not the same thing as a chord already placed on the
@@ -386,6 +389,11 @@ export function ChordPalette({
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      // j/k/l/; are also EditGrid.tsx's own melody-duration keys (h/j/k/l/;),
+      // live only once a melody cell is activated (see its own doc comment on
+      // the flag below) -- yield to that rather than also changing chord
+      // duration on the same keypress.
+      if (document.body.dataset.melodyCursorActive === 'true') return;
       const beats = DURATION_BEATS_BY_KEY[e.key.toLowerCase()];
       if (beats === undefined) return;
       e.preventDefault();
@@ -396,11 +404,12 @@ export function ChordPalette({
   }, []);
 
   // Shared by the top row and the Chord Finder picker: audition it (existing
-  // behavior) and append it to the grid at the currently-selected duration.
+  // behavior) and arm it as the pending chord at the currently-selected duration
+  // -- EditGrid places it wherever an empty cell is clicked next.
   const handleSelect = (option: ChordOption) => {
     setSelectedChord(option.chord);
     onAudition(option.chord);
-    onAddChord(option.selection, selectedDuration);
+    onSelectionChange(option.selection, selectedDuration);
   };
 
   const handleChordFinderSelect = (option: ChordOption) => {

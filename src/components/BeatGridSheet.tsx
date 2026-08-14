@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
 import { chordName, chordNameParts, resolveSelection } from '../data/progressions';
 import type { Chord, ChordPlacement, NotationStyle, ScaleName } from '../data/progressions';
 import type { SectionMarker } from '../data/sections';
@@ -118,12 +119,20 @@ export function BeatGridSheet({
     // 10 bars, not a multiple of the 4-bars-per-row width) should just stop there,
     // not trail off into empty bars with nothing in them.
     const totalBeats = placements.reduce((max, p) => Math.max(max, p.startBeat + p.lengthBeats), 0);
-    // The chord that was sounding at the previous bar's own boundary — compared
-    // against each new bar boundary to decide "name" vs "%". A gap resets this to
-    // null (see the !placement branch below), so a chord that resumes after a
-    // rest always reads as "name" again, never a wrongly-implied "%" of whatever
-    // was playing before the silence.
-    let previousBarChordName: string | null = null;
+    // The chord actually sounding in the beat immediately before the one
+    // being processed — compared against each new bar boundary to decide
+    // "name" vs "%". Deliberately *not* "whatever chord last started a bar
+    // boundary": a meter like Take Five's 5/4, where a bar can hold two
+    // different chords (e.g. 3 beats of Eb-7 then 2 of Bb-7), can reach the
+    // *next* bar boundary with a chord that happens to share a name with
+    // that earlier boundary's chord even though a different chord played in
+    // between — tracking the immediately-preceding beat instead (updated on
+    // every beat, not just bar boundaries) means "%" only fires when nothing
+    // has actually changed since a beat ago, not when a name coincidentally
+    // recurs later. A gap makes this null, so a chord that resumes after a
+    // rest always reads as "name" again, never a wrongly-implied "%" of
+    // whatever was playing before the silence.
+    let previousBeatChordName: string | null = null;
     // Whether the previous beat iterated was itself a gap — true only for the
     // very first beat of a run of silence, the "N.C." equivalent of a chord's
     // own isChordStart.
@@ -133,6 +142,9 @@ export function BeatGridSheet({
       const isChordStart = placement?.startBeat === beat;
       const isGapStart = !placement && !wasInGap;
       wasInGap = !placement;
+      const chordNameHere = placement
+        ? chordName(resolveSelection(musicalKey, scale, placement.selection), notationStyle)
+        : null;
       let mark: BeatCell['mark'] = placement ? (isChordStart ? 'name' : null) : isGapStart ? 'nc' : null;
       if (beat % beatsPerBar === 0) {
         if (!placement) {
@@ -140,25 +152,21 @@ export function BeatGridSheet({
           // a held chord getting a fresh "%" each bar rather than only marking
           // where it truly began (see beatCells' own doc comment above).
           mark = 'nc';
-          previousBarChordName = null;
+        } else if (isChordStart) {
+          // A fresh attack lands exactly on this bar boundary — the only case
+          // that actually needs comparing against what came right before it,
+          // to catch two adjacent placements that happen to share a chord.
+          mark = chordNameHere === previousBeatChordName ? 'repeat' : 'name';
         } else {
-          const chordNameHere = chordName(resolveSelection(musicalKey, scale, placement.selection), notationStyle);
-          if (isChordStart) {
-            // A fresh attack lands exactly on this bar boundary — the only case
-            // that actually needs comparing against the previous bar, to catch
-            // two adjacent placements that happen to share a chord.
-            mark = chordNameHere === previousBarChordName ? 'repeat' : 'name';
-          } else {
-            // This boundary falls inside a placement that already started
-            // earlier — whether at the previous bar's own boundary or mid-bar —
-            // so it's always a continuation, already labeled at its true start
-            // beat. Comparing against previousBarChordName here would wrongly
-            // re-show the name if that start beat wasn't itself a bar boundary.
-            mark = 'repeat';
-          }
-          previousBarChordName = chordNameHere;
+          // This boundary falls inside a placement that already started
+          // earlier — whether at the previous bar's own boundary or mid-bar —
+          // so it's always a continuation, already labeled at its true start
+          // beat. Comparing against previousBeatChordName here would wrongly
+          // re-show the name if that start beat wasn't itself a bar boundary.
+          mark = 'repeat';
         }
       }
+      previousBeatChordName = chordNameHere;
       return { beat, placement, mark };
     });
   }, [placements, musicalKey, scale, notationStyle, beatsPerBar]);
@@ -180,7 +188,7 @@ export function BeatGridSheet({
   }, [beatCells]);
 
   return (
-    <div className="beat-grid-sheet">
+    <div className="beat-grid-sheet" style={{ '--beat-grid-cols': beatsPerRow } as CSSProperties}>
       {beatRuns.map((run) => {
         const isActive =
           isPlaying && run.placement && playheadBeat >= run.startBeat && playheadBeat < run.startBeat + run.length;

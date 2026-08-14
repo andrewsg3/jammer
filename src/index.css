@@ -1876,6 +1876,12 @@ button:hover {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
+  /* Above .mobile-player__now-playing's z-index:20 -- that full-screen overlay
+     has no dismiss of its own besides Stop, so without this the settings
+     button (and anything reachable from it, like the Tap tempo control)
+     would be genuinely unclickable for as long as a song is playing. */
+  position: relative;
+  z-index: 21;
 }
 
 .mobile-player__topbar .app-title {
@@ -1970,7 +1976,10 @@ button:hover {
 .beat-grid-sheet {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(16, 1fr);
+  /* --beat-grid-cols is beatsPerBar * 4 bars, set inline per song's own meter
+     (BeatGridSheet.tsx) -- the 16 fallback only ever applies before that inline
+     style is set (there's no caller left that omits it). */
+  grid-template-columns: repeat(var(--beat-grid-cols, 16), 1fr);
   grid-auto-rows: 40px;
   row-gap: 6px;
 }
@@ -2103,6 +2112,322 @@ button:hover {
   opacity: 0.7;
 }
 
+/* Hookpad-style Edit grid (components/EditGrid.tsx + components/editGrid/*) —
+   see CLAUDE.md's "Three desktop views" section. Same manuscript-paper "paper"
+   treatment as .chord-grid-page/.lead-sheet-page. --loop-accent is amber,
+   distinct from melody green/harmony purple/the red playhead flag elsewhere. */
+:root {
+  --loop-accent: #d4a72c;
+}
+
+.edit-grid-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.edit-grid-page {
+  background: #fdfdfb;
+  color: #1a1a1a;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  padding: 0 0 8px;
+}
+
+.edit-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 8px 8px;
+  overflow-x: auto;
+}
+
+/* One nested CSS grid per 8-bar system (EDIT_BARS_PER_ROW in gridMath.ts) —
+   --cols/--bars/--beats are set inline per system since bar/beat/column count
+   depends on the song's own beatsPerBar. Bar and beat lines are both
+   background gradients rather than per-cell DOM divs, dividing the row into
+   --bars (bold) and --beats (faint) equal segments -- two layers, not one:
+   the bolder bar-line gradient is listed first (paints on top), so at a bar
+   boundary -- which is always also a beat boundary -- the bold line wins and
+   the faint one underneath is simply never visible there, letting the beat
+   gradient read as "everything the bar gradient doesn't already mark" for
+   free rather than needing to explicitly skip bar positions itself. */
+.edit-grid-system {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(4px, 1fr));
+  /* No row-gap here -- the gaps between row-groups are explicit spacer tracks
+     in gridTemplateRowsFor (EditGrid.tsx's own gridTemplateRows), not a
+     uniform grid gap, so the 7 melody rows and any stacked chord lanes stay
+     touching while ruler/loop/melody/chords still read as separated. */
+  min-width: 640px;
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(100% / var(--bars) - 1px),
+      var(--border) calc(100% / var(--bars) - 1px),
+      var(--border) calc(100% / var(--bars))
+    ),
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(100% / var(--beats) - 1px),
+      color-mix(in srgb, var(--border) 40%, transparent) calc(100% / var(--beats) - 1px),
+      color-mix(in srgb, var(--border) 40%, transparent) calc(100% / var(--beats))
+    );
+}
+
+.edit-grid-system + .edit-grid-system {
+  border-top: 2px solid var(--border);
+  padding-top: 4px;
+}
+
+.ruler-bar-number {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Neutral/inactive by default -- only the beats actually inside the loop
+   range turn amber (.loop-row-active below), not the whole row. */
+.loop-row {
+  cursor: pointer;
+  background: color-mix(in srgb, var(--border) 20%, transparent);
+}
+
+.loop-row-active {
+  background: var(--loop-accent);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* A small refresh/repeat icon at each edge of the active range -- matches
+   Hookpad's own loop-row icon, replacing the old repeat-barline glyphs
+   (𝄆/𝄇), which ran taller than this row and visibly overflowed it. */
+.loop-handle {
+  position: relative;
+  /* Reset against the older ChordGrid-era .loop-handle rule (dead --
+     ChordGrid.tsx was deleted -- but its translateY(-50%) would otherwise
+     still apply, shifting this out of its own grid row and into the one
+     above it, since this rule never touched transform itself before). */
+  transform: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--loop-accent);
+  cursor: ew-resize;
+  user-select: none;
+  z-index: 2;
+}
+
+/* Reset against the older ChordGrid-era .loop-handle-start/-end rule (now
+   dead -- ChordGrid.tsx was deleted -- but its left:-8px/right:-8px would
+   otherwise still apply as a stray relative offset on top of this grid
+   item's own column placement). */
+.loop-handle-start,
+.loop-handle-end {
+  left: auto;
+  right: auto;
+}
+
+.edit-grid-section {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: grab;
+  z-index: 3;
+}
+
+/* Label and remove button are plain flex children (like ChordGrid.tsx's own
+   .section-marker) -- .edit-grid-section is already a correctly-sized/
+   positioned CSS grid item, so nothing inside it needs its own absolute
+   positioning the way ChordGrid.tsx's percentage-of-row .section-marker did. */
+.edit-grid-section {
+  overflow: visible;
+}
+
+/* .section-marker-remove's own base rule (shared with ChordGrid.tsx's section
+   markers) sets opacity:0 -- without this, the remove "x" here would stay
+   invisible forever (unlike ChordGrid.tsx's .section-marker, this wrapper's
+   own hover was never wired to reveal it). */
+.edit-grid-section:hover .section-marker-remove {
+  opacity: 0.6;
+}
+
+.edit-grid-playhead {
+  background: #d64545;
+  opacity: 0.7;
+  width: 2px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.melody-row {
+  cursor: crosshair;
+  background: rgba(79, 176, 109, 0.04);
+}
+
+.melody-row:nth-child(odd) {
+  background: rgba(79, 176, 109, 0.08);
+}
+
+/* Background color is set inline per note (DEGREE_COLORS[degree], see
+   MelodyGrid.tsx) -- the same red-root/ROYGBIV rainbow ChordPalette.tsx's
+   diatonic chord buttons already use, so a scale degree reads the same color
+   everywhere in the app. */
+.melody-note-block {
+  position: relative;
+  margin: 2px 1px;
+  border-radius: 4px;
+  cursor: grab;
+  z-index: 2;
+}
+
+.melody-note-block-selected {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.melody-note-chromatic-badge {
+  position: absolute;
+  top: -9px;
+  left: 1px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+}
+
+.chord-lane {
+  cursor: default;
+}
+
+.chord-lane-armed {
+  cursor: copy;
+  background: rgba(159, 95, 234, 0.08);
+}
+
+.chord-block {
+  position: relative;
+  /* Horizontal only -- a stacked second lane (see laneChordSegments) should
+     touch its neighbor above/below with no vertical seam between them. */
+  margin: 0 1px;
+  background: rgba(159, 95, 234, 0.16);
+  border: 1px solid rgba(159, 95, 234, 0.4);
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  cursor: grab;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.chord-block-selected {
+  background: rgba(159, 95, 234, 0.35);
+  border-color: #9f5fe0;
+}
+
+.chord-block-name {
+  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #1a1a1a;
+}
+
+.chord-block-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.register-shift {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.register-shift button {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.register-shift button:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.register-shift-label {
+  min-width: 70px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.register-shift-hint {
+  opacity: 0.6;
+  font-size: 10px;
+}
+
+.melody-note-modify {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.melody-note-modify button {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.melody-note-modify button:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.melody-note-modify button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The activated cell -- where the next 1-7/0 keypress lands -- spans every
+   melody row so it reads as "this whole column," not tied to any one degree. */
+.melody-cursor {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-left: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .mobile-player__controls {
   display: flex;
   flex-direction: column;
@@ -2140,6 +2465,24 @@ button:hover {
 
 .mobile-player__field--grow input[type='range'] {
   width: 100%;
+}
+
+.mobile-player__tap-tempo {
+  align-self: flex-end;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mobile-player__tap-tempo:active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 .mobile-player__play {
@@ -2592,7 +2935,8 @@ button:hover {
   .playhead,
   .playhead-flag,
   .loop-handle,
-  .loop-dim,
+  .loop-row-active,
+  .edit-grid-playhead,
   .lead-sheet-playhead,
   .chord-grid-row-group-print-tail {
     display: none !important;
