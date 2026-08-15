@@ -77,6 +77,7 @@ let toms: Tone.MembraneSynth | null = null;
 let loop: Tone.Loop | null = null;
 let sectionCrashPart: Tone.Part<{ time: string }> | null = null;
 let sectionFillPart: Tone.Part<{ time: string; note: DrumVoice; velocity: number }> | null = null;
+let sectionStylePart: Tone.Part<{ time: string; note: DrumVoice; velocity: number }> | null = null;
 // Absolute-beat ranges the main Loop below should go quiet for — rebuilt fresh
 // each scheduleDrums() call, one entry per section that got a fill. Checked via
 // Transport.getTicksAtTime(time) (the audio-clock time Tone actually schedules
@@ -87,6 +88,12 @@ let sectionFillPart: Tone.Part<{ time: string; note: DrumVoice; velocity: number
 // have wrongly suppressed some of the main Loop's ticks that were actually
 // scheduled to sound *earlier* than the fill's real start.
 let fillWindows: { start: number; end: number }[] = [];
+// Same idea as fillWindows, but for a section playing a per-section style
+// override instead of the song's default pattern -- see scheduleDrums'
+// sectionOverrides param. A fill leading into an overridden section's own start
+// never overlaps this (fillWindows end exactly where the override's own window
+// begins), so the two gates never need to interact.
+let overrideWindows: { start: number; end: number }[] = [];
 let currentInstrument = 'Acoustic';
 
 // Which lane's Volume node a given DrumVoice's sample player should feed into —
@@ -433,11 +440,51 @@ function triggerVoice(note: DrumVoice, time: number, velocity: number): void {
   }
 }
 
-export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal', sections: SectionMarker[] = []): void {
+// A section's own drum playstyle override, resolved to a real DrumPattern by the
+// App.tsx/engine.ts boundary (this module never resolves a style name itself —
+// see SectionMarker.drumStyle's own doc comment). startBeat/lengthBeats mark the
+// absolute-beat range the override applies to; the pattern is tiled across that
+// whole range, same as the song's own default pattern tiles across the song.
+export type DrumSectionOverride = {
+  startBeat: number;
+  lengthBeats: number;
+  pattern: DrumPattern;
+};
+
+/** Tiles pattern's own hits across [startBeat, startBeat + lengthBeats) --
+ * same step-to-beat math as bass.ts's patternEvents, just for drum hits
+ * instead of transposed notes (a drum voice has no pitch to transpose). */
+function tileDrumPatternEvents(
+  pattern: DrumPattern,
+  startBeat: number,
+  lengthBeats: number,
+): { time: string; note: DrumVoice; velocity: number }[] {
+  const patternLengthSteps = pattern.bars * patternStepsPerBar(pattern);
+  const totalSteps = lengthBeats * STEPS_PER_BEAT;
+  const events: { time: string; note: DrumVoice; velocity: number }[] = [];
+  for (let s = 0; s < totalSteps; s++) {
+    const localStep = s % patternLengthSteps;
+    for (const hit of pattern.steps) {
+      if (hit.time !== localStep) continue;
+      const beat = startBeat + Math.floor(s / STEPS_PER_BEAT);
+      const sixteenths = ((s % STEPS_PER_BEAT) * 4) / STEPS_PER_BEAT;
+      events.push({ time: `0:${beat}:${sixteenths}`, note: hit.note, velocity: hit.velocity });
+    }
+  }
+  return events;
+}
+
+export function scheduleDrums(
+  pattern: DrumPattern,
+  timeFeel: TimeFeel = 'normal',
+  sections: SectionMarker[] = [],
+  sectionOverrides: DrumSectionOverride[] = [],
+): void {
   ensureSynths();
   const totalSteps = pattern.bars * patternStepsPerBar(pattern);
   let step = 0;
   fillWindows = [];
+  overrideWindows = sectionOverrides.map((o) => ({ start: o.startBeat, end: o.startBeat + o.lengthBeats }));
 
   // '32t' (32nd-note triplet) = 1/12 of a beat — the same grid patterns are
   // quantized to on import, so both straight 16th-note and 8th-note-triplet
@@ -457,7 +504,8 @@ export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal
       // actual scheduled audio time rather than a plain flag.
       const absoluteBeat = Tone.Transport.getTicksAtTime(time) / Tone.Transport.PPQ;
       const inFill = fillWindows.some((w) => absoluteBeat >= w.start && absoluteBeat < w.end);
-      if (!inFill) {
+      const inOverride = overrideWindows.some((w) => absoluteBeat >= w.start && absoluteBeat < w.end);
+      if (!inFill && !inOverride) {
         for (const hit of pattern.steps) {
           if (hit.time !== step) continue;
           triggerVoice(hit.note, time, hit.velocity);
@@ -509,6 +557,17 @@ export function scheduleDrums(pattern: DrumPattern, timeFeel: TimeFeel = 'normal
       triggerVoice(event.note, time, event.velocity);
     }, fillEvents).start(0);
   }
+
+  // Per-section style overrides -- layered on top the same way the fill/crash
+  // Parts above are: an absolute-time-scheduled Part, independent of the main
+  // Loop's own step counter, gated out of the main Loop via overrideWindows so
+  // the two patterns never sound at once.
+  if (sectionOverrides.length > 0) {
+    const overrideEvents = sectionOverrides.flatMap((o) => tileDrumPatternEvents(o.pattern, o.startBeat, o.lengthBeats));
+    sectionStylePart = new Tone.Part<{ time: string; note: DrumVoice; velocity: number }>((time, event) => {
+      triggerVoice(event.note, time, event.velocity);
+    }, overrideEvents).start(0);
+  }
 }
 
 export function disposeDrums(): void {
@@ -518,7 +577,10 @@ export function disposeDrums(): void {
   sectionCrashPart = null;
   sectionFillPart?.dispose();
   sectionFillPart = null;
+  sectionStylePart?.dispose();
+  sectionStylePart = null;
   fillWindows = [];
+  overrideWindows = [];
   // See keys.ts's disposeKeys comment — force-release every voice so a long-tailed
   // hit (crash, ride) doesn't keep ringing after stop.
   kick?.triggerRelease();

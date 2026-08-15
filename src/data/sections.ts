@@ -7,4 +7,15 @@ export type SectionMarker = {
   label: string;
   startBeat: number; // absolute, same coordinate space as ChordPlacement.startBeat
   lengthBeats: number;
+  // Per-section playstyle overrides -- a style name (matching DrumStyle/BassStyle/
+  // KeysStyle.name), same string identity the song-level drumStyle/bassStyle/keysStyle
+  // fields already use. Undefined means "use the song's own default style" for that
+  // track; unlike the song-level style state (a resolved object), this stays a plain
+  // name here since a SectionMarker is a lightweight, serializable UI/data structure,
+  // not something that owns audio-engine resolution -- resolving these names to
+  // actual style objects happens once, at the App.tsx/engine.ts boundary right before
+  // play(), same place the song-level styles are already resolved.
+  drumStyle?: string;
+  bassStyle?: string;
+  keysStyle?: string;
 };

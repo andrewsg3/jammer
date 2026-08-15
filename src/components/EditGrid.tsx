@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { Fragment, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { CSSProperties, DragEvent, MouseEvent as ReactMouseEvent } from 'react';
 import {
   deserializeSelection,
@@ -8,11 +8,16 @@ import {
 import type { Chord, ChordPlacement, ChordSelection, NotationStyle, ScaleDegree, ScaleName } from '../data/progressions';
 import type { MelodyNote, RestMarker } from '../data/melody';
 import type { SectionMarker } from '../data/sections';
+import type { DrumStyle, BassStyle, KeysStyle } from '../data/instrumentStyles';
 import { SheetMusicHeader } from './SheetMusicHeader';
 import { GRID_BARS, totalBeatsFor } from '../data/gridLayout';
 import {
   COL_UNIT_BEATS,
   EDIT_BARS_PER_ROW,
+  LOOP_TRACK,
+  MELODY_ROW_COUNT,
+  RULER_TRACK,
+  barBeatBoundaries,
   beatsPerSystemFor,
   canPlace,
   canPlaceSection,
@@ -20,10 +25,12 @@ import {
   chordTrackBase,
   clientXToLocalBeat,
   clientXToLocalBeatFloor,
+  colLine,
   colsPerSystem,
   gridTemplateRowsFor,
   laneChordSegments,
   maxFittingLength,
+  melodyTrackForDegree,
 } from './editGrid/gridMath';
 import { RulerRow } from './editGrid/RulerRow';
 import { LoopRow } from './editGrid/LoopRow';
@@ -83,6 +90,16 @@ type Props = {
   onRenameSection: (section: SectionMarker, label: string) => void;
   onMoveSection: (section: SectionMarker, newStartBeat: number) => void;
   onRemoveSection: (section: SectionMarker) => void;
+  // Per-section playstyle overrides -- see LoopRow.tsx's SectionStylePopover for
+  // the actual UI, and App.tsx's handleUpdateSectionStyle for the resolution.
+  onUpdateSectionStyle: (
+    section: SectionMarker,
+    track: 'drumStyle' | 'bassStyle' | 'keysStyle',
+    styleName: string | undefined,
+  ) => void;
+  drumStyleOptions: DrumStyle[];
+  bassStyleOptions: BassStyle[];
+  keysStyleOptions: KeysStyle[];
   onAddMelodyNote: (note: MelodyNote) => void;
   onUpdateMelodyNote: (index: number, patch: Partial<MelodyNote>) => void;
   onRemoveMelodyNote: (index: number) => void;
@@ -239,6 +256,10 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
   onRenameSection,
   onMoveSection,
   onRemoveSection,
+  onUpdateSectionStyle,
+  drumStyleOptions,
+  bassStyleOptions,
+  keysStyleOptions,
   onAddMelodyNote,
   onUpdateMelodyNote,
   onRemoveMelodyNote,
@@ -564,6 +585,30 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
       setAnchorId(placement.id);
     }
     onAuditionChord(chord);
+  };
+
+  // Scrubs the playhead by clicking (or dragging) the ruler row -- the one row
+  // guaranteed to always have room to click, unlike the chord row (no empty
+  // cells once a chart is fully packed) or the loop row (a click there sets
+  // the loop range instead, not the playhead). Same drag-follows-pointer
+  // pattern as handleLoopBackgroundMouseDown just above.
+  const handleRulerMouseDown = (e: ReactMouseEvent) => {
+    if (isPlaying) return;
+    const beat = beatFromPoint(e.clientX, e.clientY, beatsPerSystem);
+    if (beat === null) return;
+    onPlayheadChange(clamp(beat, 0, totalBeats));
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dragBeat = beatFromPoint(moveEvent.clientX, moveEvent.clientY, beatsPerSystem);
+      if (dragBeat === null) return;
+      onPlayheadChange(clamp(dragBeat, 0, totalBeats));
+    };
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
   };
 
   const handleChordLaneClick = (globalBeat: number) => {
@@ -892,7 +937,7 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
             const segmentsInSystem = placements
               .flatMap((p) => chordSystemSegments(p, beatsPerSystem))
               .filter((s) => s.system === systemIndex);
-            const laned = laneChordSegments(segmentsInSystem, beatsPerBar);
+            const laned = laneChordSegments(segmentsInSystem);
             const maxLane = laned.reduce((m, s) => Math.max(m, s.lane), 0);
             // Only this system's own melody grid grows to fit a note that's
             // moved outside visibleOctave (e.g. via Lower Octave) -- every
@@ -919,15 +964,66 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
                 style={
                   {
                     '--cols': colsPerSystemVal,
-                    '--bars': EDIT_BARS_PER_ROW,
-                    '--beats': beatsPerSystem,
                     gridTemplateRows: gridTemplateRowsFor(maxLane + 1, melodyOctaveSpan),
                   } as CSSProperties
                 }
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
               >
-                <RulerRow systemIndex={systemIndex} beatsPerBar={beatsPerBar} />
+                {/* Real bar/beat divider lines, one segment per row-group per
+                    boundary, positioned via colLine -- the same column math
+                    actual chords/notes use, so these can't drift off the real
+                    grid the way the old background-image gradient approach
+                    could (two independently-rounded systems -- gradient
+                    percentage stops vs. the grid's own `fr`-track layout --
+                    landing a pixel or so apart at non-round widths, reported
+                    as misaligned/doubled lines). Segmented per group (ruler/
+                    loop/melody/chords) rather than one line spanning the
+                    whole system top-to-bottom, so nothing crosses the gap
+                    tracks between groups -- those stay genuinely blank
+                    instead of needing a separate opaque cover. Ruler only
+                    gets bar lines (its own bar-number cells already mark
+                    beats plenty); the other three get both, with a visibly
+                    heavier style for bars so the two read as a real
+                    hierarchy, not two similar-weight lines. Includes both
+                    outer edges (beat 0 and beatsPerSystem, always bar-weight)
+                    as well as the interior boundaries, so the system reads as
+                    a fully framed grid, not just internally divided -- the
+                    right edge uses a distinct -end variant (border-right +
+                    justify-self:end on the system's last real column) since a
+                    bare `colLine(beatsPerSystem)` line reference has no
+                    column of its own to sit in. */}
+                {[
+                  { key: 'edge-start', col: colLine(0), isBar: true, end: false },
+                  ...barBeatBoundaries(beatsPerSystem, beatsPerBar).map(({ beat, isBar }) => ({
+                    key: `${beat}`,
+                    col: colLine(beat),
+                    isBar,
+                    end: false,
+                  })),
+                  { key: 'edge-end', col: colsPerSystemVal, isBar: true, end: true },
+                ].map(({ key, col, isBar, end }) => {
+                  const base = isBar ? 'edit-grid-line-bar' : 'edit-grid-line-beat';
+                  const lineClass = end ? `${base} edit-grid-line-end` : base;
+                  return (
+                    <Fragment key={key}>
+                      {isBar && <div className={lineClass} style={{ gridRow: RULER_TRACK, gridColumn: col }} />}
+                      <div className={lineClass} style={{ gridRow: LOOP_TRACK, gridColumn: col }} />
+                      <div
+                        className={lineClass}
+                        style={{
+                          gridRow: `${melodyTrackForDegree(MELODY_ROW_COUNT - 1, 0)} / ${melodyTrackForDegree(0, melodyOctaveSpan - 1) + 1}`,
+                          gridColumn: col,
+                        }}
+                      />
+                      <div
+                        className={lineClass}
+                        style={{ gridRow: `${chordTrackBaseVal} / ${chordTrackBaseVal + maxLane + 1}`, gridColumn: col }}
+                      />
+                    </Fragment>
+                  );
+                })}
+                <RulerRow systemIndex={systemIndex} beatsPerBar={beatsPerBar} onScrubMouseDown={handleRulerMouseDown} />
                 <LoopRow
                   systemStart={systemStart}
                   beatsPerSystem={beatsPerSystem}
@@ -946,6 +1042,10 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
                   onCancelEditingSection={cancelEditingSection}
                   onSectionMouseDown={handleSectionMouseDown}
                   onRemoveSection={onRemoveSection}
+                  onUpdateSectionStyle={onUpdateSectionStyle}
+                  drumStyleOptions={drumStyleOptions}
+                  bassStyleOptions={bassStyleOptions}
+                  keysStyleOptions={keysStyleOptions}
                   onLoopBackgroundMouseDown={handleLoopBackgroundMouseDown}
                   onLoopStartHandleMouseDown={handleLoopStartHandleMouseDown}
                   onLoopEndHandleMouseDown={handleLoopEndHandleMouseDown}

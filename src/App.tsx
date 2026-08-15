@@ -30,6 +30,9 @@ import { parseMidiDrumPattern } from './data/midiDrumImport';
 import { parseMidiMelodyFile } from './data/midiMelodyImport';
 import type { MelodyNote } from './data/melody';
 import type { SectionMarker } from './data/sections';
+import type { DrumSectionOverride } from './audio/drums';
+import type { BassSectionOverride } from './audio/bass';
+import type { KeysSectionOverride } from './audio/keys';
 import {
   bundledSongPresets,
   downloadSongPreset,
@@ -284,11 +287,14 @@ function App() {
   const [songLoadNonce, setSongLoadNonce] = useState(0);
   // The four main track faders start at 70%, not 100 — headroom to boost
   // whichever track needs it, rather than already maxed out with nowhere to go.
+  // Drums starts a bit under that (the kit as a whole tends to dominate the mix
+  // otherwise) and melody a good bit over it (the one track most likely to be
+  // the actual tune you want up front, not buried under the backing track).
   const [chordsVolume, setChordsVolumeState] = useState(70);
   const [bassVolume, setBassVolumeState] = useState(70);
-  const [drumsVolume, setDrumsVolumeState] = useState(70);
+  const [drumsVolume, setDrumsVolumeState] = useState(55);
   const [metronomeVolume, setMetronomeVolumeState] = useState(100);
-  const [melodyVolume, setMelodyVolumeState] = useState(70);
+  const [melodyVolume, setMelodyVolumeState] = useState(90);
   const [masterVolume, setMasterVolumeState] = useState(100);
   const [drumsExpanded, setDrumsExpanded] = useState(false);
   const [kickVolume, setKickVolumeState] = useState(100);
@@ -297,12 +303,14 @@ function App() {
   // Cymbals default quieter than the rest of the kit — the real recorded samples
   // (hihat/ride/crash family) sit much louder relative to the drum shells than the
   // old synths ever did, so 100% here was overwhelming the mix out of the gate.
-  const [hihatVolume, setHihatVolumeState] = useState(50);
-  const [hihatOpenVolume, setHihatOpenVolumeState] = useState(50);
-  const [hihatFootVolume, setHihatFootVolumeState] = useState(50);
-  const [rideVolume, setRideVolumeState] = useState(50);
-  const [rideBellVolume, setRideBellVolumeState] = useState(50);
-  const [crashVolume, setCrashVolumeState] = useState(50);
+  // Dropped further still (50 -> 20) after that first pass still read as too
+  // loud in practice.
+  const [hihatVolume, setHihatVolumeState] = useState(20);
+  const [hihatOpenVolume, setHihatOpenVolumeState] = useState(20);
+  const [hihatFootVolume, setHihatFootVolumeState] = useState(20);
+  const [rideVolume, setRideVolumeState] = useState(20);
+  const [rideBellVolume, setRideBellVolumeState] = useState(20);
+  const [crashVolume, setCrashVolumeState] = useState(20);
   const [tomsVolume, setTomsVolumeState] = useState(100);
   const [chordsInstrument, setChordsInstrumentState] = useState<Instrument>(
     keysInstruments.find((i) => i.name === DEFAULT_SONG_PRESET?.chordsInstrument) ?? keysInstruments[0],
@@ -413,8 +421,15 @@ function App() {
 
   useEffect(() => {
     // While playing, the playhead tracks the transport; the stop handlers themselves
-    // reset it back to 0, so there's nothing to do here once playback ends.
-    if (!isPlaying) return;
+    // reset it back to 0, so there's nothing to do here once playback ends. Skipped
+    // entirely during the count-in: Tone.Transport hasn't actually started yet at
+    // that point (its start is merely scheduled for after the count-in finishes --
+    // see engine.ts's play()), so getCurrentBeat() would read 0 and snap the
+    // playhead back to the start of the song, stomping over wherever the user had
+    // scrubbed it to, even though playback itself was always going to begin at the
+    // right place. Re-runs (restarting the loop) once countInActive flips back to
+    // false, picking the real transport position back up from there.
+    if (!isPlaying || countInActive) return;
     let frameId: number;
     const tick = () => {
       setPlayheadBeat(Math.floor(getCurrentBeat()));
@@ -422,7 +437,7 @@ function App() {
     };
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, [isPlaying]);
+  }, [isPlaying, countInActive]);
 
   // Backgrounding the tab (or, on mobile, locking the screen) can force the engine
   // to stop itself — see onAutoStop's doc comment in audio/engine.ts. Sync the UI
@@ -522,6 +537,17 @@ function App() {
     setSections((prev) => prev.filter((s) => s.id !== section.id));
   };
 
+  // A style name (matching a DrumStyle/BassStyle/KeysStyle.name), or undefined to
+  // clear the override and fall back to the song's own default for that track --
+  // see SectionMarker.drumStyle et al.'s own doc comment (data/sections.ts).
+  const handleUpdateSectionStyle = (
+    section: SectionMarker,
+    track: 'drumStyle' | 'bassStyle' | 'keysStyle',
+    styleName: string | undefined,
+  ) => {
+    setSections((prev) => prev.map((s) => (s.id === section.id ? { ...s, [track]: styleName } : s)));
+  };
+
   // Melody editing (see ChordGrid.tsx's "Edit Melody" mode) -- indexes into the
   // melody array are used as note identity, same as ChordGrid's own comment on
   // this explains (MelodyNote has no persisted id).
@@ -597,7 +623,14 @@ function App() {
       startBeat,
       lengthBeats,
     }));
-    const flatSections = sections.map(({ label, startBeat, lengthBeats }) => ({ label, startBeat, lengthBeats }));
+    const flatSections = sections.map(({ label, startBeat, lengthBeats, drumStyle: d, bassStyle: b, keysStyle: k }) => ({
+      label,
+      startBeat,
+      lengthBeats,
+      drumStyle: d,
+      bassStyle: b,
+      keysStyle: k,
+    }));
     // Prefer the sections+arrangement shape whenever it can represent the current
     // chart losslessly (see deriveSectionsAndArrangement) -- that's what actually
     // avoids retyping a repeated section. Falls back to the flat shape when there
@@ -692,6 +725,27 @@ function App() {
         countInTimeoutRef.current = null;
       }, (countInBars * beatsPerBar * 60 * 1000) / tempo);
     }
+    // Per-section playstyle overrides -- resolve each section's own plain style
+    // name (SectionMarker.drumStyle et al.) against the same style lists the
+    // song-level pickers use, right here at the App.tsx/engine.ts boundary. A
+    // name that doesn't resolve (a style since removed/renamed) is silently
+    // skipped, same "don't crash on stale data" stance the song-preset loader
+    // already takes elsewhere in this file.
+    const sectionDrumOverrides: DrumSectionOverride[] = sections.flatMap((s) => {
+      const style = s.drumStyle ? drumStyles.find((d) => d.name === s.drumStyle) : undefined;
+      return style?.pattern ? [{ startBeat: s.startBeat, lengthBeats: s.lengthBeats, pattern: style.pattern }] : [];
+    });
+    const sectionBassOverrides: BassSectionOverride[] = sections.flatMap((s) => {
+      const style = s.bassStyle ? bassStyles.find((b) => b.name === s.bassStyle) : undefined;
+      return style
+        ? [{ startBeat: s.startBeat, lengthBeats: s.lengthBeats, rule: style.rule, pattern: style.pattern ?? null }]
+        : [];
+    });
+    const sectionKeysOverrides: KeysSectionOverride[] = sections.flatMap((s) => {
+      const style = s.keysStyle ? keysStyles.find((k) => k.name === s.keysStyle) : undefined;
+      return style ? [{ startBeat: s.startBeat, lengthBeats: s.lengthBeats, rule: style.rule }] : [];
+    });
+
     await play({
       key: musicalKey,
       scale,
@@ -709,6 +763,9 @@ function App() {
       keysTimeFeel: keysTimeFeel.value,
       melody,
       sections,
+      sectionDrumOverrides,
+      sectionBassOverrides,
+      sectionKeysOverrides,
       countInBars,
       beatsPerBar,
     });
@@ -723,8 +780,10 @@ function App() {
     playheadBeat,
     tempo,
     drumStyle,
+    drumStyles,
     drumsTimeFeel,
     bassStyle,
+    bassStyles,
     bassTimeFeel,
     keysStyle,
     keysTimeFeel,
@@ -946,6 +1005,10 @@ function App() {
                 onRenameSection={handleRenameSection}
                 onMoveSection={handleMoveSection}
                 onRemoveSection={handleRemoveSection}
+                onUpdateSectionStyle={handleUpdateSectionStyle}
+                drumStyleOptions={visibleDrumStyles}
+                bassStyleOptions={visibleBassStyles}
+                keysStyleOptions={visibleKeysStyles}
                 onAddMelodyNote={handleAddMelodyNote}
                 onUpdateMelodyNote={handleUpdateMelodyNote}
                 onRemoveMelodyNote={handleRemoveMelodyNote}

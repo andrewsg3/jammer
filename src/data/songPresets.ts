@@ -6,7 +6,10 @@ import type { SectionMarker } from './sections';
 
 // Persisted shape — no id, same treatment as melody notes: a runtime-only React
 // key, reassigned via crypto.randomUUID() whenever a preset loads.
-export type SongPresetSection = Pick<SectionMarker, 'label' | 'startBeat' | 'lengthBeats'>;
+export type SongPresetSection = Pick<
+  SectionMarker,
+  'label' | 'startBeat' | 'lengthBeats' | 'drumStyle' | 'bassStyle' | 'keysStyle'
+>;
 
 export type SongPresetPlacement = {
   selection: ChordSelection;
@@ -25,6 +28,25 @@ export type SongPresetPlacement = {
 export type SongPresetSectionDef = {
   label: string;
   placements: SongPresetPlacement[];
+  // How many times this section's own pattern repeats back-to-back before the
+  // arrangement moves on -- e.g. Virtual Insanity's A/B sections, each a short
+  // vamp played 4x, rather than needing the same pattern pasted out by hand
+  // that many times. Optional, defaults to 1 (no repeat, every preset written
+  // before this existed). Resolve-side only: deriveSectionsAndArrangement (the
+  // save-side reverse, below) never produces this -- editing a repeated
+  // section in the app and re-saving always writes it back out fully
+  // expanded. Deliberate: auto-detecting "is this still N clean repeats of
+  // the same pattern" after arbitrary edits is exactly the kind of fragile
+  // heuristic this file avoids elsewhere (see deriveSectionsAndArrangement's
+  // own "only when it can represent this losslessly" stance).
+  repeatCount?: number;
+  // Per-section playstyle overrides -- see SectionMarker's own fields of the same
+  // name (data/sections.ts) for the full rationale. Living on the def (not per
+  // repeat) means every repeat of a repeatCount>1 section shares the same override,
+  // same as repeatCount itself applying uniformly across all repeats.
+  drumStyle?: string;
+  bassStyle?: string;
+  keysStyle?: string;
 };
 
 // The portable, on-disk shape of a full song: everything needed to reproduce a
@@ -145,13 +167,28 @@ function isMelodyNote(value: unknown): value is MelodyNote {
 function isSongPresetSection(value: unknown): value is SongPresetSection {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  return typeof v.label === 'string' && typeof v.startBeat === 'number' && typeof v.lengthBeats === 'number';
+  return (
+    typeof v.label === 'string' &&
+    typeof v.startBeat === 'number' &&
+    typeof v.lengthBeats === 'number' &&
+    (v.drumStyle === undefined || typeof v.drumStyle === 'string') &&
+    (v.bassStyle === undefined || typeof v.bassStyle === 'string') &&
+    (v.keysStyle === undefined || typeof v.keysStyle === 'string')
+  );
 }
 
 function isSongPresetSectionDef(value: unknown): value is SongPresetSectionDef {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  return typeof v.label === 'string' && Array.isArray(v.placements) && v.placements.every(isSongPresetPlacement);
+  return (
+    typeof v.label === 'string' &&
+    Array.isArray(v.placements) &&
+    v.placements.every(isSongPresetPlacement) &&
+    (v.repeatCount === undefined || typeof v.repeatCount === 'number') &&
+    (v.drumStyle === undefined || typeof v.drumStyle === 'string') &&
+    (v.bassStyle === undefined || typeof v.bassStyle === 'string') &&
+    (v.keysStyle === undefined || typeof v.keysStyle === 'string')
+  );
 }
 
 /**
@@ -177,7 +214,11 @@ export function resolvePlacementStarts(
  * produces today, just built by walking the arrangement (with repeats) instead of a
  * single flat placements array. An arrangement entry with no matching sectionDef is
  * skipped (logged, not thrown) -- same "invalid data doesn't crash playback" stance
- * isSongPreset takes elsewhere.
+ * isSongPreset takes elsewhere. A section with repeatCount > 1 tiles its own
+ * pattern back-to-back that many times before the arrangement moves on to the
+ * next entry -- the whole repeated run still becomes just one SectionMarker
+ * (one "A" badge spanning all four repeats, not four separate ones), since
+ * it's still structurally one section, just built from a repeating cell.
  */
 export function resolveArrangement(
   sectionDefs: SongPresetSectionDef[],
@@ -198,11 +239,23 @@ export function resolveArrangement(
       continue;
     }
     const resolved = resolvePlacementStarts(def.placements);
-    const sectionLength = resolved.reduce((max, p) => Math.max(max, p.startBeat + p.lengthBeats), 0);
-    for (const p of resolved) {
-      placements.push({ selection: p.selection, startBeat: cursor + p.startBeat, lengthBeats: p.lengthBeats });
+    const patternLength = resolved.reduce((max, p) => Math.max(max, p.startBeat + p.lengthBeats), 0);
+    const repeatCount = Math.max(1, Math.floor(def.repeatCount ?? 1));
+    for (let rep = 0; rep < repeatCount; rep++) {
+      const repeatStart = cursor + rep * patternLength;
+      for (const p of resolved) {
+        placements.push({ selection: p.selection, startBeat: repeatStart + p.startBeat, lengthBeats: p.lengthBeats });
+      }
     }
-    sections.push({ label, startBeat: cursor, lengthBeats: sectionLength });
+    const sectionLength = patternLength * repeatCount;
+    sections.push({
+      label,
+      startBeat: cursor,
+      lengthBeats: sectionLength,
+      drumStyle: def.drumStyle,
+      bassStyle: def.bassStyle,
+      keysStyle: def.keysStyle,
+    });
     cursor += sectionLength;
   }
 
@@ -258,7 +311,13 @@ export function deriveSectionsAndArrangement(
         lengthBeats: p.lengthBeats,
       }));
 
-    const contentKey = JSON.stringify({ label: section.label, relative });
+    const contentKey = JSON.stringify({
+      label: section.label,
+      relative,
+      drumStyle: section.drumStyle,
+      bassStyle: section.bassStyle,
+      keysStyle: section.keysStyle,
+    });
     let defLabel = labelForContent.get(contentKey);
     if (!defLabel) {
       defLabel = section.label;
@@ -269,7 +328,13 @@ export function deriveSectionsAndArrangement(
         n++;
       }
       defLabel = unique;
-      sectionDefs.push({ label: defLabel, placements: relative });
+      sectionDefs.push({
+        label: defLabel,
+        placements: relative,
+        drumStyle: section.drumStyle,
+        bassStyle: section.bassStyle,
+        keysStyle: section.keysStyle,
+      });
       labelForContent.set(contentKey, defLabel);
     }
     arrangement.push(defLabel);

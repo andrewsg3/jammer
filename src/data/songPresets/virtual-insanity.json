@@ -30,16 +30,9 @@
         { "selection": { "type": "chromatic", "offset": 9, "quality": "m7b5" }, "lengthBeats": 2 },
         { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 2 },
         { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7sharp5" }, "lengthBeats": 2 },
-        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 2 },
-        { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 2 },
-        { "selection": { "type": "chromatic", "offset": 5, "quality": "dom7" }, "lengthBeats": 2 },
-        { "selection": { "type": "chromatic", "offset": 10, "quality": "add9" }, "lengthBeats": 2 },
-        { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "lengthBeats": 2 },
-        { "selection": { "type": "chromatic", "offset": 9, "quality": "m7b5" }, "lengthBeats": 2 },
-        { "selection": { "type": "chromatic", "offset": 8, "quality": "maj7" }, "lengthBeats": 2 },
-        { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7sharp5" }, "lengthBeats": 2 },
         { "selection": { "type": "chromatic", "offset": 0, "quality": "min7" }, "lengthBeats": 2 }
-      ]
+      ],
+      "repeatCount": 4
     },
     {
       "label": "B",
@@ -50,11 +43,11 @@
         { "selection": { "type": "chromatic", "offset": 3, "quality": "maj7" }, "lengthBeats": 1 },
         { "selection": { "type": "chromatic", "offset": 5, "quality": "min7" }, "lengthBeats": 1 },
         { "selection": { "type": "chromatic", "offset": 7, "quality": "dom7" }, "lengthBeats": 1 }
-      ]
+      ],
+      "repeatCount": 4
     }
   ],
   "arrangement": [
-    "Intro",
     "A",
     "B"
   ]

@@ -1600,16 +1600,6 @@ button:hover {
   min-width: 0;
 }
 
-.chord-label-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
-  font-size: 19px;
-  line-height: 1;
-  font-weight: 400;
-}
-
 /* Real-book "N.C." (No Chord) for a gap between placements — see
    ncSegmentsForGaps in ChordGrid.tsx. Styled as a marking rather than a literal
    chord (italic, dimmer), same treatment BeatGridSheet.tsx's own .beat-grid-
@@ -1766,6 +1756,10 @@ button:hover {
   padding: 0 4px 4px;
 }
 
+/* This sits on the edit grid's own always-light sheet paper, not the app's
+   dark-themed UI -- a fixed dark color (matching .chord-block-name/.section-
+   marker-label's own convention), not var(--text), which flips light in dark
+   mode and goes invisible against paper that's never anything but light. */
 .section-add-button,
 .melody-edit-toggle {
   font-size: 11px;
@@ -1773,7 +1767,7 @@ button:hover {
   border-radius: 4px;
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--text);
+  color: #1a1a1a;
   cursor: pointer;
 }
 
@@ -2091,19 +2085,6 @@ button:hover {
   pointer-events: none;
 }
 
-/* Positioned against a real VexFlow tickable's own rendered x — see
-   LeadSheet.tsx's forced-boundary construction — not a percentage/beat-width
-   estimate the way ChordGrid.tsx's/BeatGridSheet.tsx's chord labels are.
-   .chord-label-name (shared class) already carries the Architects Daughter
-   typography; this just adds the absolute positioning. */
-.lead-sheet-chord-label {
-  position: absolute;
-  white-space: nowrap;
-}
-
-.lead-sheet-section {
-  z-index: 2;
-}
 
 .lead-sheet-playhead {
   position: absolute;
@@ -2144,15 +2125,9 @@ button:hover {
 }
 
 /* One nested CSS grid per 8-bar system (EDIT_BARS_PER_ROW in gridMath.ts) —
-   --cols/--bars/--beats are set inline per system since bar/beat/column count
-   depends on the song's own beatsPerBar. Bar and beat lines are both
-   background gradients rather than per-cell DOM divs, dividing the row into
-   --bars (bold) and --beats (faint) equal segments -- two layers, not one:
-   the bolder bar-line gradient is listed first (paints on top), so at a bar
-   boundary -- which is always also a beat boundary -- the bold line wins and
-   the faint one underneath is simply never visible there, letting the beat
-   gradient read as "everything the bar gradient doesn't already mark" for
-   free rather than needing to explicitly skip bar positions itself. */
+   --cols is set inline per system since column count depends on the song's
+   own beatsPerBar. Bar/beat divider lines are real grid-item divs now (see
+   .edit-grid-line-bar/-beat below), not a background gradient here. */
 .edit-grid-system {
   position: relative;
   display: grid;
@@ -2162,21 +2137,6 @@ button:hover {
      uniform grid gap, so the 7 melody rows and any stacked chord lanes stay
      touching while ruler/loop/melody/chords still read as separated. */
   min-width: 640px;
-  background-image:
-    repeating-linear-gradient(
-      to right,
-      transparent 0,
-      transparent calc(100% / var(--bars) - 1px),
-      var(--border) calc(100% / var(--bars) - 1px),
-      var(--border) calc(100% / var(--bars))
-    ),
-    repeating-linear-gradient(
-      to right,
-      transparent 0,
-      transparent calc(100% / var(--beats) - 1px),
-      color-mix(in srgb, var(--border) 40%, transparent) calc(100% / var(--beats) - 1px),
-      color-mix(in srgb, var(--border) 40%, transparent) calc(100% / var(--beats))
-    );
 }
 
 .edit-grid-system + .edit-grid-system {
@@ -2184,6 +2144,68 @@ button:hover {
   padding-top: 4px;
 }
 
+/* Real bar/beat divider lines (EditGrid.tsx's own barBeatBoundaries loop) --
+   replaced a two-layer `background-image` gradient approximation that could
+   drift a pixel or so off the actual grid at non-round container widths
+   (the gradient's own percentage math and the grid's `fr`-track layout are
+   two independently-rounded systems, not locked together), which read as
+   misaligned/doubled lines "in different places," and didn't clearly read as
+   bar vs. beat since both were the same 1px-ish stroke width, just a color/
+   opacity difference. These are real grid items positioned via colLine (the
+   same column math actual content uses, so they can't drift from it) with an
+   explicit pixel width flush at the column's own start edge -- a genuine
+   width difference now, not just opacity, so the hierarchy is unambiguous
+   even before color registers. */
+/* border-left, not width+background -- a positioned div sized by `width`
+   sits wherever the browser's own fractional-pixel distribution across the
+   grid's `1fr` columns happens to land it, which can snap to a half-pixel at
+   some column boundaries and not others (non-round container widths don't
+   divide evenly across every column), rendering as visibly uneven line
+   weight between one bar divider and the next even though the underlying
+   markup/CSS is identical at every one (verified: same class, same color,
+   same computed width, evenly spaced). A border's own edge is what browsers
+   snap most consistently to the device pixel grid. */
+.edit-grid-line-bar {
+  width: 0;
+  border-left: 2px solid var(--border);
+  pointer-events: none;
+}
+
+.edit-grid-line-beat {
+  width: 0;
+  border-left: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  pointer-events: none;
+}
+
+/* The system's own right edge -- sits in its last real column (justify-self:
+   end puts it flush at that column's own right edge, which is the grid's
+   right edge) rather than needing an extra implicit column the way a bare
+   `colLine(beatsPerSystem)` line reference would. border-right, not
+   border-left, for the same reason. */
+.edit-grid-line-end {
+  border-left: none;
+  border-right: 2px solid var(--border);
+  justify-self: end;
+}
+
+/* Sits behind the bar-number labels (z-index below their z-index: 1) purely
+   so the ruler reads as its own row -- a faint wash plus a full top+bottom
+   border so it reads as its own boxed group. First of four explicit
+   row-groups (ruler/loop/melody/chords); see .loop-row, .melody-row-group-
+   top/-bottom, and .chord-lane-first/-last below for the other three -- each
+   group is fully bordered on its own, so a gap between two groups shows two
+   close-together lines (one per group's own edge), not a single shared one. */
+.ruler-row-bg {
+  cursor: pointer;
+  background: color-mix(in srgb, var(--border) 10%, transparent);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Fixed dark color, not var(--text) -- this renders on the always-light
+   sheet paper, not the app's dark-themed UI, and var(--text) flips light in
+   dark mode, going invisible against paper that never does. Caught live: the
+   bar numbers were fully unreadable under a dark-mode browser preference. */
 .ruler-bar-number {
   display: flex;
   align-items: center;
@@ -2191,17 +2213,21 @@ button:hover {
   padding-left: 3px;
   font-size: 11px;
   font-weight: 700;
-  color: var(--text);
+  color: #1a1a1a;
   opacity: 0.85;
   pointer-events: none;
   z-index: 1;
 }
 
 /* Neutral/inactive by default -- only the beats actually inside the loop
-   range turn amber (.loop-row-active below), not the whole row. */
+   range turn amber (.loop-row-active below), not the whole row. Full
+   top+bottom border, same "each group boxed on its own" convention as
+   .ruler-row-bg above. */
 .loop-row {
   cursor: pointer;
   background: color-mix(in srgb, var(--border) 20%, transparent);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .loop-row-active {
@@ -2265,6 +2291,66 @@ button:hover {
   opacity: 0.6;
 }
 
+/* Same reveal-on-hover treatment as .section-marker-remove above -- a small,
+   unobtrusive affordance rather than a permanently-visible button crowding the
+   badge. See LoopRow.tsx's SectionStylePopover for what it opens. */
+.section-marker-style-toggle {
+  margin-left: 2px;
+  background: transparent;
+  border: none;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0;
+  cursor: pointer;
+  padding: 0 1px;
+}
+
+.edit-grid-section:hover .section-marker-style-toggle {
+  opacity: 0.6;
+}
+
+.section-style-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 6px;
+  background: #fff;
+  color: #1a1a1a;
+  border: 1px solid #1a1a1a;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.section-style-popover-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+}
+
+.section-style-popover-row select {
+  font-size: 11px;
+  max-width: 140px;
+}
+
+.section-style-popover-close {
+  align-self: flex-end;
+  font-size: 10px;
+  background: transparent;
+  border: 1px solid #1a1a1a;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
 .edit-grid-playhead {
   background: #d64545;
   opacity: 0.7;
@@ -2282,7 +2368,20 @@ button:hover {
   background: rgba(79, 176, 109, 0.08);
 }
 
-/* Background color is set inline per note (DEGREE_COLORS[degree], see
+/* The melody block's own true top/bottom edges (see MelodyGrid.tsx's
+   edgeClass -- only the very first/last rendered row gets these, not every
+   octave-block seam when the grid's expanded to more than one) -- a full
+   border around the whole block, same "every group boxed on its own"
+   convention as .ruler-row-bg/.loop-row above. */
+.melody-row-group-top {
+  border-top: 1px solid var(--border);
+}
+
+.melody-row-group-bottom {
+  border-bottom: 1px solid var(--border);
+}
+
+/* Background is set inline per note (DEGREE_COLORS[degree], see
    MelodyGrid.tsx) -- the same red-root/ROYGBIV rainbow ChordPalette.tsx's
    diatonic chord buttons already use, so a scale degree reads the same color
    everywhere in the app. */
@@ -2298,18 +2397,35 @@ button:hover {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
-.melody-note-chromatic-badge {
-  position: absolute;
-  top: -9px;
-  left: 1px;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--text);
+/* A sharp/flat: straddles the boundary between its own degree's row and the
+   next degree up (translateY(-50%) shifts it half a row higher without
+   affecting grid layout -- the element still occupies its own row's cell for
+   placement purposes, this only moves where it paints), striped in both
+   degrees' colors (see MelodyGrid.tsx's background) instead of sitting flush
+   in one row with a "+" badge. */
+.melody-note-block-chromatic {
+  transform: translateY(-50%);
+  z-index: 3;
 }
 
+/* A faint wash even when nothing's armed (rgba(159, 95, 234, ...) is this
+   app's Harmony/chord accent, same purple chord-block itself uses) -- used to
+   be fully transparent by default, which read as "no row here at all" next
+   to melody's own always-on tint above it. */
 .chord-lane {
   cursor: default;
+  background: rgba(159, 95, 234, 0.03);
+}
+
+/* The chord box's own top/bottom edges -- only the first/last lane, not
+   every stacked chord lane, same "every group boxed on its own" convention
+   as .ruler-row-bg/.loop-row/.melody-row-group-top/-bottom above. */
+.chord-lane-first {
+  border-top: 1px solid var(--border);
+}
+
+.chord-lane-last {
+  border-bottom: 1px solid var(--border);
 }
 
 .chord-lane-armed {
@@ -2317,24 +2433,33 @@ button:hover {
   background: rgba(159, 95, 234, 0.08);
 }
 
+/* Background/border-color are set inline per chord (see ChordRow.tsx's
+   chordBlockBackground/chordBlockBorderColor) -- the same DEGREE_COLORS
+   rainbow ChordPalette.tsx's diatonic buttons and MelodyGrid.tsx's notes
+   already use, striped for a chromatic root the same two-color way a sharped
+   melody note is. border-width/style stay fixed here, only the color varies. */
 .chord-block {
   position: relative;
-  /* Horizontal only -- a stacked second lane (see laneChordSegments) should
-     touch its neighbor above/below with no vertical seam between them. */
-  margin: 0 1px;
-  background: rgba(159, 95, 234, 0.16);
-  border: 1px solid rgba(159, 95, 234, 0.4);
+  /* No margin at all -- same-lane neighbors touch directly border-to-border
+     (a visible seam still reads from each block's own colored border, just
+     with no blank strip of lane background between them), and a stacked
+     second lane (see laneChordSegments) touches its neighbor above/below
+     with no vertical seam either. */
+  border: 1px solid transparent;
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 0 4px;
   cursor: grab;
   overflow: hidden;
   z-index: 2;
 }
 
+/* A ring overlay (same idea as .melody-note-block-selected) rather than
+   overriding background/border-color -- selecting a chord shouldn't erase
+   which degree color it was showing. */
 .chord-block-selected {
-  background: rgba(159, 95, 234, 0.35);
-  border-color: #9f5fe0;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .chord-block-name {
@@ -2345,6 +2470,22 @@ button:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   color: #1a1a1a;
+}
+
+/* A sub-NARROW_CHORD_BEATS-long block (ChordRow.tsx) is only ~28px wide at
+   this grid's fixed 8-bars/row column width -- too narrow for a 13px symbol
+   plus its own 4px padding (most chord names need 22-33px), which is what
+   used to ellipsis-truncate them down to 1-2 illegible characters. Smaller
+   font + tighter padding recovers enough room for the vast majority of this
+   app's chord names (root+quality, e.g. "Gb△7") to actually fit -- still not
+   a guarantee for a genuinely long name (a slash chord with an extension) in
+   a single narrow beat, which still falls back to the same ellipsis. */
+.chord-block-narrow {
+  padding: 0 1px;
+}
+
+.chord-block-narrow .chord-block-name {
+  font-size: 10px;
 }
 
 .chord-block-resize-handle {
@@ -2363,13 +2504,15 @@ button:hover {
   font-size: 11px;
 }
 
+/* Same sheet-paper-not-app-UI fix as .section-add-button above -- fixed dark
+   color, not the theme-flipping var(--text). */
 .register-shift button {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--text);
+  color: #1a1a1a;
   cursor: pointer;
 }
 
@@ -2947,6 +3090,33 @@ button:hover {
     print-color-adjust: exact !important;
   }
 
+  /* SheetMusicHeader.tsx's title/subtitle/author/play-style fields are real
+     <input>/<textarea> elements with a placeholder ("Untitled"/"Subtitle"/
+     "Unknown"/"Style") shown on screen as an empty-field editing hint --
+     unlike on screen, browsers print an empty field's placeholder text by
+     default, so an unfilled subtitle (the common case -- most songs don't
+     have one) showed up on the printed page as literal grey "Subtitle" text
+     instead of just being blank the way an actual fake book would be. */
+  input::placeholder,
+  textarea::placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
+  }
+
+  /* Hiding the placeholder *text* above still leaves .sheet-subtitle's own box
+     in the layout -- it's a real flex child of .sheet-header-title-block
+     (title/subtitle stacked in a column, with the title's underline drawn via
+     ::after at the bottom of that whole column, see .sheet-header-title-block
+     below) with its own font-size/padding, so an empty one left a blank gap
+     between the title and its underline instead of the underline sitting
+     flush under the title the way an actual fake book would for a song with
+     no subtitle. :placeholder-shown (true exactly when the field is empty)
+     collapses the box entirely rather than just its text, so the underline
+     naturally rises to sit right under the title when there's nothing here. */
+  .sheet-subtitle:placeholder-shown {
+    display: none !important;
+  }
+
   .top-bar,
   .chord-palette,
   .melody-note-toolbar,
@@ -2976,7 +3146,10 @@ button:hover {
   .layout-grid,
   .chord-grid-page,
   .chord-grid,
-  .sheet-header {
+  .sheet-header,
+  .lead-sheet-page,
+  .lead-sheet,
+  .lead-sheet-svg {
     height: auto !important;
     max-height: none !important;
     min-height: 0 !important;

@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { SectionMarker } from '../../data/sections';
+import type { DrumStyle, BassStyle, KeysStyle } from '../../data/instrumentStyles';
 import { colLine, LOOP_TRACK, SECTION_TRACK } from './gridMath';
+
+type StyleTrack = 'drumStyle' | 'bassStyle' | 'keysStyle';
 
 type Props = {
   systemStart: number;
@@ -20,10 +24,66 @@ type Props = {
   onCancelEditingSection: () => void;
   onSectionMouseDown: (section: SectionMarker) => (e: ReactMouseEvent) => void;
   onRemoveSection: (section: SectionMarker) => void;
+  onUpdateSectionStyle: (section: SectionMarker, track: StyleTrack, styleName: string | undefined) => void;
+  drumStyleOptions: DrumStyle[];
+  bassStyleOptions: BassStyle[];
+  keysStyleOptions: KeysStyle[];
   onLoopBackgroundMouseDown: (e: ReactMouseEvent) => void;
   onLoopStartHandleMouseDown: (e: ReactMouseEvent) => void;
   onLoopEndHandleMouseDown: (e: ReactMouseEvent) => void;
 };
+
+const DEFAULT_OPTION = '(song default)';
+
+/** A section's own drums/bass/keys playstyle overrides -- see
+ * SectionMarker.drumStyle et al.'s doc comment (data/sections.ts) for the data
+ * model, and CLAUDE.md's "Per-section instrument arrangement" idea this is the
+ * first concrete slice of. Three plain <select>s rather than anything fancier --
+ * a minimal, functional v1, not a polished mixer panel. */
+function SectionStylePopover({
+  section,
+  onUpdateSectionStyle,
+  drumStyleOptions,
+  bassStyleOptions,
+  keysStyleOptions,
+  onClose,
+}: {
+  section: SectionMarker;
+  onUpdateSectionStyle: Props['onUpdateSectionStyle'];
+  drumStyleOptions: DrumStyle[];
+  bassStyleOptions: BassStyle[];
+  keysStyleOptions: KeysStyle[];
+  onClose: () => void;
+}) {
+  const rows: { track: StyleTrack; label: string; options: { name: string }[] }[] = [
+    { track: 'drumStyle', label: 'Drums', options: drumStyleOptions },
+    { track: 'bassStyle', label: 'Bass', options: bassStyleOptions },
+    { track: 'keysStyle', label: 'Keys', options: keysStyleOptions },
+  ];
+  return (
+    <div className="section-style-popover" onMouseDown={(e) => e.stopPropagation()}>
+      {rows.map(({ track, label, options }) => (
+        <label key={track} className="section-style-popover-row">
+          <span>{label}</span>
+          <select
+            value={section[track] ?? ''}
+            onChange={(e) => onUpdateSectionStyle(section, track, e.target.value || undefined)}
+          >
+            <option value="">{DEFAULT_OPTION}</option>
+            {options.map((o) => (
+              <option key={o.name} value={o.name}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ))}
+      <button type="button" className="section-style-popover-close" onClick={onClose}>
+        Done
+      </button>
+    </div>
+  );
+}
 
 /** Loop range row (LOOP_TRACK) plus the full-height playhead line and section
  * badges (rendered at SECTION_TRACK, above the ruler) — none of these three are
@@ -51,12 +111,17 @@ export function LoopRow({
   onCancelEditingSection,
   onSectionMouseDown,
   onRemoveSection,
+  onUpdateSectionStyle,
+  drumStyleOptions,
+  bassStyleOptions,
+  keysStyleOptions,
   onLoopBackgroundMouseDown,
   onLoopStartHandleMouseDown,
   onLoopEndHandleMouseDown,
 }: Props) {
   const activeStart = Math.max(0, Math.min(beatsPerSystem, loopStart - systemStart));
   const activeEnd = Math.max(0, Math.min(beatsPerSystem, loopEnd - systemStart));
+  const [openStyleSectionId, setOpenStyleSectionId] = useState<string | null>(null);
 
   return (
     <>
@@ -126,6 +191,16 @@ export function LoopRow({
           )}
           <button
             type="button"
+            className="section-marker-style-toggle"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => setOpenStyleSectionId((id) => (id === section.id ? null : section.id))}
+            aria-label={`Edit playstyle for section ${section.label}`}
+            title="Per-section drums/bass/keys playstyle"
+          >
+            🎛
+          </button>
+          <button
+            type="button"
             className="section-marker-remove"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => onRemoveSection(section)}
@@ -133,6 +208,16 @@ export function LoopRow({
           >
             ×
           </button>
+          {openStyleSectionId === section.id && (
+            <SectionStylePopover
+              section={section}
+              onUpdateSectionStyle={onUpdateSectionStyle}
+              drumStyleOptions={drumStyleOptions}
+              bassStyleOptions={bassStyleOptions}
+              keysStyleOptions={keysStyleOptions}
+              onClose={() => setOpenStyleSectionId(null)}
+            />
+          )}
         </div>
       ))}
       {showPlayhead && (

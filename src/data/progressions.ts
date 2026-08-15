@@ -69,8 +69,12 @@ export const SCALE_LABELS: Record<ScaleName, string> = {
 // Hookpad-style scale-degree rainbow: 1-7 -> red-orange-yellow-green-blue-
 // indigo-violet, independent of the app's own single accent color, so a
 // scale degree reads the same color everywhere it's shown -- diatonic chord
-// buttons (ChordPalette.tsx) and diatonic melody notes (MelodyGrid.tsx) alike.
-export const DEGREE_COLORS = ['#e53e3e', '#ed8936', '#ecc94b', '#48bb78', '#4299e1', '#4c51bf', '#9f7aea'];
+// buttons (ChordPalette.tsx), diatonic melody notes (MelodyGrid.tsx), and
+// placed chord blocks (ChordRow.tsx) alike. Bright, fully-saturated primary/
+// secondary tones (iOS's own system-color values, chosen for exactly this:
+// vivid but still legible with dark text on top) rather than the earlier
+// softer/muted shades.
+export const DEGREE_COLORS = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#007aff', '#5856d6', '#af52de'];
 
 const NOTE_TO_SEMITONE: Record<string, number> = {
   C: 0, 'C#': 1, Db: 1,
@@ -737,15 +741,19 @@ export function scaleDegreeToMidi(
 
 export type ScaleDegreePosition = { degree: ScaleDegree; octave: number; semitoneOffset: number };
 
-/** Inverse of scaleDegreeToMidi — finds the nearest scale degree (+ octave + a
- * semitone nudge for anything off-scale) for an existing MIDI pitch, so a
- * MelodyNote (hand-placed or MIDI-imported, possibly genuinely chromatic) renders
- * at a sensible row/octave/nudge in the grid rather than only ever supporting
- * newly-placed notes. */
-export function midiToScaleDegreePosition(midi: number, key: string, scale: ScaleName): ScaleDegreePosition {
-  const root = rootSemitone(key);
-  const pitchOctave = Math.floor(midi / 12) - 1;
-  const offset = (((midi - root) % 12) + 12) % 12;
+type NearestDegree = { degree: ScaleDegree; interval: number; semitoneOffset: number };
+
+/** Shared core behind midiToScaleDegreePosition and chordRootScaleDegree below
+ * — given a semitone offset from the key's own root (0-11) and the scale's
+ * own interval table, finds the closest diatonic degree plus how far off it
+ * is (0 if the offset lands exactly on a degree). Every mode here is a
+ * rotation of the plain major scale's whole/half-step pattern (see data/
+ * melody.ts's midiFromStaffSteps for the same fact used elsewhere), so an
+ * off-scale offset is always exactly equidistant between two adjacent
+ * degrees, never closer to one than the other -- ties resolve to the lower
+ * degree (found first in iteration order below), always giving a +1
+ * semitoneOffset, never negative. */
+function nearestScaleDegree(offset: number, scale: ScaleName): NearestDegree {
   const intervals = SCALE_INTERVALS[scale];
   const candidates = [
     ...intervals.map((interval, d) => ({ degree: d as ScaleDegree, interval })),
@@ -760,7 +768,40 @@ export function midiToScaleDegreePosition(midi: number, key: string, scale: Scal
       bestAbs = abs;
     }
   }
-  const semitoneOffset = offset - best.interval;
+  return { ...best, semitoneOffset: offset - best.interval };
+}
+
+/** Inverse of scaleDegreeToMidi — finds the nearest scale degree (+ octave + a
+ * semitone nudge for anything off-scale) for an existing MIDI pitch, so a
+ * MelodyNote (hand-placed or MIDI-imported, possibly genuinely chromatic) renders
+ * at a sensible row/octave/nudge in the grid rather than only ever supporting
+ * newly-placed notes. */
+export function midiToScaleDegreePosition(midi: number, key: string, scale: ScaleName): ScaleDegreePosition {
+  const root = rootSemitone(key);
+  const pitchOctave = Math.floor(midi / 12) - 1;
+  const offset = (((midi - root) % 12) + 12) % 12;
+  const best = nearestScaleDegree(offset, scale);
   const octaveOffset = Math.floor((root + best.interval) / 12);
-  return { degree: best.degree, octave: pitchOctave - octaveOffset, semitoneOffset };
+  return { degree: best.degree, octave: pitchOctave - octaveOffset, semitoneOffset: best.semitoneOffset };
+}
+
+export type ChordRootDegree = { degree: ScaleDegree; semitoneOffset: number };
+
+/** Same idea as midiToScaleDegreePosition, but for a chord's root note name
+ * rather than a MIDI pitch — chord roots have no octave, so there's nothing
+ * to resolve there, just the nearest diatonic degree and whether the root
+ * sits exactly on it (semitoneOffset 0) or a semitone above (see
+ * nearestScaleDegree's own doc comment for why this app's scale vocabulary
+ * never produces anything but 0 or +1). Used to color a placed chord block by
+ * scale degree the same way ChordPalette.tsx's diatonic buttons and
+ * MelodyGrid.tsx's notes already are — including non-diatonic selections
+ * (borrowed, secondary dominant, chromatic), which ChordSelection's own
+ * `degree` field doesn't cover (a secondary dominant's `degree` names its
+ * *target*, not its own root; chromatic/borrowed have no degree field at
+ * all) — this reads the actual resolved root instead, so every placed chord
+ * gets a color regardless of which selection type produced it. */
+export function chordRootScaleDegree(root: string, key: string, scale: ScaleName): ChordRootDegree {
+  const offset = ((rootSemitone(root) - rootSemitone(key)) % 12 + 12) % 12;
+  const best = nearestScaleDegree(offset, scale);
+  return { degree: best.degree, semitoneOffset: best.semitoneOffset };
 }

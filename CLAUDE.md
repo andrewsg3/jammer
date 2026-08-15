@@ -558,6 +558,9 @@ npm run dev
 - Before committing/pushing: check `git status` for anything under `data/drumSamples/` or
   similar unreviewed binary assets — see the sample-based drums note below for why that
   directory in particular needs a licensing gut-check before it's ever committed.
+- Standing permission: bump `APP_VERSION` in `src/appInfo.ts` (the version tag in the app
+  title, e.g. "v0.1") as desired when committing, pushing, building, or deploying — no need
+  to ask first each time.
 - **Attempted and reverted:** rhythmic variation for the "Smart Walking" bass style
   (`audio/bass.ts`'s `smartWalkBarEvents`) — beats 2/3 of each bar occasionally breaking from a
   plain quarter note into an eighth-note leading pair or an eighth-note triplet run, rolled

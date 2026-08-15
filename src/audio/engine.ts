@@ -11,6 +11,9 @@ import { PIANO_SAMPLE_URLS } from '../data/pianoSamples';
 import type { DrumPattern, TimeFeel, BassRule, BassPattern, KeysRule } from '../data/instrumentStyles';
 import type { MelodyNote } from '../data/melody';
 import type { SectionMarker } from '../data/sections';
+import type { DrumSectionOverride } from './drums';
+import type { BassSectionOverride } from './bass';
+import type { KeysSectionOverride } from './keys';
 import {
   scheduleDrums,
   disposeDrums,
@@ -168,6 +171,14 @@ export type PlaybackParams = {
   keysTimeFeel: TimeFeel;
   melody: MelodyNote[];
   sections: SectionMarker[];
+  // Per-section playstyle overrides, already resolved from SectionMarker's own
+  // plain style-name fields to real style objects -- see SectionMarker.drumStyle
+  // et al. (data/sections.ts) for why the resolution happens here rather than in
+  // drums.ts/bass.ts/keys.ts themselves. Optional/defaults to none, same as
+  // every song written before this feature existed.
+  sectionDrumOverrides?: DrumSectionOverride[];
+  sectionBassOverrides?: BassSectionOverride[];
+  sectionKeysOverrides?: KeysSectionOverride[];
   tempo: number;
   countInBars: CountInBars;
   // Simple meter only, always over a "4" denominator -- see CLAUDE.md's "Beats
@@ -331,7 +342,8 @@ export async function play(params: PlaybackParams): Promise<void> {
   Tone.Transport.loopStart = `0:${params.loopStartBeat}:0`;
   Tone.Transport.loopEnd = `0:${params.loopEndBeat}:0`;
 
-  if (params.drums) scheduleDrums(params.drums, params.drumsTimeFeel, params.sections);
+  if (params.drums)
+    scheduleDrums(params.drums, params.drumsTimeFeel, params.sections, params.sectionDrumOverrides ?? []);
   if (params.bass || params.bassPattern) {
     scheduleBass(
       params.placements,
@@ -341,9 +353,18 @@ export async function play(params: PlaybackParams): Promise<void> {
       params.bassPattern,
       params.bassTimeFeel,
       params.beatsPerBar,
+      params.sectionBassOverrides ?? [],
     );
   }
-  if (params.keys) scheduleKeys(params.placements, params.key, params.scale, params.keys, params.keysTimeFeel);
+  if (params.keys)
+    scheduleKeys(
+      params.placements,
+      params.key,
+      params.scale,
+      params.keys,
+      params.keysTimeFeel,
+      params.sectionKeysOverrides ?? [],
+    );
   if (params.melody.length > 0) scheduleMelody(params.melody);
   // Always scheduled — audibility is controlled by its mute state (a track like any
   // other now), not by whether it's running at all.

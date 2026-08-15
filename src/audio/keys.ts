@@ -229,17 +229,23 @@ function voicingNotes(chord: Chord, voicing: KeysRule['voicing']): string[] {
   }
 }
 
-export function scheduleKeys(
-  placements: ChordPlacement[],
-  key: string,
-  scale: ScaleName,
-  rule: KeysRule,
-  timeFeel: TimeFeel = 'normal',
-): void {
-  ensureSynth();
-  const factor = timeFeelFactor(timeFeel);
+// A section's own keys playstyle override, resolved to a real KeysRule by the
+// App.tsx/engine.ts boundary (this module never resolves a style name itself —
+// see SectionMarker.keysStyle's own doc comment). startBeat/lengthBeats mark the
+// absolute-beat range the override applies to. `rule: null` means "no keys" for
+// that section specifically -- silences it rather than falling back to the
+// song's default style.
+export type KeysSectionOverride = {
+  startBeat: number;
+  lengthBeats: number;
+  rule: KeysRule | null;
+};
 
-  const events = placements.map((placement) => {
+/** The actual per-style event generation, extracted out of scheduleKeys so it
+ * can run once for the song's default style and once more per section
+ * override, each against only its own subset of placements. */
+function keysEventsForPlacements(placements: ChordPlacement[], key: string, scale: ScaleName, rule: KeysRule) {
+  return placements.map((placement) => {
     const chord = resolveSelection(key, scale, placement.selection);
     // The bass note the LH plays for a slash chord (see bassRootNote) — the
     // bossa-nova 'root' hit type and blues-shuffle's power chords are built off
@@ -259,6 +265,42 @@ export function scheduleKeys(
       rhythm: rule.rhythm,
     };
   });
+}
+
+export function scheduleKeys(
+  placements: ChordPlacement[],
+  key: string,
+  scale: ScaleName,
+  rule: KeysRule,
+  timeFeel: TimeFeel = 'normal',
+  sectionOverrides: KeysSectionOverride[] = [],
+): void {
+  ensureSynth();
+  const factor = timeFeelFactor(timeFeel);
+
+  // Same section-partitioning approach as scheduleBass -- see its own comment.
+  // A section override with rule: null silences keys for that section entirely
+  // (no group generated for it at all).
+  const defaultPlacements: ChordPlacement[] = [];
+  const overrideGroups = new Map<KeysSectionOverride, ChordPlacement[]>();
+  for (const p of placements) {
+    const override = sectionOverrides.find(
+      (o) => p.startBeat >= o.startBeat && p.startBeat < o.startBeat + o.lengthBeats,
+    );
+    if (override) {
+      const group = overrideGroups.get(override) ?? [];
+      group.push(p);
+      overrideGroups.set(override, group);
+    } else {
+      defaultPlacements.push(p);
+    }
+  }
+
+  const events = [...keysEventsForPlacements(defaultPlacements, key, scale, rule)];
+  for (const [override, group] of overrideGroups) {
+    if (!override.rule) continue;
+    events.push(...keysEventsForPlacements(group, key, scale, override.rule));
+  }
 
   part = new Tone.Part<KeysEvent>((time, event) => {
     if (event.rhythm === 'sustained') {

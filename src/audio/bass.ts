@@ -651,16 +651,32 @@ function withTimeFeel(
   }));
 }
 
-export function scheduleBass(
+// A section's own bass playstyle override, resolved to real BassRule/BassPattern
+// objects by the App.tsx/engine.ts boundary (this module never resolves a style
+// name itself — see SectionMarker.bassStyle's own doc comment). startBeat/
+// lengthBeats mark the absolute-beat range the override applies to.
+export type BassSectionOverride = {
+  startBeat: number;
+  lengthBeats: number;
+  rule: BassRule | null;
+  pattern: BassPattern | null;
+};
+
+/** The actual per-style event generation, extracted out of scheduleBass so it can
+ * run once for the song's default style and once more per section override,
+ * each against only its own subset of placements — smart-walk's continuous
+ * register pointer and tumbao's next-chord lookahead both naturally stay scoped
+ * to whichever group they're called with, so a style change at a section
+ * boundary doesn't try to voice-lead across it. */
+function bassEventsForPlacements(
   placements: ChordPlacement[],
   key: string,
   scale: ScaleName,
   rule: BassRule | null,
   pattern: BassPattern | null,
-  timeFeel: TimeFeel = 'normal',
-  beatsPerBar: number = 4,
-): void {
-  ensureSynth();
+  timeFeel: TimeFeel,
+  beatsPerBar: number,
+): BassEvent[] {
   const factor = timeFeelFactor(timeFeel);
 
   const events: BassEvent[] = [];
@@ -709,6 +725,48 @@ export function scheduleBass(
         }),
       );
     }
+  }
+
+  return events;
+}
+
+export function scheduleBass(
+  placements: ChordPlacement[],
+  key: string,
+  scale: ScaleName,
+  rule: BassRule | null,
+  pattern: BassPattern | null,
+  timeFeel: TimeFeel = 'normal',
+  beatsPerBar: number = 4,
+  sectionOverrides: BassSectionOverride[] = [],
+): void {
+  ensureSynth();
+
+  // Partition placements by which section override (if any) they fall in, by
+  // start beat -- assumes sections don't overlap, same assumption the rest of
+  // this app's section handling already makes. Each group is then run through
+  // bassEventsForPlacements independently, with its own style and (for rules
+  // like smart-walk/tumbao that look at neighboring placements) its own scope.
+  const defaultPlacements: ChordPlacement[] = [];
+  const overrideGroups = new Map<BassSectionOverride, ChordPlacement[]>();
+  for (const p of placements) {
+    const override = sectionOverrides.find(
+      (o) => p.startBeat >= o.startBeat && p.startBeat < o.startBeat + o.lengthBeats,
+    );
+    if (override) {
+      const group = overrideGroups.get(override) ?? [];
+      group.push(p);
+      overrideGroups.set(override, group);
+    } else {
+      defaultPlacements.push(p);
+    }
+  }
+
+  const events: BassEvent[] = [
+    ...bassEventsForPlacements(defaultPlacements, key, scale, rule, pattern, timeFeel, beatsPerBar),
+  ];
+  for (const [override, group] of overrideGroups) {
+    events.push(...bassEventsForPlacements(group, key, scale, override.rule, override.pattern, timeFeel, beatsPerBar));
   }
 
   part = new Tone.Part<BassEvent>((time, event) => {

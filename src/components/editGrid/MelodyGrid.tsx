@@ -60,23 +60,36 @@ export function MelodyGrid({
   return (
     <>
       {blocks.map((offset) =>
-        degrees.map((degree) => (
-          <div
-            key={`melody-row-${offset}-${degree}`}
-            className="melody-row"
-            data-degree={degree}
-            data-octave={topOctave - offset}
-            style={{ gridRow: melodyTrackForDegree(degree, offset), gridColumn: '1 / -1' }}
-            onMouseDown={(e) => {
-              if (e.target !== e.currentTarget) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const raw = ((e.clientX - rect.left) / rect.width) * beatsPerSystem;
-              const snapped = Math.round(raw / COL_UNIT_BEATS) * COL_UNIT_BEATS;
-              const localBeat = Math.max(0, Math.min(beatsPerSystem - COL_UNIT_BEATS, snapped));
-              onActivateCell(localBeat);
-            }}
-          />
-        )),
+        degrees.map((degree) => {
+          // Only the melody block's true top/bottom edges (however many
+          // octave blocks it's currently showing -- usually just 1, never
+          // every octave-block seam) get a divider -- the whole block reads
+          // as its own fully-bordered box, same convention every row-group
+          // uses (see .ruler-row-bg's own comment in index.css).
+          const edgeClass =
+            offset === 0 && degree === MELODY_ROW_COUNT - 1
+              ? ' melody-row-group-top'
+              : offset === octaveSpan - 1 && degree === 0
+                ? ' melody-row-group-bottom'
+                : '';
+          return (
+            <div
+              key={`melody-row-${offset}-${degree}`}
+              className={`melody-row${edgeClass}`}
+              data-degree={degree}
+              data-octave={topOctave - offset}
+              style={{ gridRow: melodyTrackForDegree(degree, offset), gridColumn: '1 / -1' }}
+              onMouseDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const raw = ((e.clientX - rect.left) / rect.width) * beatsPerSystem;
+                const snapped = Math.round(raw / COL_UNIT_BEATS) * COL_UNIT_BEATS;
+                const localBeat = Math.max(0, Math.min(beatsPerSystem - COL_UNIT_BEATS, snapped));
+                onActivateCell(localBeat);
+              }}
+            />
+          );
+        }),
       )}
       {activeCell !== null &&
         activeCell >= systemStart &&
@@ -110,23 +123,26 @@ export function MelodyGrid({
         const localStart = note.startBeat - systemStart;
         const localEnd = Math.min(beatsPerSystem, localStart + note.lengthBeats);
         const chromatic = position.semitoneOffset !== 0;
+        // A sharp always sits a semitone above its own degree's row -- i.e.
+        // between that row and the next scale degree up (spellPitch's "natural
+        // below, sharp" convention, see data/melody.ts) -- so it's shown
+        // straddling that boundary (melody-note-block-chromatic's translateY)
+        // striped in both degrees' colors, rather than sitting flush in one
+        // row tinted a single color with a "+" badge (the old treatment).
+        const background = chromatic
+          ? `repeating-linear-gradient(45deg, ${DEGREE_COLORS[position.degree]} 0px, ${DEGREE_COLORS[position.degree]} 4px, ${DEGREE_COLORS[(position.degree + 1) % 7]} 4px, ${DEGREE_COLORS[(position.degree + 1) % 7]} 8px)`
+          : DEGREE_COLORS[position.degree];
         return (
           <div
             key={index}
-            className={`melody-note-block${selectedMelodyIndex === index ? ' melody-note-block-selected' : ''}`}
+            className={`melody-note-block${selectedMelodyIndex === index ? ' melody-note-block-selected' : ''}${chromatic ? ' melody-note-block-chromatic' : ''}`}
             style={{
               gridRow: melodyTrackForDegree(position.degree, offset),
               gridColumn: `${colLine(localStart)} / ${colLine(localEnd)}`,
-              backgroundColor: DEGREE_COLORS[position.degree],
+              background,
             }}
             onMouseDown={onNoteMouseDown(index)}
-          >
-            {chromatic && (
-              <span className="melody-note-chromatic-badge" aria-hidden="true">
-                +
-              </span>
-            )}
-          </div>
+          />
         );
       })}
       {restMarkers.map((rest, index) => {

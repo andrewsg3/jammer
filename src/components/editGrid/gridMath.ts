@@ -62,6 +62,27 @@ export function chordTrackBase(melodyOctaveSpan: number): number {
   return MELODY_TRACK_TOP + MELODY_ROW_COUNT * melodyOctaveSpan + 1;
 }
 
+export type BarBeatBoundary = { beat: number; isBar: boolean };
+
+/** Every *interior* bar/beat boundary within one system (excludes 0 and
+ * beatsPerSystem, which are the system's own outer edges, not internal
+ * divisions to mark). Used to render real grid-line divs (one per boundary,
+ * positioned via colLine — the same column math actual chords/notes/melody
+ * cells use) instead of the old two-layer `background-image` gradient
+ * approximation, which could drift a pixel or more off the real grid at
+ * non-round container widths (each gradient's percentage stops and the
+ * grid's own `fr`-track layout are two independently-rounded systems, not
+ * locked together) — reported as misaligned/doubled-looking lines "in
+ * different places." A real div at `colLine(beat)` can't drift from the grid
+ * it's *part of*. */
+export function barBeatBoundaries(beatsPerSystem: number, beatsPerBar: number): BarBeatBoundary[] {
+  const boundaries: BarBeatBoundary[] = [];
+  for (let beat = 1; beat < beatsPerSystem; beat++) {
+    boundaries.push({ beat, isBar: beat % beatsPerBar === 0 });
+  }
+  return boundaries;
+}
+
 // Every *content* track's height, in a shared unit (ROW_UNIT_PX) -- e.g. a
 // chord row reads as "4 units tall" regardless of what a unit actually
 // resolves to in pixels, so the whole grid's proportions stay a single
@@ -175,29 +196,22 @@ export function chordSystemSegments(placement: ChordPlacement, beatsPerSystem: n
 
 export type LanedChordSegment = ChordSystemSegment & { lane: number };
 
-// Since canPlace already guarantees no time-overlap, stacking into lanes is
-// purely a legibility choice: a placement's lane flips from its predecessor's
-// only when that predecessor is short enough (< 2 beats) that its label would
-// crowd the next one, and they share a bar; otherwise every segment resets to
-// lane 0.
-const CROWD_THRESHOLD_BEATS = 2;
+// A chord block this short (in beats) is too narrow at this grid's fixed
+// EDIT_BARS_PER_ROW column width to comfortably fit a normal-size chord
+// symbol -- see ChordRow.tsx's own use of this same threshold to shrink the
+// label's font/padding instead. Also used to be the trigger for automatically
+// bumping a short chord's label to a second lane, on the theory that the
+// extra lane would give it more room -- it doesn't (a block's width comes
+// from its own beat-span alone, identical in either lane), so that bump
+// bought no legibility at all while fragmenting a whole run of short chords
+// (common -- a bar of quick passing chords) into an alternating top/bottom
+// zigzag. Every segment stays on lane 0 now; the second-lane machinery below
+// (LanedChordSegment.lane, chordTrackBase's extra row) is left in place for a
+// genuine future need, just never triggered by chord duration alone anymore.
+export const NARROW_CHORD_BEATS = 2;
 
-export function laneChordSegments(segments: ChordSystemSegment[], beatsPerBar: number): LanedChordSegment[] {
-  const sorted = [...segments].sort((a, b) => a.localStart - b.localStart);
-  const laned: LanedChordSegment[] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    const seg = sorted[i];
-    if (i === 0) {
-      laned.push({ ...seg, lane: 0 });
-      continue;
-    }
-    const prev = laned[i - 1];
-    const prevBar = Math.floor(prev.localStart / beatsPerBar);
-    const curBar = Math.floor(seg.localStart / beatsPerBar);
-    const prevCrowds = prev.span < CROWD_THRESHOLD_BEATS && prevBar === curBar;
-    laned.push({ ...seg, lane: prevCrowds ? (prev.lane === 0 ? 1 : 0) : 0 });
-  }
-  return laned;
+export function laneChordSegments(segments: ChordSystemSegment[]): LanedChordSegment[] {
+  return [...segments].sort((a, b) => a.localStart - b.localStart).map((seg) => ({ ...seg, lane: 0 }));
 }
 
 function clamp(value: number, min: number, max: number): number {

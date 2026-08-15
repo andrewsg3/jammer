@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Accidental, Beam, Formatter, Fraction, Renderer, Stave, StaveNote, StaveTie, Voice } from 'vexflow';
+import {
+  Accidental,
+  Beam,
+  ChordSymbol,
+  ChordSymbolVerticalJustify,
+  Formatter,
+  Fraction,
+  Renderer,
+  Stave,
+  StaveNote,
+  StaveSection,
+  StaveModifierPosition,
+  StaveTie,
+  Voice,
+} from 'vexflow';
 import { chordNameParts, keySignatureAccidentals, resolveSelection, rootSemitone, shiftRootForKey } from '../data/progressions';
 import type { Chord, ChordPlacement, NotationStyle, ScaleName } from '../data/progressions';
 import type { MelodyNote } from '../data/melody';
@@ -101,22 +115,27 @@ function spellMelodyNote(midi: number, key: string, scale: ScaleName): SpelledPi
 
 type TickPosition = { beat: number; tickable: StaveNote };
 type BarLayout = { x0: number; x1: number; y: number };
-type ChordLabel = { placement: ChordPlacement; chord: Chord; x: number; y: number };
-type SectionLabel = { section: SectionMarker; x: number; y: number };
 
 /**
  * A real-engraved lead sheet — staff, clef, key signature, rhythm-accurate
- * noteheads/beaming/ties via VexFlow, chord symbols as a hybrid overlay (this
- * app's own Architects Daughter chord-symbol layer, positioned against VexFlow's
- * own formatted tick coordinates — same font/classes ChordGrid.tsx's chord
- * labels use, see CLAUDE.md's "VexFlow for printable/exported lead sheets").
- * Read-only and passive: no click-to-scrub, no loop-range display — just a
- * playhead that follows playback, same restrained scope Chord Grid mode has.
+ * noteheads/beaming/ties via VexFlow. Chord symbols and section markers alike
+ * are native VexFlow elements now, not a second React overlay layer: chord
+ * symbols are a real `ChordSymbol` modifier (Architects Daughter carried over
+ * via `.setFont()`, same root/ext-superscript/bass split `chordNameParts`
+ * always produced) attached to the nearest tickable at-or-before each chord's
+ * own beat, matched within that chord's own bar's tickables only -- a chord
+ * symbol, like a rehearsal mark, always belongs to a specific bar, so there's
+ * no need for the old cross-bar search findTickX used to do purely to compute
+ * an x-coordinate for a free-floating div. Section markers use VexFlow's own
+ * native StaveSection modifier, same reasoning. Read-only and passive: no
+ * click-to-scrub, no loop-range display — just a playhead that follows
+ * playback, same restrained scope Chord Grid mode has.
  *
  * Two render layers, kept deliberately separate: the VexFlow SVG (imperative,
- * only rebuilt when the song's actual content changes) and a plain-React overlay
- * (chord symbols, section badges, the playhead line) that re-renders every
- * animation frame during playback without touching VexFlow at all.
+ * only rebuilt when the song's actual content changes, now including chord
+ * symbols and section badges both) and a plain-React overlay (just the
+ * playhead line) that re-renders every animation frame during playback
+ * without touching VexFlow at all.
  */
 export function LeadSheet({
   placements,
@@ -133,13 +152,35 @@ export function LeadSheet({
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [barLayout, setBarLayout] = useState<BarLayout[]>([]);
-  const [chordLabels, setChordLabels] = useState<ChordLabel[]>([]);
-  const [sectionLabels, setSectionLabels] = useState<SectionLabel[]>([]);
+  // VexFlow measures ChordSymbol/StaveSection text width itself (to lay out
+  // superscript/bass blocks side by side, and to size a StaveSection's own
+  // box) using whatever font is *actually* available in the browser at that
+  // exact moment -- if Architects Daughter (a @font-face web font, not one of
+  // VexFlow's own bundled music fonts) hasn't finished loading yet, it
+  // measures with a fallback font instead. Unlike the browser's own text
+  // rendering, that measurement gets baked into fixed SVG coordinates right
+  // then -- it never redoes itself later just because the font finishes
+  // loading and the *glyphs* visually swap in (font-display: swap). Net
+  // effect, caught live: chord symbol blocks (root/extension/bass) rendered
+  // overlapping instead of flowing left to right, on a page load fast enough
+  // to beat the font. document.fonts.ready is the browser's own signal for
+  // "every @font-face referenced on this page has actually loaded."
+  const [fontsReady, setFontsReady] = useState(false);
 
   const chords = useMemo(
     () => placements.map((p) => ({ placement: p, chord: resolveSelection(musicalKey, scale, p.selection) })),
     [placements, musicalKey, scale],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    document.fonts.ready.then(() => {
+      if (!cancelled) setFontsReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Re-measures whenever the panel itself resizes (window resize, mixer sidebar
   // toggling, etc.) — a plain mount-time measurement alone would go stale the
@@ -157,12 +198,42 @@ export function LeadSheet({
     return () => observer.disconnect();
   }, []);
 
+  // Printing needs its own re-measurement, not just the ResizeObserver above:
+  // this view's SVG width is a real fixed pixel value baked in by VexFlow at
+  // render time (see CLEF_GUTTER's own comment -- nothing here is responsive
+  // CSS the way ChordGrid.tsx/BeatGridSheet.tsx's percentage-width grids are),
+  // so it stays exactly whatever it was measured at on-screen (typically a
+  // wide desktop viewport, mixer sidebar included) straight through into the
+  // print pass unless something explicitly re-measures it against the print
+  // page's own, usually much narrower, width -- otherwise the sheet overflows
+  // off the right edge of the printed page. ResizeObserver is not a reliable
+  // signal for this specific transition (browsers don't consistently fire it
+  // for the layout reflow a print stylesheet triggers), so this reads the
+  // wrapper's own boundingClientRect directly on the browser's beforeprint/
+  // afterprint events instead, which fire only once the print/screen
+  // stylesheet has actually taken effect.
+  useEffect(() => {
+    const remeasure = () => {
+      const el = wrapperRef.current;
+      if (!el) return;
+      const width = el.getBoundingClientRect().width;
+      if (width) setContainerWidth(Math.round(width));
+    };
+    window.addEventListener('beforeprint', remeasure);
+    window.addEventListener('afterprint', remeasure);
+    return () => {
+      window.removeEventListener('beforeprint', remeasure);
+      window.removeEventListener('afterprint', remeasure);
+    };
+  }, []);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     container.innerHTML = ''; // clear the previous render before rebuilding
 
     if (containerWidth === 0) return; // not yet measured
+    if (!fontsReady) return; // wait for Architects Daughter -- see fontsReady's own comment above
 
     const totalBeats = Math.max(
       0,
@@ -172,8 +243,6 @@ export function LeadSheet({
     );
     if (totalBeats === 0) {
       setBarLayout([]);
-      setChordLabels([]);
-      setSectionLabels([]);
       return;
     }
 
@@ -194,6 +263,32 @@ export function LeadSheet({
     const renderer = new Renderer(container, Renderer.Backends.SVG);
     renderer.resize(rowWidth + MARGIN * 2, MARGIN + totalRows * ROW_HEIGHT);
     const context = renderer.getContext();
+
+    // A rehearsal mark's real notation meaning is "this bar," not a beat
+    // position within it — real charts never place one mid-measure — so
+    // grouping by bar (rather than the exact-tick matching chord symbols
+    // still use, just now scoped to a single bar's own tickables -- see
+    // chordsByBar below) is the correct model here, not just a simplification
+    // of it.
+    const sectionsByBar = new Map<number, SectionMarker[]>();
+    for (const s of sections) {
+      const bar = Math.min(totalBars - 1, Math.max(0, Math.floor(s.startBeat / beatsPerBar)));
+      const list = sectionsByBar.get(bar) ?? [];
+      list.push(s);
+      sectionsByBar.set(bar, list);
+    }
+
+    // Which bar each chord's own ChordSymbol modifier needs to join -- a
+    // native modifier has to be attached to a tickable that actually belongs
+    // to that bar's own Voice, so this grouping (like sectionsByBar above)
+    // has to exist before that bar gets formatted/drawn, not after.
+    const chordsByBar = new Map<number, { placement: ChordPlacement; chord: Chord }[]>();
+    for (const c of chords) {
+      const bar = Math.min(totalBars - 1, Math.max(0, Math.floor(c.placement.startBeat / beatsPerBar)));
+      const list = chordsByBar.get(bar) ?? [];
+      list.push(c);
+      chordsByBar.set(bar, list);
+    }
 
     // --- Bar/stave layout. Clef + key signature + time signature only on the
     // very first stave of the whole piece — matches ChordGrid.tsx's own
@@ -217,6 +312,18 @@ export function LeadSheet({
         stave.addKeySignature(vexKeySpec(musicalKey, scale));
         stave.addTimeSignature(`${beatsPerBar}/4`);
       }
+      // VexFlow's own StaveModifier, drawn as part of this stave's own draw()
+      // pass below (a real StaveSection, not this app's own overlay div the
+      // way chord symbols work) -- position ABOVE rather than the default
+      // BEGIN slot so it sits flush at the bar's own left edge instead of
+      // stacking after bar 0's clef/key/time signature.
+      for (const section of sectionsByBar.get(bar) ?? []) {
+        stave.addModifier(
+          new StaveSection(section.label)
+            .setPosition(StaveModifierPosition.ABOVE)
+            .setFont({ family: 'Architects Daughter', size: 13, weight: '700' }),
+        );
+      }
       stave.setContext(context).draw();
       staves.push(stave);
       layouts.push({ x0: stave.getNoteStartX(), x1: stave.getNoteEndX(), y });
@@ -225,20 +332,19 @@ export function LeadSheet({
 
     // --- Forced-boundary construction: one continuous walk across the whole
     // song, splitting only at bar lines (always forced — each bar needs its own
-    // Voice) and, when nothing's currently sustaining, at chord/section starts
-    // (so their labels can align to a real tickable's rendered x-position with
-    // no interpolation). A melody note already sustaining across a chord/section
-    // boundary is never split for it — the chord symbol falls back to the start
-    // of whichever note/rest segment contains that beat instead. ---
+    // Voice) and, when nothing's currently sustaining, at chord starts (so
+    // their labels can align to a real tickable's rendered x-position with no
+    // interpolation). Section starts no longer force a split here -- they're
+    // native StaveSection modifiers attached to a whole bar now (see above),
+    // not tick-position-matched the way chord symbols still are. A melody
+    // note already sustaining across a chord boundary is never split for it —
+    // the chord symbol falls back to the start of whichever note/rest segment
+    // contains that beat instead. ---
     const sortedMelody = [...melody].sort((a, b) => a.startBeat - b.startBeat);
     const softBoundariesByBar: number[][] = layouts.map(() => []);
     for (const p of placements) {
       const bar = Math.floor(p.startBeat / beatsPerBar);
       if (bar >= 0 && bar < totalBars) softBoundariesByBar[bar].push(p.startBeat);
-    }
-    for (const s of sections) {
-      const bar = Math.floor(s.startBeat / beatsPerBar);
-      if (bar >= 0 && bar < totalBars) softBoundariesByBar[bar].push(s.startBeat);
     }
     softBoundariesByBar.forEach((list) => list.sort((a, b) => a - b));
 
@@ -253,11 +359,23 @@ export function LeadSheet({
     let activeAccidental: Record<string, '#' | 'b' | null> = {};
 
     // Standard engraving rule: an accidental holds for the rest of the measure —
-    // reset at each bar boundary from the key signature itself.
+    // reset at each bar boundary from the key signature itself. Every one of the
+    // 7 letters needs an explicit entry here, not just the key signature's own
+    // altered ones -- makeNote's `activeAccidental[letter] !== accidental` check
+    // below would otherwise compare `undefined !== null` for any letter the key
+    // signature doesn't touch (true in JS), spuriously drawing a natural on that
+    // letter's first appearance in every bar even though it was already natural
+    // and needed no marking at all. Caught on a real E minor melody (1 sharp,
+    // F only) — every other letter's first note per bar was getting a redundant
+    // natural sign.
     const resetAccidentalsForBar = () => {
-      activeAccidental = {};
       const { sign, letters } = keySignatureAccidentals(musicalKey, scale);
-      for (const letter of letters) activeAccidental[letter.toLowerCase()] = sign === 'sharp' ? '#' : 'b';
+      const alteredSign = sign === 'sharp' ? '#' : 'b';
+      const altered = new Set(letters.map((letter) => letter.toLowerCase()));
+      activeAccidental = {};
+      for (const letter of ['c', 'd', 'e', 'f', 'g', 'a', 'b']) {
+        activeAccidental[letter] = altered.has(letter) ? alteredSign : null;
+      }
     };
 
     const makeNote = (midi: number, token: string, needsAccidentalCheck: boolean): StaveNote => {
@@ -319,8 +437,44 @@ export function LeadSheet({
       barTickables.push(tickables);
     }
 
-    // --- Format/draw each bar's voice, then beam its real notes. ---
+    // --- Format/draw each bar's voice, attaching that bar's own chord
+    // symbols first (a real ChordSymbol modifier needs to be on its target
+    // tickable before Formatter.format() runs, so VexFlow accounts for its
+    // width the same way it would any other modifier), then beam its real
+    // notes. ---
     barTickables.forEach((tickables, bar) => {
+      const barStart = bar * beatsPerBar;
+      const barEnd = barStart + beatsPerBar;
+      const barTickPositions = tickPositions.filter((tp) => tp.beat >= barStart - EPS && tp.beat < barEnd - EPS);
+      for (const { placement, chord } of chordsByBar.get(bar) ?? []) {
+        let best: TickPosition | null = null;
+        for (const tp of barTickPositions) {
+          if (tp.beat <= placement.startBeat + EPS && (!best || tp.beat > best.beat)) best = tp;
+        }
+        const target = best?.tickable ?? tickables[0];
+        if (!target) continue; // an empty bar has nothing to attach to (shouldn't happen -- rests always fill a bar)
+        const { root, core, ext, bass } = chordNameParts(chord, notationStyle);
+        const symbol = new ChordSymbol()
+          .setFont({ family: 'Architects Daughter', size: 17, weight: '400' })
+          .setVertical(ChordSymbolVerticalJustify.TOP);
+        symbol.addText(root + core);
+        if (ext) symbol.addTextSuperscript(ext);
+        if (bass) symbol.addText(bass);
+        // Must attach before formatting, not after -- ChordSymbol.format()
+        // calls checkAttachedNote() internally, which throws ("Can't draw
+        // ChordSymbol without an index") if the modifier isn't already on a
+        // note. Once attached, this static `format` call is still required:
+        // it's what actually positions the extension/bass blocks to the
+        // right of the root (not automatic as part of Formatter.format()/
+        // voice.draw() the way it is for e.g. Accidental) -- skipping it
+        // left every block rendered on top of the others at x=0. One fresh
+        // state per symbol is fine here (never more than one ChordSymbol on
+        // the same note in this app, so nothing needs to coordinate across
+        // symbols).
+        target.addModifier(symbol);
+        ChordSymbol.format([symbol], { leftShift: 0, rightShift: 0, textLine: 0, topTextLine: 0 });
+      }
+
       const voice = new Voice({ numBeats: beatsPerBar, beatValue: 4 }).setStrict(false);
       voice.addTickables(tickables);
       new Formatter().format([voice], layouts[bar].x1 - layouts[bar].x0);
@@ -339,31 +493,10 @@ export function LeadSheet({
       }
     });
 
-    // --- Match each chord/section start to the nearest tickable at-or-before it. ---
-    const findTickX = (beat: number, bar: number): number => {
-      let best: TickPosition | null = null;
-      for (const tp of tickPositions) {
-        if (tp.beat <= beat + EPS && (!best || tp.beat > best.beat)) best = tp;
-      }
-      return best ? best.tickable.getAbsoluteX() : layouts[bar].x0;
-    };
-
     setBarLayout(layouts);
-    setChordLabels(
-      chords.map(({ placement, chord }) => {
-        const bar = Math.min(totalBars - 1, Math.max(0, Math.floor(placement.startBeat / beatsPerBar)));
-        return { placement, chord, x: findTickX(placement.startBeat, bar), y: layouts[bar].y };
-      }),
-    );
-    setSectionLabels(
-      sections.map((section) => {
-        const bar = Math.min(totalBars - 1, Math.max(0, Math.floor(section.startBeat / beatsPerBar)));
-        return { section, x: findTickX(section.startBeat, bar), y: layouts[bar].y };
-      }),
-    );
     // chords is derived from placements/musicalKey/scale, already listed below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placements, melody, sections, musicalKey, scale, beatsPerBar, chords, containerWidth]);
+  }, [placements, melody, sections, musicalKey, scale, beatsPerBar, chords, containerWidth, fontsReady]);
 
   // Cheap per-frame overlay only — no VexFlow work here at all.
   const playheadPos = useMemo(() => {
@@ -378,26 +511,6 @@ export function LeadSheet({
     <div className="lead-sheet" ref={wrapperRef}>
       <div ref={containerRef} className="lead-sheet-svg" />
       <div className="lead-sheet-overlay">
-        {chordLabels.map(({ placement, chord, x, y }) => {
-          const { root, core, ext, bass } = chordNameParts(chord, notationStyle);
-          return (
-            <span
-              key={placement.id}
-              className="chord-label-name lead-sheet-chord-label"
-              style={{ left: x, top: y - 22 }}
-            >
-              {root}
-              {core}
-              {ext && <sup className="chord-ext">{ext}</sup>}
-              {bass}
-            </span>
-          );
-        })}
-        {sectionLabels.map(({ section, x, y }) => (
-          <div key={section.id} className="beat-grid-sheet-section lead-sheet-section" style={{ left: x, top: y - 22 }}>
-            {section.label}
-          </div>
-        ))}
         {playheadPos && (
           <div
             className="lead-sheet-playhead"
