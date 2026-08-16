@@ -3298,6 +3298,18 @@ button:hover {
 .lick-tab-view {
   position: relative;
   overflow-x: auto;
+  /* Setting only overflow-x (needed so a many-bar lick can scroll
+     horizontally) makes the browser compute overflow-y as auto too, not the
+     visible its declaration never mentioned (CSS overflow spec: if one axis
+     is non-visible, a visible other axis silently becomes auto instead) --
+     that auto then clipped/scrolled the tab view vertically whenever this
+     flex child (.lick-editor-modal is display:flex; flex-direction:column)
+     shrank below its own content's natural height, cutting off the
+     low-string fret numbers even after STAVE_HEIGHT was sized correctly.
+     flex-shrink: 0 stops that shrink at the source, so this element is
+     always exactly as tall as its content and the auto never actually
+     triggers a scrollbar/clip. */
+  flex-shrink: 0;
   background: #fff;
   border-radius: 8px;
   padding: 4px 0;
@@ -3374,6 +3386,8 @@ button:hover {
 .lick-editor-grid {
   position: relative;
   overflow-x: auto;
+  /* Same overflow-x-forces-overflow-y-to-auto fix as .lick-tab-view above. */
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 4px 0;

@@ -16,7 +16,11 @@ type Props = {
 
 const BAR_WIDTH = 140;
 const MARGIN = 10;
-const STAVE_HEIGHT = 100;
+// A 6-line tab stave's own fret-number glyphs for the lowest string(s) sit
+// noticeably below its last line -- 100 clipped them right off the bottom
+// edge of the SVG canvas (confirmed via a rendered <text> at y=114 inside a
+// height=110 <svg>, invisible but present in the DOM). 140 leaves real margin.
+const STAVE_HEIGHT = 140;
 const EPS = 1e-6;
 
 /** Renders a lick as real guitar TAB via VexFlow's TabStave/TabNote --
