@@ -18,6 +18,7 @@ import { chordNameParts, keySignatureAccidentals, resolveSelection, rootSemitone
 import type { Chord, ChordPlacement, NotationStyle, ScaleName } from '../data/progressions';
 import type { MelodyNote } from '../data/melody';
 import type { SectionMarker } from '../data/sections';
+import { beatsToDurations } from '../data/vexflowDurations';
 
 type Props = {
   placements: ChordPlacement[];
@@ -60,37 +61,9 @@ function vexKeySpec(key: string, scale: ScaleName): string {
   return sign === 'sharp' ? SHARP_COUNT_TO_KEY_NAME[letters.length] : FLAT_COUNT_TO_KEY_NAME[letters.length];
 }
 
-// Greedy decomposition of an arbitrary beat length into VexFlow duration tokens —
-// deliberately simple, not a full rhythm-notation algorithm. MELODY_SNAP_BEATS
-// (0.5, see ChordGrid.tsx) means hand-drawn notes always decompose in <=2 tokens;
-// imported MIDI notes with arbitrary float lengths are what exercises the
-// cap/remainder path below.
-const DURATION_TABLE: { beats: number; token: string }[] = [
-  { beats: 4, token: 'w' },
-  { beats: 3, token: 'hd' },
-  { beats: 2, token: 'h' },
-  { beats: 1.5, token: 'qd' },
-  { beats: 1, token: 'q' },
-  { beats: 0.75, token: '8d' },
-  { beats: 0.5, token: '8' },
-  { beats: 0.25, token: '16' },
-];
-const MAX_TOKENS_PER_SEGMENT = 8;
-
-function beatsToDurations(beats: number): string[] {
-  const tokens: string[] = [];
-  let remaining = beats;
-  while (remaining > EPS && tokens.length < MAX_TOKENS_PER_SEGMENT) {
-    const fit = DURATION_TABLE.find((d) => d.beats <= remaining + EPS);
-    if (!fit) break; // smaller than a 16th — drop the remainder
-    tokens.push(fit.token);
-    remaining -= fit.beats;
-  }
-  if (remaining > EPS) {
-    console.warn(`LeadSheet: dropped a ${remaining.toFixed(3)}-beat remainder too short to notate`);
-  }
-  return tokens;
-}
+// beatsToDurations (greedy beats->VexFlow-duration-token decomposition) now
+// lives in data/vexflowDurations.ts, shared with LickTabView.tsx -- see that
+// module's own doc comment for the MELODY_SNAP_BEATS/cap-remainder rationale.
 
 type SpelledPitch = { letter: string; accidental: '#' | 'b' | null; vexKey: string };
 

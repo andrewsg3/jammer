@@ -45,6 +45,7 @@ type Props = {
   onImportSongPresetFile: (file: File) => void;
   songPresetError?: string | null;
   onOpenSettings: () => void;
+  onOpenLickEditor: () => void;
 };
 
 function TopBarField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -77,6 +78,7 @@ export function TopBar({
   onImportSongPresetFile,
   songPresetError,
   onOpenSettings,
+  onOpenLickEditor,
 }: Props) {
   const tapTimesRef = useRef<number[]>([]);
 
@@ -255,6 +257,16 @@ export function TopBar({
           title={!isPlaying && instrumentsLoading ? 'Loading instrument samples…' : undefined}
         >
           {!isPlaying && instrumentsLoading ? 'Loading…' : isPlaying ? '■ Stop' : '▶ Play'}
+        </button>
+
+        <button
+          type="button"
+          className="top-bar-icon-button"
+          onClick={onOpenLickEditor}
+          title="Lick Editor — program a guitar lick with real fret/string fingerings"
+          aria-label="Open lick editor"
+        >
+          🎸
         </button>
 
         <button

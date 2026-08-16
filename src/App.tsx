@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditGrid } from './components/EditGrid';
-import type { EditGridHandle, PendingChord } from './components/EditGrid';
+import type { EditGridHandle, PendingChord, PendingSectionRange } from './components/EditGrid';
 import { BeatGridSheet } from './components/BeatGridSheet';
 
 import { LeadSheet } from './components/LeadSheet';
 import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
 import { MelodyNoteToolbar } from './components/MelodyNoteToolbar';
+import { SectionRangeToolbar } from './components/SectionRangeToolbar';
 import { TopBar } from './components/TopBar';
 import { SettingsModal } from './components/SettingsModal';
+import { LickEditor } from './components/LickEditor';
 import { ChannelStrip } from './components/ChannelStrip';
 import { MiniFader } from './components/MiniFader';
 import type { Chord, ChordPlacement, ChordSelection, NotationStyle, ScaleName } from './data/progressions';
@@ -182,6 +184,7 @@ function App() {
     return stored.compactGridView ? 'chordGrid' : 'edit';
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [lickEditorOpen, setLickEditorOpen] = useState(false);
   // Falls back to whatever --accent already resolved to (light/dark default) if
   // nothing's stored yet — a manual pick simply overrides that CSS variable at
   // the root. Same mechanism as MobilePlayer.tsx's own accent picker — one shared
@@ -280,6 +283,12 @@ function App() {
   // ChordPalette/Chord Finder pick replaces the selection (via editGridRef's
   // EditGridHandle.replaceSelectedChords) instead of arming pendingChord.
   const [chordSelectionActive, setChordSelectionActive] = useState(false);
+  // A drag-selected-but-not-yet-committed bar range on EditGrid's section
+  // track -- non-null swaps ChordPalette for SectionRangeToolbar, same swap
+  // mechanism melodyEditActive already uses. "Add Section"/"Cancel" reach
+  // back into EditGrid via editGridRef, since the range's own start/end
+  // beats (and bar-boundary/overlap math) live there, not here.
+  const [pendingSectionRange, setPendingSectionRange] = useState<PendingSectionRange | null>(null);
   const editGridRef = useRef<EditGridHandle>(null);
   // Bumped on every song load, used as EditGrid's own React `key` -- an
   // explicit remount that resets its internal state (selection, clipboard,
@@ -297,6 +306,10 @@ function App() {
   const [melodyVolume, setMelodyVolumeState] = useState(90);
   const [masterVolume, setMasterVolumeState] = useState(100);
   const [drumsExpanded, setDrumsExpanded] = useState(false);
+  // The instrument mixer starts tucked away behind a tab at the right edge of
+  // the sheet, sliding out over it (not pushing it aside) rather than living
+  // as a permanent sidebar column -- see .channel-strip-drawer in index.css.
+  const [mixerOpen, setMixerOpen] = useState(false);
   const [kickVolume, setKickVolumeState] = useState(100);
   const [snareVolume, setSnareVolumeState] = useState(100);
   const [rimVolume, setRimVolumeState] = useState(100);
@@ -879,7 +892,9 @@ function App() {
         onImportSongPresetFile={handleImportSongPresetFile}
         songPresetError={songPresetError}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenLickEditor={() => setLickEditorOpen(true)}
       />
+      {lickEditorOpen && <LickEditor tempo={tempo} onClose={() => setLickEditorOpen(false)} />}
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -905,6 +920,12 @@ function App() {
             <MelodyNoteToolbar
               hasSelectedNote={melodyHasSelection}
               onModify={(kind) => editGridRef.current?.modifySelectedNote(kind)}
+            />
+          ) : pendingSectionRange ? (
+            <SectionRangeToolbar
+              bars={(pendingSectionRange.endBeat - pendingSectionRange.startBeat) / beatsPerBar}
+              onAdd={() => editGridRef.current?.commitPendingSectionRange()}
+              onCancel={() => editGridRef.current?.clearPendingSectionRange()}
             />
           ) : (
             <ChordPalette
@@ -980,6 +1001,7 @@ function App() {
                   setMelodyHasSelection(hasSelection);
                 }}
                 onChordSelectionChange={setChordSelectionActive}
+                onSectionRangeChange={setPendingSectionRange}
                 placements={placements}
                 melody={melody}
                 sections={sections}
@@ -1026,6 +1048,17 @@ function App() {
               />
             )}
           </div>
+          <div className={`channel-strip-drawer${mixerOpen ? ' open' : ''}`}>
+            <div className="channel-strip-drawer-panel">
+            <button
+              type="button"
+              className="channel-strip-drawer-tab"
+              onClick={() => setMixerOpen((v) => !v)}
+              aria-expanded={mixerOpen}
+              aria-label={mixerOpen ? 'Collapse instruments panel' : 'Expand instruments panel'}
+            >
+              🎚 Instruments
+            </button>
           <div className="channel-strip-column">
             <h2 className="panel-title">Instruments</h2>
             <div className="channel-strip-rail">
@@ -1167,6 +1200,8 @@ function App() {
             />
             <ChannelStrip label="Master" accent="master" volume={masterVolume} onVolumeChange={setMasterVolumeState} />
             </div>
+            </div>
+          </div>
           </div>
         </div>
       </main>

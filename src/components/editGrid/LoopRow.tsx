@@ -92,7 +92,10 @@ function SectionStylePopover({
  * for a whole system. The loop row itself starts neutral (grey/transparent)
  * and only the beats actually inside [loopStart, loopEnd) turn amber
  * (.loop-row-active) — the inverse of the old dim-the-excluded-region
- * approach, and a closer match to Hookpad's own loop row. */
+ * approach, and a closer match to Hookpad's own loop row. Section drag-select
+ * (create a new section by highlighting a bar range) lives in RulerRow.tsx
+ * instead, layered onto that row's existing scrub gesture via Shift — see its
+ * own doc comment. */
 export function LoopRow({
   systemStart,
   beatsPerSystem,

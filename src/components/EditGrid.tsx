@@ -62,7 +62,18 @@ export type EditGridHandle = {
   // something's already selected, instead of arming pendingChord for a new
   // placement.
   replaceSelectedChords: (selection: ChordSelection) => void;
+  // Turns the currently drag-selected bar range (see onSectionRangeChange)
+  // into a real section via onAddSection, then clears the selection -- how
+  // App.tsx's SectionRangeToolbar "Add Section" button reaches back in, same
+  // remote-control shape modifySelectedNote/replaceSelectedChords already use.
+  commitPendingSectionRange: () => void;
+  clearPendingSectionRange: () => void;
 };
+
+// A drag-selected, not-yet-committed bar range on the ruler (Shift+drag) --
+// see onSectionRangeChange below and RulerRow.tsx's own onScrubMouseDown/
+// .section-range-pending for the drag surface and its highlight.
+export type PendingSectionRange = { startBeat: number; endBeat: number };
 
 type Props = {
   placements: ChordPlacement[];
@@ -87,6 +98,11 @@ type Props = {
   onAuditionChord: (chord: Chord) => void;
   onPastePlacements: (placements: ChordPlacement[]) => void;
   onAddSection: (startBeat: number, lengthBeats: number) => void;
+  // Fires whenever the ruler's Shift+drag section-select range changes (a
+  // fresh drag, an extend, or clearing to null) so App.tsx can swap
+  // ChordPalette for SectionRangeToolbar -- same report-state-up pattern as
+  // onMelodyActiveChange/onChordSelectionChange above.
+  onSectionRangeChange?: (range: PendingSectionRange | null) => void;
   onRenameSection: (section: SectionMarker, label: string) => void;
   onMoveSection: (section: SectionMarker, newStartBeat: number) => void;
   onRemoveSection: (section: SectionMarker) => void;
@@ -253,6 +269,7 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
   onAuditionChord,
   onPastePlacements,
   onAddSection,
+  onSectionRangeChange,
   onRenameSection,
   onMoveSection,
   onRemoveSection,
@@ -298,6 +315,9 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
   const clipboardRef = useRef<{ selection: ChordSelection; relativeStart: number; lengthBeats: number }[]>([]);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionLabel, setEditingSectionLabel] = useState('');
+  // Drag-selected, not-yet-committed bar range from Shift+dragging the ruler --
+  // see handleSectionRangeMouseDown below and EditGridHandle.commitPendingSectionRange.
+  const [pendingSectionRange, setPendingSectionRange] = useState<PendingSectionRange | null>(null);
   const prevSectionIdsRef = useRef<Set<string>>(new Set(sections.map((s) => s.id)));
 
   useEffect(() => {
@@ -342,6 +362,10 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
   useEffect(() => {
     onChordSelectionChange?.(selectedIds.size > 0);
   }, [selectedIds, onChordSelectionChange]);
+
+  useEffect(() => {
+    onSectionRangeChange?.(pendingSectionRange);
+  }, [pendingSectionRange, onSectionRangeChange]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -438,6 +462,11 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
         return;
       }
 
+      if (e.key === 'Escape' && pendingSectionRange !== null) {
+        setPendingSectionRange(null);
+        return;
+      }
+
       // Melody note entry -- only live once a cell's been clicked/activated
       // (see MelodyGrid.tsx's onActivateCell), and the only way notes get
       // added at all: 1-7 places a diatonic scale degree (Alt+1-7 sharps it --
@@ -523,6 +552,7 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
     onUpdateMelodyNote,
     onAuditionMelodyNote,
     restMarkers,
+    pendingSectionRange,
   ]);
 
   const handleWrapperClickCapture = (e: ReactMouseEvent<HTMLDivElement>) => {
@@ -558,6 +588,11 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
       if (target.closest('.melody-note-block') || target.closest('.melody-note-toolbar')) return;
       setActiveCell(null);
       setSelectedMelodyIndex(null);
+      // Same exemption, same reason -- SectionRangeToolbar's own buttons live
+      // outside EditGrid (App.tsx, where ChordPalette normally sits) and fire
+      // on the later 'click' event, so clearing the range here first would
+      // wipe it out before Add Section/Cancel ever got to read it.
+      if (!target.closest('.section-range-toolbar')) setPendingSectionRange(null);
     };
     document.addEventListener('mousedown', handleDocumentMouseDown, true);
     return () => document.removeEventListener('mousedown', handleDocumentMouseDown, true);
@@ -591,8 +626,16 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
   // guaranteed to always have room to click, unlike the chord row (no empty
   // cells once a chart is fully packed) or the loop row (a click there sets
   // the loop range instead, not the playhead). Same drag-follows-pointer
-  // pattern as handleLoopBackgroundMouseDown just above.
+  // pattern as handleLoopBackgroundMouseDown just above. Shift+drag instead
+  // drag-selects a bar range for a new section (handleSectionRangeMouseDown,
+  // defined below) -- routed through here rather than a separate handler prop
+  // since only one gesture can ever be live from a single mousedown anyway,
+  // and it keeps RulerRow.tsx's own props down to the one it already had.
   const handleRulerMouseDown = (e: ReactMouseEvent) => {
+    if (e.shiftKey) {
+      handleSectionRangeMouseDown(e);
+      return;
+    }
     if (isPlaying) return;
     const beat = beatFromPoint(e.clientX, e.clientY, beatsPerSystem);
     if (beat === null) return;
@@ -692,6 +735,57 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
     const length = Math.min(beatsPerSystem, totalBeats - start);
     onAddSection(start, length);
   };
+
+  // Shift+drag on the ruler to select an arbitrary bar range and size/place a
+  // new section by hand, instead of "+ Section" always appending a fixed
+  // one-system-wide block at the end. A plain Shift+click highlights the
+  // whole bar under the pointer (matching handleLoopBackgroundMouseDown's own
+  // convention just below); dragging extends bar-by-bar off whichever edge of
+  // that anchor bar the pointer moves past. Extension is hard-blocked at the
+  // nearest existing section on either side (precomputed once here, since
+  // sections don't change mid-drag) -- a range can never overlap another
+  // section, matching how canPlaceSection already gates a dragged/appended one.
+  const handleSectionRangeMouseDown = (e: ReactMouseEvent) => {
+    e.preventDefault();
+    const anchor = beatFromPoint(e.clientX, e.clientY, beatsPerSystem);
+    if (anchor === null) return;
+    const anchorBarStart = Math.floor(anchor / beatsPerBar) * beatsPerBar;
+    const anchorBarEnd = Math.min(totalBeats, anchorBarStart + beatsPerBar);
+    if (!canPlaceSection(sections, null, anchorBarStart, anchorBarEnd - anchorBarStart, totalBeats)) return;
+
+    const lowerBound = sections
+      .filter((s) => s.startBeat + s.lengthBeats <= anchorBarStart)
+      .reduce((max, s) => Math.max(max, s.startBeat + s.lengthBeats), 0);
+    const upperBound = sections
+      .filter((s) => s.startBeat >= anchorBarEnd)
+      .reduce((min, s) => Math.min(min, s.startBeat), totalBeats);
+
+    setPendingSectionRange({ startBeat: anchorBarStart, endBeat: anchorBarEnd });
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const beat = beatFromPoint(moveEvent.clientX, moveEvent.clientY, beatsPerSystem);
+      if (beat === null) return;
+      const rawLo = clamp(Math.min(anchorBarStart, beat), 0, totalBeats);
+      const rawHi = clamp(Math.max(anchorBarEnd, beat + 1), 0, totalBeats);
+      const lo = Math.max(Math.floor(rawLo / beatsPerBar) * beatsPerBar, lowerBound);
+      const hi = Math.min(Math.ceil(rawHi / beatsPerBar) * beatsPerBar, upperBound);
+      setPendingSectionRange({ startBeat: lo, endBeat: hi });
+    };
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const commitPendingSectionRange = () => {
+    if (!pendingSectionRange) return;
+    onAddSection(pendingSectionRange.startBeat, pendingSectionRange.endBeat - pendingSectionRange.startBeat);
+    setPendingSectionRange(null);
+  };
+
+  const clearPendingSectionRange = () => setPendingSectionRange(null);
 
   const startEditingSection = (section: SectionMarker) => (e: ReactMouseEvent) => {
     e.preventDefault();
@@ -829,8 +923,20 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
 
   useImperativeHandle(
     ref,
-    () => ({ modifySelectedNote, replaceSelectedChords }),
-    [selectedMelodyIndex, melody, musicalKey, scale, onUpdateMelodyNote, onAuditionMelodyNote, placements, selectedIds, onReplaceChord],
+    () => ({ modifySelectedNote, replaceSelectedChords, commitPendingSectionRange, clearPendingSectionRange }),
+    [
+      selectedMelodyIndex,
+      melody,
+      musicalKey,
+      scale,
+      onUpdateMelodyNote,
+      onAuditionMelodyNote,
+      placements,
+      selectedIds,
+      onReplaceChord,
+      pendingSectionRange,
+      onAddSection,
+    ],
   );
 
   const handleNoteMouseDown = (index: number) => (e: ReactMouseEvent) => {
@@ -1023,7 +1129,14 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
                     </Fragment>
                   );
                 })}
-                <RulerRow systemIndex={systemIndex} beatsPerBar={beatsPerBar} onScrubMouseDown={handleRulerMouseDown} />
+                <RulerRow
+                  systemIndex={systemIndex}
+                  systemStart={systemStart}
+                  beatsPerSystem={beatsPerSystem}
+                  beatsPerBar={beatsPerBar}
+                  onScrubMouseDown={handleRulerMouseDown}
+                  pendingSectionRange={pendingSectionRange}
+                />
                 <LoopRow
                   systemStart={systemStart}
                   beatsPerSystem={beatsPerSystem}

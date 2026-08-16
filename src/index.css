@@ -287,11 +287,6 @@ body {
 
 .layout-grid {
   flex: 1;
-  /* Capped at the pixel value 40vw reaches once .app hits its own max-width: 1400px
-     cap — otherwise this floor keeps growing with raw viewport width past that point
-     and squeezes .channel-strip-column (min-width: 0) down to nothing on wide
-     screens, since .layout never wraps. */
-  min-width: min(40vw, 560px);
   min-height: 0;
   overflow-y: auto;
 }
@@ -370,17 +365,109 @@ select option {
   flex: 1;
 }
 
+/* The instrument mixer as a slide-out drawer, not a permanent sidebar column
+   -- starts tucked away behind .channel-strip-drawer-tab at the right edge of
+   the screen, and extends left *over* the sheet (not a flex sibling competing
+   for width) rather than pushing it aside. position: fixed against the real
+   viewport, not .layout -- .layout (and .app above it) stops at its own
+   max-width and centers on wide screens, so anchoring here to .layout's own
+   edge left a sliver of the closed panel visible in the gap between .app's
+   edge and the actual browser edge on any window wider than that cap.
+   Purely a positioning wrapper -- pointer-events: none so clicks reach the
+   sheet underneath everywhere except the tab/panel themselves (each opts
+   back in). */
+.channel-strip-drawer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* The actual sliding element. Its only normal-flow child is .channel-strip-column
+   -- .channel-strip-tab is deliberately position: absolute (see below), which
+   excludes it from this box's own width, so this element's width is exactly
+   the column's width and translateX(100%) moves it by exactly that much.
+   That's what makes the tab travel *with* the panel correctly: CSS transforms
+   carry an element's whole subtree along uniformly, so the tab -- positioned
+   relative to this panel's own pre-transform box -- gets dragged by the same
+   offset as the column beside it. (A tighter-looking but wrong version had
+   the tab take part in this box's own width too, e.g. via display:flex; that
+   makes translateX(100%) overshoot by the tab's width as well, carrying the
+   tab itself off past the visible edge while closed -- exactly the "tucked
+   away" state losing its own toggle affordance.) */
+.channel-strip-drawer-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  pointer-events: auto;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+
+.channel-strip-drawer.open .channel-strip-drawer-panel {
+  transform: translateX(0);
+}
+
+/* Positioned against its own left edge (not the panel's box model -- see the
+   comment above), sticking out further left by its own width via
+   translateX(-100%), so it sits flush against .channel-strip-column's own
+   left edge in both open and closed states while still being pulled along by
+   .channel-strip-drawer-panel's transform. writing-mode + rotate(180deg) is
+   what lets the label read bottom-to-top without a mirrored/upside-down
+   glyph -- but the rotation also swaps which *side* ends up rounded vs.
+   flush. border-radius/border-left below are deliberately on the
+   pre-rotation right side so that, post-rotation, the rounded corners face
+   outward (away from the column, correct) and the flush edge meets the
+   column with no doubled border, not the other way around. */
+.channel-strip-drawer-tab {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%) translateX(-100%) rotate(180deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 8px;
+  writing-mode: vertical-rl;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.channel-strip-drawer-tab:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .channel-strip-column {
-  flex: 0 1 auto;
-  min-width: 0;
-  align-self: flex-start;
+  width: max-content;
+  /* Wide enough for all 6 channel strips in a single row (see
+     .channel-strip-rail) without wrapping or needing a horizontal scrollbar. */
+  max-width: min(90vw, 820px);
   display: flex;
   flex-direction: column;
   gap: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px 0 0 8px;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+  padding: 12px;
   /* The rail's 3 fixed-width columns (see .channel-strip-rail) don't shrink below
      their own intrinsic width, and its two rows can run taller than the layout row
      has room for — scroll both axes rather than overflow the page, same
-     per-pane-scrolls-itself approach .layout-grid already uses. */
+     per-pane-scrolls-itself approach .layout-grid already uses. Scoped to this
+     inner box, not the sliding row above, so it can't clip the tab (a sibling,
+     not a descendant of this overflow:auto box). */
   max-height: 100%;
   overflow: auto;
 }
@@ -395,8 +482,11 @@ select option {
   /* auto, not a hardcoded px value -- .channel-strip is content-box with its own
      padding/border, so its real rendered width is wider than its declared
      width:100px. Sizing columns from content keeps them matched to the strip's
-     actual box instead of drifting out of sync with it. */
-  grid-template-columns: repeat(3, auto);
+     actual box instead of drifting out of sync with it. All 6 strips (Drums/
+     Bass/Harmony/Melody/Metronome/Master) in one row now that the mixer is a
+     drawer, not a permanent sidebar squeezed for width -- see
+     .channel-strip-column's own widened max-width below. */
+  grid-template-columns: repeat(6, auto);
   gap: 8px;
   /* Room for the scrollbar so it doesn't sit flush against (or clip) the last fader. */
   padding-bottom: 6px;
@@ -2194,12 +2284,25 @@ button:hover {
    row-groups (ruler/loop/melody/chords); see .loop-row, .melody-row-group-
    top/-bottom, and .chord-lane-first/-last below for the other three -- each
    group is fully bordered on its own, so a gap between two groups shows two
-   close-together lines (one per group's own edge), not a single shared one. */
+   close-together lines (one per group's own edge), not a single shared one.
+   Also both the playhead-scrub surface and (Shift+drag) the section
+   drag-select surface -- see RulerRow.tsx/EditGrid.tsx's handleRulerMouseDown. */
 .ruler-row-bg {
   cursor: pointer;
   background: color-mix(in srgb, var(--border) 10%, transparent);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+}
+
+/* Neutral green (distinct from the loop row's amber -- .loop-row-active --
+   and the accent purple everything else uses) so a Shift+drag-selected
+   section range on the ruler reads as its own, unambiguous thing while it's
+   live. */
+.section-range-pending {
+  background: color-mix(in srgb, #2f9e5c 40%, transparent);
+  border-left: 1px solid #2f9e5c;
+  border-right: 1px solid #2f9e5c;
+  pointer-events: none;
 }
 
 /* Fixed dark color, not var(--text) -- this renders on the always-light
@@ -2284,16 +2387,27 @@ button:hover {
 }
 
 /* .section-marker-remove's own base rule (shared with ChordGrid.tsx's section
-   markers) sets opacity:0 -- without this, the remove "x" here would stay
-   invisible forever (unlike ChordGrid.tsx's .section-marker, this wrapper's
-   own hover was never wired to reveal it). */
-.edit-grid-section:hover .section-marker-remove {
-  opacity: 0.6;
+   markers) sets opacity:0, hover-only-reveal -- fine for ChordGrid.tsx's own
+   markers (an occasional glance, not something users need to hunt for), but
+   here it made the delete/style controls genuinely undiscoverable: they're
+   flex children of a grid item only ~1 column wide (.edit-grid-section has
+   no explicit span, see EditGrid.tsx), so overflow:visible pushes them well
+   outside the badge's own narrow box -- a user hovering the "A"/"B" letter
+   itself has no visual cue anything sits further to the right at all.
+   Always-faintly-visible, brightening on hover, means there's something to
+   actually see and click without needing to find the right hover spot first. */
+.edit-grid-section .section-marker-remove {
+  opacity: 0.45;
+  font-size: 12px;
+  padding: 2px 4px;
 }
 
-/* Same reveal-on-hover treatment as .section-marker-remove above -- a small,
-   unobtrusive affordance rather than a permanently-visible button crowding the
-   badge. See LoopRow.tsx's SectionStylePopover for what it opens. */
+.edit-grid-section:hover .section-marker-remove {
+  opacity: 1;
+}
+
+/* Same always-faintly-visible treatment as .section-marker-remove above --
+   see LoopRow.tsx's SectionStylePopover for what it opens. */
 .section-marker-style-toggle {
   margin-left: 2px;
   background: transparent;
@@ -2305,8 +2419,14 @@ button:hover {
   padding: 0 1px;
 }
 
+.edit-grid-section .section-marker-style-toggle {
+  opacity: 0.45;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
 .edit-grid-section:hover .section-marker-style-toggle {
-  opacity: 0.6;
+  opacity: 1;
 }
 
 .section-style-popover {
@@ -2584,6 +2704,40 @@ button:hover {
 
 .melody-note-toolbar-triplet {
   margin-left: 8px;
+}
+
+/* Replaces ChordPalette's own toolbar row while a section-track bar range is
+   drag-selected (App.tsx swaps the two based on EditGrid's
+   onSectionRangeChange) -- same shape/sizing as .melody-note-toolbar. */
+.section-range-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-range-toolbar-hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.section-range-toolbar button {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.section-range-toolbar button:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.section-range-toolbar-cancel {
+  opacity: 0.7;
 }
 
 /* The activated cell -- where the next 1-7/0 keypress lands -- spans every
@@ -3069,6 +3223,248 @@ button:hover {
   color: var(--accent);
 }
 
+/* Lick Editor (components/LickEditor.tsx) -- click-to-place fret/string entry
+   for a short guitar phrase, plus its live TAB preview (LickTabView.tsx).
+   Same modal shape as .settings-modal above, just wider (the grid + tab
+   view both need real horizontal room) and stacked above it (z-index) since
+   there's no reason the two could conflict, but higher is the safe default
+   for a true modal. */
+.lick-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.lick-editor-modal {
+  width: 100%;
+  max-width: 640px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lick-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lick-editor-label-input {
+  flex: 1;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--text);
+}
+
+.lick-editor-label-input:hover,
+.lick-editor-label-input:focus {
+  border-color: var(--border);
+}
+
+.lick-editor-close {
+  font: inherit;
+  font-size: 16px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+/* LickTabView.tsx's own root -- the SVG plus the CSS-positioned playback/
+   cursor line, which (unlike EditGrid's own playhead) is simple enough not
+   to need its own render layer distinction: this view has no animation-frame
+   redraw loop, it just repositions on every React re-render like any other
+   piece of UI. */
+.lick-tab-view {
+  position: relative;
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px 0;
+}
+
+.lick-tab-view-svg svg {
+  display: block;
+}
+
+.lick-tab-view-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.lick-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lick-editor-bars-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.lick-editor-bars-stepper button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.lick-editor-duration-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.lick-editor-duration-picker button {
+  font-size: 16px;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.lick-editor-duration-active {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
+}
+
+/* The click/keyboard entry surface -- one row per string (see STRING_LABELS
+   in LickEditor.tsx, string 1/high-e drawn at top matching real tab
+   convention), fixed pixel-grid (CELL_PX), not responsive -- same reasoning
+   LeadSheet.tsx's VexFlow render has for why a fixed-width layout is fine
+   here: this lives in a modal, not the main page flow, and can scroll
+   horizontally (.lick-editor-grid's own overflow) rather than reflow. */
+.lick-editor-grid {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 0;
+}
+
+.lick-bar-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+
+.lick-row {
+  display: flex;
+  align-items: stretch;
+  height: 32px;
+}
+
+.lick-row-label {
+  flex: 0 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.6;
+  border-right: 1px solid var(--border);
+}
+
+.lick-row-track {
+  position: relative;
+  flex: 1;
+  cursor: pointer;
+}
+
+.lick-row:not(:last-child) .lick-row-track {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.lick-cursor {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  border-left: 2px solid var(--accent);
+  pointer-events: none;
+}
+
+.lick-note-block {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  margin: 0 1px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.lick-editor-hint {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.5;
+}
+
+.lick-editor-hint kbd {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin: 0 1px;
+}
+
+.lick-editor-file-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
 /* Printing/"Export as PDF" is just the browser's own print pipeline (window.print()
    in TopBar.tsx) pointed at the sheet — no separate PDF renderer. Everything here
    either hides editing-only chrome (palette, mixer, transport overlay, per-element
@@ -3120,7 +3516,8 @@ button:hover {
   .top-bar,
   .chord-palette,
   .melody-note-toolbar,
-  .channel-strip-column,
+  .section-range-toolbar,
+  .channel-strip-drawer,
   .loading-modal-backdrop,
   .chord-grid-hint,
   .section-toolbar,
@@ -3132,6 +3529,7 @@ button:hover {
   .playhead-flag,
   .loop-handle,
   .loop-row-active,
+  .section-range-pending,
   .edit-grid-playhead,
   .lead-sheet-playhead,
   .chord-grid-row-group-print-tail {

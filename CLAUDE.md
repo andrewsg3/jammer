@@ -258,7 +258,13 @@ opt-in transform — not a side effect of touching the Meter dropdown.
 
 ## Explicit non-goals (still true)
 - No AI/generative anything.
-- No user accounts, no server-side anything.
+- No user accounts, no server-side anything. **Reconsidered as an eventual (not near-term) goal**
+  — see "Practice philosophy for jazz guitar improvisation" below, which now names accounts +
+  practice history + learning pathways as the long-run endpoint of the practice-aid direction.
+  Still a real non-goal for everything being built right now: no backend exists, nothing currently
+  planned needs one yet, and every practice exercise below this line is scoped to work entirely
+  client-side first (same "eventually" pattern as this file's other reconsidered non-goals, e.g.
+  the notation-engraving one just below).
 - No editing on mobile — the mobile view (see "Current shape" above) is playback-only by design,
   not a scaled-down editor; building/editing a progression stays desktop-only, since the chord
   grid's drag/resize/select interactions don't translate to touch.
@@ -1182,29 +1188,121 @@ rather than picking new colors.
   fill picker (much cheaper, reuses the existing bundled-fills library as-is) is enough on its own
   to satisfy most of what this idea is actually after.
 
-## Direction: what this app needs next
-Asked-and-answered product question, worth keeping around since it'll come up again. Given how
-much of the recent work went into looking/feeling like a real fake book (staff notation, key
-signatures, MIDI melody import) rather than into export/production tooling or pedagogy, **jam/
-practice aid** is the natural next identity to lean into — it's the shortest path from the
-current shape, versus retrofitting this into a demo maker (needs audio export, song-structure/
-arrangement, better instrument quality). The mobile companion view (see "Current shape" above) is
-the first concrete step actually taken in this direction, not just the theory of it.
+## Practice philosophy for jazz guitar improvisation (design doc, not built yet)
+**Practice is now an explicit primary identity alongside composition, not a replacement for it** —
+not a demo maker, but a tool for a guitarist learning to improvise over jazz changes. Composition
+stays a first-class use case in its own right, not mere scaffolding practice features sit on top
+of: a teacher building a specific ii-V-I exercise or a progression to assign, or one musician
+putting together a chart to send a bandmate to work on, is real, valuable use of this app on its
+own terms — and it's already substantially served today, not just theoretically. The chord/section
+editor plus song presets' JSON export/import (see "Song presets" in "Current shape" above) is
+already the actual mechanism for "prep something and send it to someone else to practice" — no new
+sharing feature is needed for that half of the story, just the practice-facing features below to
+make what gets sent worth practicing against. Every idea elsewhere in this file that reads as
+"pedagogical" (chord-scale suggestions/auditioning, the not-yet-built chord progression analyzer,
+the CAGED fingering-diagram idea) was already pointed toward the practice half; this section is
+what ties those together into an actual philosophy, so future feature decisions — on both the
+composition and practice sides — have a real standard to check against rather than each being
+argued from scratch.
 
-The "or a music theory teacher" branch this section used to rule out (on the grounds that it
-"needs genuinely new pedagogical features — scale/chord-tone highlighting, ear training — that
-nothing here currently hints at") turned out to not hold — the chord-scale suggestion/auditioning
-feature above *is* exactly that kind of pedagogical feature, just framed as a practice-aid tool
-rather than a teaching mode. The two directions aren't as separate as this file used to assume.
+**What efficient jazz guitar practice actually builds, as four separable skills:**
+1. **Chord knowledge** — voicings for a given chord across the whole neck, not just one shape.
+   This app already shows the *symbol* (`ChordGrid.tsx`/`EditGrid.tsx`'s chord labels) and can
+   *play* a voicing (`keys.ts`), but has no idea of the guitar fretboard at all yet — no fingering,
+   no position. The CAGED fingering-diagrams idea (see its own section above) is this skill's
+   missing piece, not a nice-to-have extra.
+2. **A "bag of licks"** — real vocabulary, tied to *harmonic context* (a lick you reach for over a
+   ii-V-I in a major key is a different lick than one over a minor ii-V, a turnaround, or a
+   backdoor progression — see the chord progression analyzer's own Layer 1 catalog above for the
+   actual harmonic vocabulary this should key off of). `data/melody.ts`'s `MelodyNote[]` is already
+   the right shape to *store* a short phrase (this is exactly what the AI trading-fours idea's own
+   "lick bank" above already assumes), but nothing today lets a user *browse* licks by the harmonic
+   situation they fit, and nothing renders them as guitar TAB (fret/string position) rather than
+   pitch-only staff notation — a real, currently-total gap, and the same missing fretboard model
+   skill 1 needs.
+3. **Scale/arpeggio technical fluency** — the actual hand-technique practice (running a scale or
+   arpeggio cleanly, in position, up-tempo). `data/scaleSuggestions.ts` and the "Audition any scale"
+   modal (see "Chord-scale suggestions and auditioning" above) already cover the *listening* half of
+   this (hear what a scale sounds like over a chord); the *playing* half needs the same fretboard
+   model as skills 1-2, applied to scale/arpeggio shapes instead of chord shapes.
+4. **Knowing which scale fits which chord, including substitutions** — functional harmony
+   knowledge: Mixolydian over a plain dominant, but an altered scale or a tritone substitution's own
+   scale once the harmony calls for it; Dorian over a minor 7, a different color once it's a ii°
+   in a minor ii-V. `SCALE_SUGGESTIONS` already encodes the diatonic-mode half of this (see its own
+   section above for the real gap it accepts — no melodic/harmonic minor, no altered/whole-tone/
+   diminished scales for the qualities that actually need them); the not-yet-built chord progression
+   analyzer (see its own section above) is what would let this app *tell* a user "this is a ii-V-I,
+   here's the textbook substitution," rather than only ever answering "what does scale X sound like
+   over chord Y" when asked. Reframed under this philosophy, that analyzer isn't composition-chart
+   annotation anymore — it's a practice feature (spot the pattern → know the substitution) that
+   happens to reuse the same root-motion math either way.
+
+**Next concrete exercise: a spaced-repetition lick trainer over a looping progression (idea, not
+scoped, the next thing to actually build).** Loop a short vamp — a ii-V-I, a turnaround, whatever
+harmonic cell is being drilled — using the loop-range mechanism that already exists
+(`loopStart`/`loopEnd` in `App.tsx`, `LoopRow.tsx`'s own UI for setting it by hand, now also
+reachable via Shift-drag on the ruler — see "Edit view" above). Each pass through the loop (or every
+few passes — the exact cadence is part of what "spaced repetition" needs to tune) swaps in a
+different licks' worth of TAB for the user to play along with over that same harmonic cell, so the
+same 4 (or 8) bars keep recurring while the vocabulary layered onto them rotates. Building blocks
+that already exist: the loop mechanism itself; the beat-countdown pattern already built for
+`MobilePlayer.tsx`'s now-playing mode (and already earmarked for AI trading-fours' own turn cue) —
+the same "N beats until the next thing" countdown works unchanged for "N beats until the lick
+changes"; `MelodyNote[]` as the data shape a lick is stored in. Real new pieces needed: **guitar TAB
+rendering** (fret/string position, not pitch-only — the same gap skills 1-3 above all hit, so this
+is the one piece of new infrastructure that unlocks the most at once); a lick *bank* keyed by
+harmonic context (structurally close to `SCALE_SUGGESTIONS`'s `Record<ChordQuality, ScaleName[]>`,
+but keyed by progression-shape rather than a single chord quality, and holding phrases instead of
+scale names); and a v1 rotation scheme (round-robin or random-without-immediate-repeat is a fine
+placeholder) standing in for real spaced repetition until there's practice history to actually base
+scheduling on — see the eventual-accounts idea just below for what closes that gap for real.
+
+**Eventually: user accounts, practice history, and learning pathways (idea, explicitly not now).**
+The lick trainer above can ship and be useful with a fixed or random rotation and zero persistence
+— but *real* spaced repetition (drill what you're weak on more often, ease off what you've clearly
+got) needs to know what a given user has actually practiced and how it went, across sessions, which
+this app's whole architecture currently has no room for at all (see "Explicit non-goals" above — no
+accounts, no server-side anything, still true today). This is the one idea in this entire file that
+would need a real backend, which makes it a genuinely different scale of undertaking than anything
+else here, not a natural next increment — treat it as the philosophy's long-run endpoint (what
+"efficient practice" ultimately wants: tracking, weak-spot surfacing, real learning pathways through
+the skill list above), not as a near-term task to scope alongside the lick trainer.
+
+## Direction: what this app needs next
+Guitarist-learning-to-improvise is now an explicit target identity alongside composition/authoring
+(see "Practice philosophy" just above) — a real sharpening from this section's older, more general
+"jam/practice aid" framing, which was closer to "a nice thing to jam along with" than to a
+structured skill-building tool. Most of what's below this file's older "Highest-leverage next
+pieces" list was compositional in character (finish sample kits, build the chord progression
+analyzer as chart annotation, deepen sections/arrangement); none of that is wasted, and composition
+isn't being deprioritized as a use case — the analyzer in particular gets reframed rather than
+dropped, see the philosophy section above. What's changed is the *implementation queue*: practice
+is the newer, far-less-built half of the two, so it's what the next few pieces of work below
+target, not a judgment that composition matters less.
 
 Highest-leverage next pieces, in order:
-1. **Finish the Electronic drum kit's samples** (see above) — most of "sample-based drums" is
-   already done (Acoustic kit, real bass/piano samples); this is now a much smaller remaining
-   task than it used to be, not a from-scratch undertaking.
-2. **AI trading-fours** (see above) — the scoping questions are answered; building it is a genuinely
-   large effort (lick bank/generator, turn scheduler) on top of pieces that now all actually exist
-   (monophonic playback, the countdown-cue pattern, scale-rooted note generation, and now a real
-   melody editor to build/audition licks against).
+1. **Guitar fretboard/TAB infrastructure** (see "Practice philosophy" above) — the single missing
+   piece every one of the four practice skills listed there depends on in some form, and currently
+   a total gap: this app has no notion of the guitar fretboard at all, only pitch. The CAGED
+   fingering-diagrams idea (see its own section above) is the chord-knowledge-facing entry point
+   into this; TAB rendering for licks is the melody-facing one. Whichever gets built first, the
+   underlying fretboard/fingering model is shared infrastructure either way, worth designing once
+   rather than twice.
+2. **The spaced-repetition lick trainer** (see "Practice philosophy" above) — the concrete exercise
+   this app should actually build next once there's a TAB rendering to display, reusing the loop
+   mechanism and beat-countdown pattern that already exist.
+3. **AI trading-fours** (see its own section above) — the scoping questions are answered; building
+   it is a genuinely large effort (lick bank/generator, turn scheduler) on top of pieces that now
+   all actually exist (monophonic playback, the countdown-cue pattern, scale-rooted note generation,
+   a real melody editor to build/audition licks against), and shares real infrastructure with the
+   lick trainer above (a lick bank, a turn/loop-driven cue).
+4. **Finish the Electronic drum kit's samples** (see "Sample-based drum playback" above) — most of
+   it is already done (Acoustic kit, real bass/piano samples); still a real loose end, just no
+   longer ahead of anything guitar-practice-facing.
+
+Chord-scale suggestions/auditioning (done) is worth naming here too, not just above — it's the
+existing feature that already proves this practice-aid direction has real traction, not just a
+theory of one.
 
 Both milestones of "Three desktop views" (see above) are now done — the Edit view is the real
 Hookpad-style `EditGrid.tsx` rewrite, not a bridge; the old `ChordGrid.tsx` was deleted once the new

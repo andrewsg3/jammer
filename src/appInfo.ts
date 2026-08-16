@@ -6,5 +6,5 @@
 // import a TS constant, so those stay independently maintained; this only
 // covers in-app UI text.
 export const APP_NAME = 'JazzMate';
-export const APP_VERSION = 'v0.1';
+export const APP_VERSION = 'v0.2';
 export const APP_TITLE = `${APP_NAME} ${APP_VERSION}`;

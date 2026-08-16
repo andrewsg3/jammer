@@ -11,6 +11,7 @@ import { PIANO_SAMPLE_URLS } from '../data/pianoSamples';
 import type { DrumPattern, TimeFeel, BassRule, BassPattern, KeysRule } from '../data/instrumentStyles';
 import type { MelodyNote } from '../data/melody';
 import type { SectionMarker } from '../data/sections';
+import { lickNoteMidi, type LickNote } from '../data/licks';
 import type { DrumSectionOverride } from './drums';
 import type { BassSectionOverride } from './bass';
 import type { KeysSectionOverride } from './keys';
@@ -89,6 +90,21 @@ export async function auditionChord(chord: Chord): Promise<void> {
 export async function auditionNote(midi: number): Promise<void> {
   await Tone.start();
   auditionSynth.triggerAttackRelease(Tone.Frequency(midi, 'midi').toFrequency(), '8n');
+}
+
+/** Plays a whole lick (LickEditor.tsx's "▶ Play Lick") as one Tone.now()-relative
+ * one-shot sequence, same independent-of-Transport scheduling as
+ * runScaleAudition below -- a lick preview has no relationship to song
+ * playback/looping, so it doesn't need real Transport scheduling, just each
+ * note's own beat position converted to real seconds at the given tempo. */
+export async function auditionLick(notes: LickNote[], tempo: number): Promise<void> {
+  await Tone.start();
+  const secondsPerBeat = 60 / tempo;
+  const now = Tone.now();
+  for (const note of notes) {
+    const freq = Tone.Frequency(lickNoteMidi(note), 'midi').toFrequency();
+    auditionSynth.triggerAttackRelease(freq, note.lengthBeats * secondsPerBeat * 0.85, now + note.startBeat * secondsPerBeat);
+  }
 }
 
 // Holds the sustained chord pad's release, so a new scale audition can cut off
