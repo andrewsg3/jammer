@@ -907,15 +907,29 @@ another once loaded), no arrangement-reordering UI (hand-authored in the JSON, l
 markers already are).
 
 The actual mechanism (`data/songPresets.ts`):
-- `SongPresetSectionDef = { label: string; placements: SongPresetPlacement[] }` — same
-  placement shape/rules as the flat shape (`startBeat` optional, relative to that section's own
-  start).
+- `SongPresetSectionDef = { label: string; placements: SongPresetPlacement[]; repeatCount?:
+  number; drumStyle?/bassStyle?/keysStyle?: string }` — same placement shape/rules as the flat
+  shape (`startBeat` optional, relative to that section's own start), plus per-section style
+  overrides (`SectionMarker`'s own fields of the same name — see "Per-section instrument
+  arrangement" idea below for where these actually get used at playback time) and `repeatCount`
+  (default 1): tiles the section's own placements back-to-back that many times before the
+  arrangement moves to its next entry, so **a short repeating cell — not just a whole verbatim
+  section — only ever needs typing once**, e.g. Virtual Insanity's bundled preset (`data/
+  songPresets/virtual-insanity.json`) writing its A/B vamps once each with `repeatCount: 4` rather
+  than pasting each 4 times, or a Take-Five-shaped vamp (a 3-beat-then-2-beat chord pair,
+  repeating every 5/4 bar) as one section with `repeatCount` set to however many bars the vamp
+  plays. Resolve-side only — `deriveSectionsAndArrangement` below never reconstructs this on
+  save, always writing a repeated run back out fully expanded instead (auto-detecting "is this
+  still N clean repeats of the same pattern" after arbitrary edits is exactly the kind of fragile
+  heuristic this file avoids elsewhere).
 - `resolveArrangement(sectionDefs, arrangement)` (load-side): for each label in `arrangement`,
   resolves that section's own placements via the existing `resolvePlacementStarts` to get its
-  local (0-based) chords + total length, then places that sequence at the running global cursor
-  and advances it — producing both the flat placements and a derived `SectionMarker[]`-shaped
-  `sections` array in exactly the shape everything downstream already consumes. An arrangement
-  entry naming an unknown section is skipped with a console warning, not a crash.
+  local (0-based) chords + total length, then places that sequence — repeated `repeatCount`
+  times back-to-back, per above — at the running global cursor and advances it — producing both
+  the flat placements and a derived `SectionMarker[]`-shaped `sections` array in exactly the
+  shape everything downstream already consumes (one section badge spanning the whole repeated
+  run, not one per repeat — still structurally one section). An arrangement entry naming an
+  unknown section is skipped with a console warning, not a crash.
 - `deriveSectionsAndArrangement(placements, sections)` (save-side, the reverse): slices
   placements by each section marker's range, rebases to a relative startBeat, and dedupes
   identical `{label, placements}` containers across markers so a preset that already has
