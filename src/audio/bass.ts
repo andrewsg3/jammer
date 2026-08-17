@@ -247,6 +247,10 @@ function noteForBeat(chord: Chord, rule: BassRule, beat: number): string | null 
       // Handled by tunisiaVampEvents (needs sixteenth-note placement this
       // per-beat/single-chord function can't express).
       return null;
+    case 'take-five-vamp':
+      // Handled by takeFiveVampEvents (needs sixteenth-note placement this
+      // per-beat/single-chord function can't express).
+      return null;
   }
 }
 
@@ -358,6 +362,52 @@ function tunisiaVampEvents(chord: Chord, placement: ChordPlacement): BassEvent[]
     push(barStart + 6, seventh, '4n'); // 2& — held through beat 3
     push(barStart + 10, fifth, '4n'); // 3& — held through beat 4
     push(barStart + 14, third, '8n'); // 4&
+  }
+  return events;
+}
+
+/**
+ * Take Five's own 5/4 vamp bass line — a real fixed idiom tied to a specific
+ * harmonic rhythm, not a formula: the tune's chart alternates a 3-beat chord and
+ * a 2-beat chord within every 5-beat bar (Ebmin7 for 3, Bbmin7 for 2), each its
+ * own ChordPlacement, so this generates a different cell depending on which of
+ * the two a given placement actually is — no next-chord lookahead needed, unlike
+ * tumbaoEvents, since the chord itself (not an anticipation of the next one) is
+ * what's playing on every hit here. The 3-beat cell: root on 1, the 5th on the
+ * "and" of 1, root again on the "and" of 2, the 5th on 3. The 2-beat cell: root
+ * on 1, the 5th on 2 — no syncopation, since Take Five's own chart plays the
+ * shorter chord straight. A placement that's neither 3 nor 2 beats (a chart that
+ * doesn't actually alternate this way) falls back to the 2-beat cell tiled
+ * across whatever length it has — a plain, if not idiomatic, root-5th pulse
+ * rather than a crash.
+ */
+function takeFiveVampEvents(chord: Chord, placement: ChordPlacement): BassEvent[] {
+  const tones = rootTones(chord, BASS_OCTAVE);
+  const root = tones[0];
+  const fifth = tones[2] ?? root;
+  const totalSixteenths = placement.lengthBeats * 4;
+  const events: BassEvent[] = [];
+
+  const push = (offset: number, note: string, duration: string) => {
+    if (offset >= totalSixteenths) return;
+    const beat = placement.startBeat + Math.floor(offset / 4);
+    const sixteenths = offset % 4;
+    events.push({ time: `0:${beat}:${sixteenths}`, note, duration, velocity: 0.8 });
+  };
+
+  const isLongCell = Math.round(placement.lengthBeats) === 3;
+  const cellSixteenths = isLongCell ? 12 : 8;
+
+  for (let cellStart = 0; cellStart < totalSixteenths; cellStart += cellSixteenths) {
+    if (isLongCell) {
+      push(cellStart, root, '4n'); // beat 1
+      push(cellStart + 2, fifth, '8n'); // "and" of 1
+      push(cellStart + 6, root, '8n'); // "and" of 2
+      push(cellStart + 8, fifth, '4n'); // beat 3
+    } else {
+      push(cellStart, root, '4n'); // beat 1 (of this cell)
+      push(cellStart + 4, fifth, '4n'); // beat 2 (of this cell)
+    }
   }
   return events;
 }
@@ -712,6 +762,10 @@ function bassEventsForPlacements(
       }
       if (rule.style === 'tunisia-vamp') {
         events.push(...withTimeFeel(placement, factor, beatsPerBar, (vp) => tunisiaVampEvents(chord, vp)));
+        continue;
+      }
+      if (rule.style === 'take-five-vamp') {
+        events.push(...withTimeFeel(placement, factor, beatsPerBar, (vp) => takeFiveVampEvents(chord, vp)));
         continue;
       }
       events.push(

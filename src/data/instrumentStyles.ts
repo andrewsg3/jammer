@@ -70,7 +70,8 @@ export type BassRule = {
     | 'tumbao'
     | 'root-fifth-pump'
     | 'smart-walk'
-    | 'tunisia-vamp';
+    | 'tunisia-vamp'
+    | 'take-five-vamp';
 };
 
 export type BassPatternStep = {
@@ -172,6 +173,12 @@ export const baseBassStyles: BassStyle[] = [
   { name: 'Root-Fifth Pump', rule: { style: 'root-fifth-pump' }, beatsPerBar: 4 },
   { name: 'Smart Walking', rule: { style: 'smart-walk' } },
   { name: 'Tunisia Vamp', rule: { style: 'tunisia-vamp' }, beatsPerBar: 4 },
+  // Take Five's own 5/4 vamp bass line -- see bass.ts's takeFiveVampEvents for the
+  // actual root/5th cell shapes. Tagged 5, not 4, unlike every other fixed-idiom
+  // bass style above -- a real fixed figure tied to a *different* meter than the
+  // rest of this list, not a formula, so it's hidden outside 5/4 the same way
+  // Tumbao/Root-Fifth Pump/Tunisia Vamp are hidden outside 4/4.
+  { name: 'Take Five Vamp', rule: { style: 'take-five-vamp' }, beatsPerBar: 5 },
 ];
 
 export const keysStyles: KeysStyle[] = [
