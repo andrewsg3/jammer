@@ -591,6 +591,80 @@ VexFlow API at all) — verified this doesn't reformat/redraw the whole score on
 swapping the live view) didn't need resolving after all — Lead Sheet as a genuinely separate,
 non-interactive view sidesteps it entirely. `ChordGrid.tsx` was never touched.
 
+## Edit view follow-ups round 2: chord group actions, click-to-place, rotated fretboard diagrams
+A second batch of usability fixes, per direct user request. Some done, some deliberately deferred
+mid-implementation (see "Not done yet" below) to get what *was* finished committed before running
+out of session budget.
+
+**Chord selection group actions (done).** Selecting one or more chord blocks (`selectedIds`,
+already existed for Delete) now also shows a `.chord-selection-toolbar` row of buttons *above*
+`ChordPalette`'s usual row (an addition, not a swap like `MelodyNoteToolbar`/
+`SectionRangeToolbar` — the palette below stays clickable for replace-in-place while chords are
+selected, so it can't be swapped out). All four reach `EditGridHandle` methods, same
+remote-control shape `replaceSelectedChords` already used:
+- **Repeat** (`repeatSelectedChords`) — duplicates the selection immediately after its own end,
+  preserving each placement's relative offset/length. Prefers inserting right after the selection;
+  falls back to the true song end (same append point Ctrl+V already uses) if something's already
+  sitting there, rather than ever overlapping existing content.
+- **Make Section** (`makeSectionFromSelectedChords`) — wraps the selection's own `[min start, max
+  end]` span in a new section marker, gated by the same `canPlaceSection` check
+  `handleSectionRangeMouseDown`'s drag-select already uses.
+- **2× / ½× Length** (`scaleSelectedChordsLength(2 | 0.5)`) — doubles/halves each selected
+  placement's own length in place, skipping (not corrupting) any that would collide with a
+  neighbor. A local `working` copy of `placements` tracks resizes already applied earlier in the
+  same click so an adjacent *run* of selected chords composes correctly, not just the first one.
+
+**Click-to-place now also auto-places at the end (done).** Previously, clicking a palette chord
+only *armed* it (`pendingChord`) — nothing appeared until you also clicked an empty grid cell.
+Per direct user request ("Clicking a chord... should place it at the next available place, unless
+a chord is selected, in which case it replaces it"), `App.tsx`'s `handleSelectionChange` now *also*
+appends a copy at the song's running end (`handleDropChord`, gated by `totalBeatsFor(beatsPerBar)`)
+on the same click, while still leaving it armed — so a plain click both stamps one copy at the end
+immediately *and* still lets a follow-up empty-cell click place another one elsewhere, unchanged.
+Replace-in-place (a chord already selected) is untouched.
+
+**Fretboard diagrams rotated 90° (done).** `FretboardDiagram.tsx` (CAGED chord shapes) and
+`ScaleFretboardDiagram.tsx` (scale/arpeggio boxes) both used to draw strings as vertical lines
+(low E leftmost) and frets as horizontal lines (nut at top) — a wall-poster chord-chart
+convention. Per direct user request, both are now rotated: frets run left-to-right (nut on the
+left) and strings run top-to-bottom with **low E at the bottom row**, matching how the neck looks
+to the player's own fretting hand rather than the poster convention. Implemented as a direct
+coordinate-math swap (which axis `STRING_GAP` vs. `FRET_GAP` drives, `STRING_ORDER` reversed to
+`[1,2,3,4,5,6]` top-to-bottom), not an SVG `transform: rotate()` (would also rotate the text
+labels/dots illegibly) — every fret-label/mute-marker offset was individually re-derived for the
+new axes, not just swapped blindly. Both components still don't share a common base (same
+duplication this app already had between them before the rotation).
+
+**Not done yet, queued for a future session:**
+- **Melody note multi-select + group actions** ("highlight melody notes and get the same options —
+  repeat, for example"). Real gap: melody note selection today (`EditGrid.tsx`'s
+  `selectedMelodyIndex`) is a single `number | null`, not a `Set` like chord blocks' `selectedIds`
+  — every consumer (`modifySelectedNote`'s Raise/Lower/Octave/Semitone/Triplet, duration resize,
+  Delete, `MelodyGrid.tsx`'s own selected-note highlight) assumes exactly one note. Converting this
+  to a `Set<number>` (mirroring chord blocks' shift-click-range/ctrl-click-toggle convention
+  exactly, `handleChordClick` in `EditGrid.tsx`) plus a `repeatSelectedMelodyNotes` action is a
+  real, bounded refactor — sketched but reverted mid-edit this session (ran out of budget before
+  finishing all ~10 call sites), not shipped. `MelodyNote` still has no persisted id (index-based
+  identity, see "In-browser MIDI editor" below) — a multi-select Delete needs to remove in
+  descending-index order for exactly the reason that section already flags as a real constraint.
+- **Melody step-entry: smart octave continuation.** User's ask: placing "1-3-5-7-1" via digit-key
+  step entry should probably land that last "1" an octave up (closest-pitch-to-the-previous-note,
+  not always the currently visible register) rather than requiring a manual fix afterward.
+  Alternative/complementary ask: a held button to force the next placement an octave up/down. Not
+  started. Worth noting the existing `MelodyNoteToolbar`'s Raise/Lower Octave buttons already give
+  a one-click *post-hoc* fix for exactly this misfire today — the smart-default idea would reduce
+  how often that's needed, not replace it as the correction mechanism either way.
+- **Undo.** No undo/redo exists anywhere in this app today. The lowest-risk shape for a first cut
+  is almost certainly a whole-editable-state snapshot stack (placements/melody/sections/key/scale/
+  tempo/etc. — essentially what a song preset already captures) pushed before each mutating
+  action, rather than a granular per-operation command pattern — far less risk of missing an edge
+  case, at the cost of coarser undo granularity. The real design work is *when* to push a snapshot
+  (once per completed gesture — mouseup after a drag, not every mousemove — same coalescing
+  problem `ScaleArpeggioTrainer`'s beat-polling rAF loop had to think about, different context) and
+  wiring it through the many existing mutation handlers in `App.tsx` (`handleResize`, `handleMove`,
+  `handleRemove`, `handleAddMelodyNote`, `handleAddSection`, the new group actions above, etc.) —
+  not started at all yet.
+
 ## Edit view follow-ups: melody note toolbar, step-entry refinements, chord replace-in-place (done)
 A batch of usability fixes on top of the Hookpad-style grid above, none of them a new milestone —
 mostly closing real gaps in the v1 melody step-entry model, plus one chord-editing gap that turned

@@ -66,6 +66,16 @@ type Props = {
   // cell is next clicked (repeatable -- stays armed after placing, matching
   // Hookpad's own "stamp" behavior). Drag-and-drop from the palette is untouched.
   onSelectionChange: (selection: ChordSelection, lengthBeats: number) => void;
+  // Selection group actions -- shown as an extra row above the usual palette
+  // (not swapped in place of it, unlike MelodyNoteToolbar/SectionRangeToolbar,
+  // since a chord-replace-in-place pick from the palette below should still
+  // work while chords are selected) whenever one or more chord blocks are
+  // selected in EditGrid. All four reach EditGridHandle methods via App.tsx.
+  chordSelectionActive: boolean;
+  onRepeatSelection: () => void;
+  onMakeSectionFromSelection: () => void;
+  onDoubleSelectionLength: () => void;
+  onHalveSelectionLength: () => void;
 };
 
 /** One chord button, shared by the top row and the Chord Finder picker's lists --
@@ -374,6 +384,11 @@ export function ChordPalette({
   onAudition,
   onAuditionExoticScale,
   onSelectionChange,
+  chordSelectionActive,
+  onRepeatSelection,
+  onMakeSectionFromSelection,
+  onDoubleSelectionLength,
+  onHalveSelectionLength,
 }: Props) {
   // Whichever chord was last clicked/dragged — seeds the Audition-any-scale
   // modal's initial chord. Not the same thing as a chord already placed on the
@@ -447,6 +462,28 @@ export function ChordPalette({
           🎵 Audition any scale…
         </button>
       </div>
+
+      {/* An extra row, not a swap -- unlike MelodyNoteToolbar/SectionRangeToolbar,
+          the palette above stays usable while chords are selected (clicking a
+          chord there replaces the selection in place, see App.tsx's
+          handleSelectionChange), so these buttons live alongside it rather than
+          instead of it. */}
+      {chordSelectionActive && (
+        <div className="chord-selection-toolbar" role="group" aria-label="Selected chords">
+          <button type="button" onClick={onRepeatSelection} title="Duplicate the selected chords right after themselves">
+            ⧉ Repeat
+          </button>
+          <button type="button" onClick={onMakeSectionFromSelection} title="Wrap the selected chords in a new section">
+            🏷 Make Section
+          </button>
+          <button type="button" onClick={onDoubleSelectionLength} title="Double the length of each selected chord">
+            2× Length
+          </button>
+          <button type="button" onClick={onHalveSelectionLength} title="Halve the length of each selected chord">
+            ½× Length
+          </button>
+        </div>
+      )}
 
       {chordFinderOpen && (
         <ChordFinderModal

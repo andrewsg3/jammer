@@ -5,12 +5,15 @@ const STRING_COUNT = 6;
 const MARGIN = 18;
 const STRING_GAP = 14;
 const FRET_GAP = 22;
-const WIDTH = MARGIN * 2 + STRING_GAP * (STRING_COUNT - 1);
-const HEIGHT = MARGIN * 2 + FRET_GAP * SCALE_BOX_FRETS;
+// Frets run left-to-right, strings top-to-bottom -- see FretboardDiagram.tsx's
+// own note on the rotated layout this and that component share.
+const WIDTH = MARGIN * 2 + FRET_GAP * SCALE_BOX_FRETS;
+const HEIGHT = MARGIN * 2 + STRING_GAP * (STRING_COUNT - 1);
 const DOT_RADIUS = 5;
 
-// Same low-E-to-high-E left-to-right physical order FretboardDiagram.tsx uses.
-const STRING_ORDER: (6 | 5 | 4 | 3 | 2 | 1)[] = [6, 5, 4, 3, 2, 1];
+// Top-to-bottom physical order: high e first, low E last -- matches
+// FretboardDiagram.tsx's own STRING_ORDER.
+const STRING_ORDER: (1 | 2 | 3 | 4 | 5 | 6)[] = [1, 2, 3, 4, 5, 6];
 
 type Props = {
   root: string;
@@ -26,7 +29,8 @@ type Props = {
  * data/scaleFretboard.ts's own doc comment for why that split is the right
  * one here, unlike chord voicings. Root notes get a distinct fill so the box
  * still reads as "rooted" at a glance, same idea as CAGED_SHAPES chord
- * diagrams always naming their own root.
+ * diagrams always naming their own root. Frets run left-to-right with low E
+ * at the bottom row, same rotated layout as FretboardDiagram.tsx.
  */
 export function ScaleFretboardDiagram({ root, intervals, position, label }: Props) {
   const startFret = positionStartFret(root, position);
@@ -45,33 +49,38 @@ export function ScaleFretboardDiagram({ root, intervals, position, label }: Prop
         {STRING_ORDER.map((stringNum, i) => (
           <line
             key={`string-${stringNum}`}
-            x1={MARGIN + i * STRING_GAP}
-            y1={MARGIN}
-            x2={MARGIN + i * STRING_GAP}
-            y2={MARGIN + FRET_GAP * SCALE_BOX_FRETS}
+            x1={MARGIN}
+            y1={MARGIN + i * STRING_GAP}
+            x2={MARGIN + FRET_GAP * SCALE_BOX_FRETS}
+            y2={MARGIN + i * STRING_GAP}
             className="fretboard-string"
           />
         ))}
-        {Array.from({ length: SCALE_BOX_FRETS + 1 }, (_, row) => (
+        {Array.from({ length: SCALE_BOX_FRETS + 1 }, (_, col) => (
           <line
-            key={`fret-${row}`}
-            x1={MARGIN}
-            y1={MARGIN + row * FRET_GAP}
-            x2={MARGIN + STRING_GAP * (STRING_COUNT - 1)}
-            y2={MARGIN + row * FRET_GAP}
-            className={row === 0 && isOpenPosition ? 'fretboard-fret fretboard-nut' : 'fretboard-fret'}
+            key={`fret-${col}`}
+            x1={MARGIN + col * FRET_GAP}
+            y1={MARGIN}
+            x2={MARGIN + col * FRET_GAP}
+            y2={MARGIN + STRING_GAP * (STRING_COUNT - 1)}
+            className={col === 0 && isOpenPosition ? 'fretboard-fret fretboard-nut' : 'fretboard-fret'}
           />
         ))}
         {!isOpenPosition && (
-          <text x={MARGIN - 6} y={MARGIN + FRET_GAP * 0.7} className="fretboard-fret-label" textAnchor="end">
+          <text
+            x={MARGIN + FRET_GAP * 0.7}
+            y={MARGIN + STRING_GAP * (STRING_COUNT - 1) + 12}
+            className="fretboard-fret-label"
+            textAnchor="middle"
+          >
             {startFret}fr
           </text>
         )}
         {notes.map((n) => {
           const i = STRING_ORDER.indexOf(n.string);
-          const x = MARGIN + i * STRING_GAP;
+          const y = MARGIN + i * STRING_GAP;
           const relativeFret = n.fret - startFret;
-          const y = MARGIN + (relativeFret + 0.5) * FRET_GAP;
+          const x = MARGIN + (relativeFret + 0.5) * FRET_GAP;
           return (
             <circle
               key={`${n.string}-${n.fret}`}

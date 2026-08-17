@@ -68,6 +68,12 @@ export type EditGridHandle = {
   // remote-control shape modifySelectedNote/replaceSelectedChords already use.
   commitPendingSectionRange: () => void;
   clearPendingSectionRange: () => void;
+  // Selected-chord-group actions -- how ChordPalette's own selection-toolbar
+  // buttons (chordSelectionActive) reach back in, same remote-control shape
+  // every method above already uses.
+  repeatSelectedChords: () => void;
+  makeSectionFromSelectedChords: () => void;
+  scaleSelectedChordsLength: (factor: 2 | 0.5) => void;
 };
 
 // A drag-selected, not-yet-committed bar range on the ruler (Shift+drag) --
@@ -921,9 +927,87 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
     }
   };
 
+  // Duplicates the selected chords immediately after their own end, preserving
+  // each one's own relative offset/length within the group -- same clipboard
+  // shape Ctrl+C/Ctrl+V already build (relativeStart from the group's earliest
+  // startBeat), just pasted right where the selection ends instead of at the
+  // song's end. Falls back to the song's actual end if something's already
+  // sitting right after the selection (common once you've selected something
+  // mid-song, not just the tail you were just composing) -- never overlaps
+  // existing content either way, same invariant every other placement op here
+  // keeps.
+  const repeatSelectedChords = () => {
+    if (selectedIds.size === 0) return;
+    const selected = placements.filter((p) => selectedIds.has(p.id)).sort((a, b) => a.startBeat - b.startBeat);
+    if (selected.length === 0) return;
+    const minStart = selected[0].startBeat;
+    const groupEnd = Math.max(...selected.map((p) => p.startBeat + p.lengthBeats));
+    const targets = selected.map((p) => ({
+      selection: p.selection,
+      relativeStart: p.startBeat - minStart,
+      lengthBeats: p.lengthBeats,
+    }));
+    const fitsAt = (base: number) =>
+      targets.every((t) => canPlace(placements, null, base + t.relativeStart, t.lengthBeats, totalBeats));
+    const songEnd = placements.length === 0 ? 0 : Math.max(...placements.map((p) => p.startBeat + p.lengthBeats));
+    const base = fitsAt(groupEnd) ? groupEnd : songEnd;
+    if (!fitsAt(base)) return; // nowhere left to put it
+    const pasted = targets.map((t) => ({
+      id: crypto.randomUUID(),
+      selection: t.selection,
+      startBeat: base + t.relativeStart,
+      lengthBeats: t.lengthBeats,
+    }));
+    onPastePlacements(pasted);
+    setSelectedIds(new Set(pasted.map((p) => p.id)));
+    setAnchorId(pasted[pasted.length - 1].id);
+  };
+
+  // Wraps the selected chords' own span in a new section marker -- same
+  // canPlaceSection gate handleSectionRangeMouseDown's own drag-select already
+  // uses, so this can't overlap an existing section either.
+  const makeSectionFromSelectedChords = () => {
+    if (selectedIds.size === 0) return;
+    const selected = placements.filter((p) => selectedIds.has(p.id));
+    if (selected.length === 0) return;
+    const start = Math.min(...selected.map((p) => p.startBeat));
+    const end = Math.max(...selected.map((p) => p.startBeat + p.lengthBeats));
+    if (!canPlaceSection(sections, null, start, end - start, totalBeats)) return;
+    onAddSection(start, end - start);
+  };
+
+  // Doubles/halves each selected chord's own length in place, skipping any
+  // that would collide with a neighbor (still-unresized or otherwise) rather
+  // than silently overlapping it. `working` tracks resizes already applied
+  // earlier in this same pass so a selected *run* of adjacent chords composes
+  // correctly (each halve/double sees its neighbors' already-updated lengths,
+  // not just the pre-click snapshot) -- the individual onResize calls below
+  // still each apply correctly via React's own batched functional updates
+  // either way, this is purely for this function's own validation step.
+  const scaleSelectedChordsLength = (factor: 2 | 0.5) => {
+    if (selectedIds.size === 0) return;
+    let working = placements;
+    const selected = placements.filter((p) => selectedIds.has(p.id));
+    for (const placement of selected) {
+      const newLength = factor === 2 ? placement.lengthBeats * 2 : Math.max(1, Math.floor(placement.lengthBeats / 2));
+      if (newLength === placement.lengthBeats) continue;
+      if (!canPlace(working, placement.id, placement.startBeat, newLength, totalBeats)) continue;
+      onResize(placement, newLength);
+      working = working.map((p) => (p.id === placement.id ? { ...p, lengthBeats: newLength } : p));
+    }
+  };
+
   useImperativeHandle(
     ref,
-    () => ({ modifySelectedNote, replaceSelectedChords, commitPendingSectionRange, clearPendingSectionRange }),
+    () => ({
+      modifySelectedNote,
+      replaceSelectedChords,
+      commitPendingSectionRange,
+      clearPendingSectionRange,
+      repeatSelectedChords,
+      makeSectionFromSelectedChords,
+      scaleSelectedChordsLength,
+    }),
     [
       selectedMelodyIndex,
       melody,
@@ -936,6 +1020,10 @@ export const EditGrid = forwardRef<EditGridHandle, Props>(function EditGrid({
       onReplaceChord,
       pendingSectionRange,
       onAddSection,
+      totalBeats,
+      sections,
+      onPastePlacements,
+      onResize,
     ],
   );
 

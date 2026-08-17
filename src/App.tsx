@@ -36,6 +36,7 @@ import { parseMidiDrumPattern } from './data/midiDrumImport';
 import { parseMidiMelodyFile } from './data/midiMelodyImport';
 import type { MelodyNote } from './data/melody';
 import type { SectionMarker } from './data/sections';
+import { totalBeatsFor } from './data/gridLayout';
 import type { DrumSectionOverride } from './audio/drums';
 import type { BassSectionOverride } from './audio/bass';
 import type { KeysSectionOverride } from './audio/keys';
@@ -543,20 +544,24 @@ function App() {
   };
 
   // Click-to-place (ChordPalette.tsx -> EditGrid.tsx): picking a palette chord
-  // arms it here rather than appending it anywhere itself -- EditGrid's
-  // ChordRow places it wherever an empty cell is next clicked, and it stays
-  // armed afterward so repeated clicks "stamp" the same chord across several
-  // cells (Hookpad's own behavior). Except when a chord block is already
-  // selected -- then the same click instead replaces every selected block's
-  // chord in place (EditGridHandle.replaceSelectedChords), matching how
-  // picking a chord for a selected melody note edits that note directly
-  // rather than queuing something up.
+  // both places a copy immediately at the next available beat (the running
+  // end of the current progression, same append point "Repeat"'s own fallback
+  // and the old pre-Hookpad-grid click-to-add used) *and* arms it here, so
+  // repeated clicks keep "stamping" further copies at the end while a
+  // still-armed pendingChord also lets ChordRow place one somewhere else
+  // entirely via an explicit empty-cell click, unchanged. Except when a chord
+  // block is already selected -- then the same click instead replaces every
+  // selected block's chord in place (EditGridHandle.replaceSelectedChords),
+  // matching how picking a chord for a selected melody note edits that note
+  // directly rather than queuing something up.
   const handleSelectionChange = (selection: ChordSelection, lengthBeats: number) => {
     if (chordSelectionActive) {
       editGridRef.current?.replaceSelectedChords(selection);
       return;
     }
     setPendingChord({ selection, lengthBeats });
+    const start = placements.length === 0 ? 0 : Math.max(...placements.map((p) => p.startBeat + p.lengthBeats));
+    if (start + lengthBeats <= totalBeatsFor(beatsPerBar)) handleDropChord(selection, start, lengthBeats);
   };
 
   const handleReplaceChord = (placement: ChordPlacement, selection: ChordSelection) => {
@@ -1027,6 +1032,11 @@ function App() {
               onAudition={handleAudition}
               onAuditionExoticScale={handleAuditionExoticScale}
               onSelectionChange={handleSelectionChange}
+              chordSelectionActive={chordSelectionActive}
+              onRepeatSelection={() => editGridRef.current?.repeatSelectedChords()}
+              onMakeSectionFromSelection={() => editGridRef.current?.makeSectionFromSelectedChords()}
+              onDoubleSelectionLength={() => editGridRef.current?.scaleSelectedChordsLength(2)}
+              onHalveSelectionLength={() => editGridRef.current?.scaleSelectedChordsLength(0.5)}
             />
           ))}
         <div className="layout">
