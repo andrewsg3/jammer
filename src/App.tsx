@@ -4,6 +4,7 @@ import type { EditGridHandle, PendingChord, PendingSectionRange } from './compon
 import { BeatGridSheet } from './components/BeatGridSheet';
 
 import { LeadSheet } from './components/LeadSheet';
+import { PracticeView } from './components/PracticeView';
 import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
 import { MelodyNoteToolbar } from './components/MelodyNoteToolbar';
@@ -134,11 +135,12 @@ function setSongInUrl(name: string | null): void {
 // storage key/shape rather than sharing mobile's — the two views' settings are
 // independent (grid style in particular is desktop-only; mobile has no editor).
 const DESKTOP_PREFS_STORAGE_KEY = 'jazzmate-desktop-prefs';
-// 'edit' = ChordGrid.tsx (the only view where chords/melody can be added, moved, resized, or
+// 'edit' = EditGrid.tsx (the only view where chords/melody can be added, moved, resized, or
 // deleted); 'chordGrid' = the same read-only BeatGridSheet.tsx MobilePlayer.tsx uses; 'leadSheet' =
-// a real-engraved, VexFlow-rendered view for printing/practicing. Playback and the mixer work in
-// all three — only editing is Edit-mode-exclusive.
-export type ViewMode = 'edit' | 'chordGrid' | 'leadSheet';
+// a real-engraved, VexFlow-rendered view for printing/practicing; 'practice' = PracticeView.tsx,
+// guitar fretboard diagrams for whatever chord was last clicked anywhere else in the app. Playback
+// and the mixer work in all four — only editing is Edit-mode-exclusive.
+export type ViewMode = 'edit' | 'chordGrid' | 'leadSheet' | 'practice';
 type DesktopStoredPrefs = {
   notationStyle?: NotationStyle;
   viewMode?: ViewMode;
@@ -272,6 +274,10 @@ function App() {
   // ChordPalette.tsx's onSelectionChange. Stays set after a placement (not
   // auto-cleared) so repeated clicks "stamp" the same chord across cells.
   const [pendingChord, setPendingChord] = useState<PendingChord | null>(null);
+  // The most recently clicked/auditioned chord anywhere in the app -- what
+  // PracticeView shows fretboard diagrams for. See handleAudition below for
+  // where this actually gets set.
+  const [practiceChord, setPracticeChord] = useState<Chord | null>(null);
   // Whether EditGrid's melody cursor/selection is live -- drives the swap
   // between ChordPalette and MelodyNoteToolbar just below. editGridRef is how
   // the toolbar's buttons reach back in to actually modify the selected note
@@ -467,6 +473,13 @@ function App() {
 
   const handleAudition = (chord: Chord) => {
     auditionChord(chord);
+    // Every chord click that already triggers an audible preview (palette,
+    // Chord Finder, Edit grid's chord blocks) routes through here -- Practice
+    // mode piggybacks on that instead of adding its own click wiring, so
+    // "click a chord, see it in Practice" is free wherever clicking a chord
+    // was already a meaningful action. Chord Grid/Lead Sheet are read-only
+    // (no click-to-audition there at all), so they don't feed this.
+    setPracticeChord(chord);
   };
 
   const handleAuditionExoticScale = (chord: Chord, scaleRoot: string, intervals: number[]) => {
@@ -992,6 +1005,7 @@ function App() {
                 />
               </div>
             )}
+            {viewMode === 'practice' && <PracticeView chord={practiceChord} notationStyle={notationStyle} />}
             {viewMode === 'edit' && (
               <EditGrid
                 key={songLoadNonce}

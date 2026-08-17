@@ -283,23 +283,27 @@ opt-in transform — not a side effect of touching the Meter dropdown.
   not narrowed down further) before Phase 1 existed, and is exactly the mistake the tag-and-filter
   approach exists to avoid repeating.
 
-## Three desktop views: Edit / Chord Grid / Lead Sheet (both milestones done)
+## Four desktop views: Edit / Chord Grid / Lead Sheet / Practice
 Desktop used to have one always-editable view (the old `ChordGrid.tsx`, a staff with drag/resize/
 select chord placements and a click/drag melody editor) plus a little-used `compactGridView`
 toggle that swapped it for `BeatGridSheet.tsx` (the same read-only cell chart `MobilePlayer.tsx`
-uses). That's now three explicit, purpose-built modes, switched via a segmented control in
-`TopBar.tsx` (`App.tsx`'s `viewMode: 'edit' | 'chordGrid' | 'leadSheet'`, persisted the same way
-`compactGridView` used to be, with a one-time migration from that old boolean). **Editing chord
-placements and melody notes is exclusive to Edit mode** — Chord Grid and Lead Sheet are read-only
-views of the same underlying song, but playback (Play/Stop) and the full mixer (`ChannelStrip`
-volume/mute/instrument/style pickers, a sibling panel outside whichever view renders — nothing
-about it needed to change) work identically in all three.
+uses). That's now four explicit, purpose-built modes, switched via a segmented control in
+`TopBar.tsx` (`App.tsx`'s `viewMode: 'edit' | 'chordGrid' | 'leadSheet' | 'practice'`, persisted the
+same way `compactGridView` used to be, with a one-time migration from that old boolean). **Editing
+chord placements and melody notes is exclusive to Edit mode** — the other three are read-only views
+either of the same underlying song (Chord Grid, Lead Sheet) or of whatever chord was last clicked
+(Practice, see "Guitar fingering diagrams" below) — but playback (Play/Stop) and the full mixer
+(`ChannelStrip` volume/mute/instrument/style pickers, a sibling panel outside whichever view
+renders — nothing about it needed to change) work identically in all four.
 
 - **Edit** — `EditGrid.tsx` (Milestone 2's Hookpad-style rebuild; the staff-based `ChordGrid.tsx`
   it replaced no longer exists — see below).
 - **Chord Grid** — `BeatGridSheet.tsx`, unchanged since Milestone 1 (confirmed with the user
   directly: "Beat grid is perfect as-is"). Purely a re-gating of the exact JSX `compactGridView`
   used to render.
+- **Practice** — `PracticeView.tsx`, guitar fretboard diagrams for the last-clicked chord — see
+  "Guitar fingering diagrams" below for the full mechanics. The newest of the four, and the first
+  view driven by "whatever was last clicked" rather than "the currently loaded song."
 - **Lead Sheet** — `components/LeadSheet.tsx`, real engraved notation via VexFlow (`vexflow` in
   `package.json`). This is what used to be an unscoped export idea — built as a first-class in-app
   *view* instead, passive-only by the user's explicit choice (a playhead that follows playback, no
@@ -1029,23 +1033,51 @@ actual catalog of patterns this would need to recognize, worked out in more deta
 pass would need, on the theory that scoping the intelligence first is cheaper than re-deriving it
 mid-implementation.
 
-## Guitar fingering diagrams (CAGED system) (idea, not scoped)
-Another practice-aid idea in the same family as chord-scale suggestions/auditioning above:
-clicking a chord (in the palette, or once placed on the grid) shows how to actually play it on
-guitar, as a set of fretboard diagrams in the CAGED system — the standard way a chord's shape
-maps to five movable positions up the neck, each named for the open-position chord shape (C, A,
-G, E, D) it's derived from. Same "click a chord, see something useful about it" interaction shape
-`ChordPalette.tsx`'s `selectedChord` state already drives for scale suggestions — this would be a
-sibling panel/modal, not a new interaction pattern.
+## Guitar fingering diagrams (CAGED system) (v1 done — Practice view, 5 qualities, 2 positions each)
+Desktop's 4th view mode: `App.tsx`'s `ViewMode` gained `'practice'` alongside `edit`/`chordGrid`/
+`leadSheet`, rendering `PracticeView.tsx`. Clicking a chord anywhere that already triggers an
+audible preview (`ChordPalette.tsx`'s palette row and Chord Finder, Edit grid's chord blocks — all
+already call `App.tsx`'s `handleAudition`) also sets a new `practiceChord` state there, so Practice
+mode shows fretboard diagrams for whatever chord was last clicked, with zero new click wiring
+needed in any of those components. Chord Grid and Lead Sheet don't audition on click at all (still
+read-only, unchanged), so they don't feed this — consistent with how those two views have always
+worked.
 
-Real scoping questions, not yet worked out: fingering-diagram data would need to exist for every
-root × quality combination this app supports (`CHORD_QUALITIES` is already a 29-member union) —
-either a real fretboard-shape generator (find valid fingerings algorithmically from the chord's
-actual tones + CAGED shape rules) or a curated lookup table, and a generator is the only approach
-that doesn't need hand-authoring dozens of shapes per quality. Rendering itself is a new visual
-component this app doesn't have anything like yet (a small fretboard grid with fret/string dots
-and open/muted-string markers) — closer to the in-browser MIDI editor's "new 2D surface" category
-than to the chord-scale suggestion panel's plain buttons/text. Not scoped further than this.
+**Curated, not generated** — deliberately decided against the fretboard-shape-generator approach
+this section used to float, in favor of hand-verified real shapes: a generator can't be play-tested
+by ear in this environment, and a subtly-wrong generated fingering would be a worse failure mode
+than an honest gap. `data/fretboard.ts`'s `CAGED_SHAPES` covers exactly the 5 qualities most load-
+bearing for real jazz practice (`maj`, `min`, `dom7`, `maj7`, `min7` — not coincidentally, also the
+qualities a ii-V-I loop actually needs), each as two movable barre positions ("E-shape" and
+"A-shape", named for the open-position chord each barres from) rather than the full five CAGED
+letters (C/G/D-shape extended-to-7th forms exist in real guitar pedagogy too, but E-shape and
+A-shape are the two most standard, confidently-reproducible ones — the other three, and the
+remaining ~24 chord qualities, are a real, honest gap, not silently guessed at). Every shape was
+derived from a genuine, well-known open-position chord (e.g. E-shape dom7 comes from open E7:
+`0-2-0-1-0-0`) and then verified programmatically — every sounded pitch class checked against
+`QUALITY_INTERVALS`'s own definition of the quality, confirming no wrong or missing chord tone
+across 100 shape/root combinations — rather than trusted from memory alone.
+
+`data/fretboard.ts`'s `rootFretFor`/`absoluteFretting` do the actual movable-shape math: given a
+shape's relative frets (`ShapeFretting.frets`, indexed low-E-to-high-E) and a root note name, find
+the lowest fret (0-11) where that shape's root string actually sounds that root, then offset the
+whole shape by that amount — e.g. `CAGED_SHAPES.dom7`'s E-shape for root "D" barres at fret 10 (not
+0), correctly distinct from the A-shape's fret 5 for the same chord. `components/practice/
+FretboardDiagram.tsx` renders one shape as a small hand-rolled SVG (6 strings, a few fret lines, dots
+for fretted notes, "×" for muted strings, a fret-number label unless it's a true open-position
+shape) — same "good enough to read at a glance, not a full engraving system" spirit as this app's
+melody notation (see "How melody notation works" above), and deliberately not VexFlow (a fretboard
+diagram isn't something a music-notation engraver renders in the first place — `LickTabView.tsx`'s
+VexFlow `TabStave`/`TabNote` usage, for rendering a *lick* as real guitar TAB, solves a genuinely
+different problem: a fixed melodic phrase's actual fret/string choices, not a movable chord shape).
+
+**Real, not-yet-closed gaps**: the other three CAGED letters (C/G/D-shape) and the ~24 remaining
+chord qualities have no diagram at all yet — `PracticeView.tsx` shows an honest "no fingering
+diagrams yet for this chord quality" message rather than a wrong or missing-tone shape, same
+"hidden/gapped rather than offered-and-wrong" stance this app already takes elsewhere (meter-
+mismatched drum/bass/keys styles, scale suggestions with no diatonic-mode answer). Extending
+`CAGED_SHAPES` for any of those is additive — new entries in the same curated table, verified the
+same tone-by-tone way — not a rearchitecture.
 
 ## Chord progression analyzer: what harmony to detect (design doc, not built yet)
 The detector's real math is already half-available: every chord's root is stored as an offset
@@ -1208,18 +1240,19 @@ argued from scratch.
 **What efficient jazz guitar practice actually builds, as four separable skills:**
 1. **Chord knowledge** — voicings for a given chord across the whole neck, not just one shape.
    This app already shows the *symbol* (`ChordGrid.tsx`/`EditGrid.tsx`'s chord labels) and can
-   *play* a voicing (`keys.ts`), but has no idea of the guitar fretboard at all yet — no fingering,
-   no position. The CAGED fingering-diagrams idea (see its own section above) is this skill's
-   missing piece, not a nice-to-have extra.
+   *play* a voicing (`keys.ts`); the fretboard/fingering gap is now partly closed — see "Guitar
+   fingering diagrams" above for the Practice view's v1 (5 chord qualities, 2 movable positions
+   each, curated and verified rather than generated). Still a real gap for the other ~24 qualities
+   and the C/G/D-shape positions, just no longer a *total* one.
 2. **A "bag of licks"** — real vocabulary, tied to *harmonic context* (a lick you reach for over a
    ii-V-I in a major key is a different lick than one over a minor ii-V, a turnaround, or a
    backdoor progression — see the chord progression analyzer's own Layer 1 catalog above for the
-   actual harmonic vocabulary this should key off of). `data/melody.ts`'s `MelodyNote[]` is already
-   the right shape to *store* a short phrase (this is exactly what the AI trading-fours idea's own
-   "lick bank" above already assumes), but nothing today lets a user *browse* licks by the harmonic
-   situation they fit, and nothing renders them as guitar TAB (fret/string position) rather than
-   pitch-only staff notation — a real, currently-total gap, and the same missing fretboard model
-   skill 1 needs.
+   actual harmonic vocabulary this should key off of). `data/licks.ts`'s `Lick`/`LickNote` (fret/
+   string explicit, not just pitch) plus `LickEditor.tsx`/`LickTabView.tsx` (VexFlow TAB rendering,
+   step-entry authoring) now cover *storing, authoring, and rendering* a single lick as real guitar
+   TAB — the rendering half of this gap is closed. What's still missing: a real *bank* of licks
+   keyed by harmonic context, and any UI to *browse* one by the situation it fits, rather than
+   authoring/playing one lick at a time.
 3. **Scale/arpeggio technical fluency** — the actual hand-technique practice (running a scale or
    arpeggio cleanly, in position, up-tempo). `data/scaleSuggestions.ts` and the "Audition any scale"
    modal (see "Chord-scale suggestions and auditioning" above) already cover the *listening* half of
@@ -1281,21 +1314,23 @@ is the newer, far-less-built half of the two, so it's what the next few pieces o
 target, not a judgment that composition matters less.
 
 Highest-leverage next pieces, in order:
-1. **Guitar fretboard/TAB infrastructure** (see "Practice philosophy" above) — the single missing
-   piece every one of the four practice skills listed there depends on in some form, and currently
-   a total gap: this app has no notion of the guitar fretboard at all, only pitch. The CAGED
-   fingering-diagrams idea (see its own section above) is the chord-knowledge-facing entry point
-   into this; TAB rendering for licks is the melody-facing one. Whichever gets built first, the
-   underlying fretboard/fingering model is shared infrastructure either way, worth designing once
-   rather than twice.
-2. **The spaced-repetition lick trainer** (see "Practice philosophy" above) — the concrete exercise
-   this app should actually build next once there's a TAB rendering to display, reusing the loop
-   mechanism and beat-countdown pattern that already exist.
-3. **AI trading-fours** (see its own section above) — the scoping questions are answered; building
+1. **The spaced-repetition lick trainer** (see "Practice philosophy" above) — now the actual next
+   thing, not blocked on missing fretboard/TAB infrastructure the way it used to be: both halves of
+   that prerequisite exist now (CAGED chord diagrams in Practice mode, and TAB rendering/authoring
+   via `LickEditor.tsx`/`LickTabView.tsx`/`data/licks.ts`). What's still missing is specifically the
+   *trainer* itself — a lick *bank* keyed by harmonic context, and the loop-and-rotate exercise UI
+   (reusing the existing loop mechanism and `MobilePlayer.tsx`'s beat-countdown pattern) — not new
+   fretboard modeling.
+2. **AI trading-fours** (see its own section above) — the scoping questions are answered; building
    it is a genuinely large effort (lick bank/generator, turn scheduler) on top of pieces that now
    all actually exist (monophonic playback, the countdown-cue pattern, scale-rooted note generation,
    a real melody editor to build/audition licks against), and shares real infrastructure with the
-   lick trainer above (a lick bank, a turn/loop-driven cue).
+   lick trainer above (a lick bank, a turn/loop-driven cue) — worth deciding whether these two
+   share one lick bank or want separate ones before building either bank in earnest.
+3. **Guitar fingering diagrams: the remaining gap** (see "Guitar fingering diagrams" above) — the
+   other three CAGED letters (C/G/D-shape) and ~24 more chord qualities, once there's a concrete
+   need (a lick/exercise that specifically wants one of them) rather than filling the table
+   speculatively.
 4. **Finish the Electronic drum kit's samples** (see "Sample-based drum playback" above) — most of
    it is already done (Acoustic kit, real bass/piano samples); still a real loose end, just no
    longer ahead of anything guitar-practice-facing.

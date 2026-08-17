@@ -2152,6 +2152,82 @@ button:hover {
   opacity: 0.75;
 }
 
+/* Practice view (PracticeView.tsx, components/practice/FretboardDiagram.tsx)
+   -- desktop's 4th view mode, guitar fretboard diagrams for whatever chord
+   was last clicked elsewhere in the app. Same "paper" page treatment as the
+   other three views, for visual consistency across the view switcher. */
+.practice-view {
+  background: #fdfdfb;
+  color: #1a1a1a;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  min-height: 200px;
+}
+
+.practice-view-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.practice-view-chord-name {
+  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
+  font-size: 32px;
+  font-weight: 400;
+  margin: 0 0 20px;
+}
+
+.fretboard-diagram-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.fretboard-diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.fretboard-string {
+  stroke: #1a1a1a;
+  stroke-width: 1;
+}
+
+.fretboard-fret {
+  stroke: #1a1a1a;
+  stroke-width: 1;
+}
+
+.fretboard-nut {
+  stroke-width: 3;
+}
+
+.fretboard-fret-label {
+  font-size: 9px;
+  fill: #1a1a1a;
+}
+
+.fretboard-dot {
+  fill: #9f5fe0;
+}
+
+.fretboard-mute {
+  font-size: 10px;
+  fill: #1a1a1a;
+  opacity: 0.6;
+}
+
+.fretboard-diagram-label {
+  font-size: 11px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* Same "paper" treatment as .beat-grid-sheet-page — see that rule's own comment. */
 .lead-sheet-page {
   overflow-y: auto;

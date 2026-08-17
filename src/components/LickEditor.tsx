@@ -9,7 +9,7 @@ import {
   lickNoteMidi,
   parseLickFile,
 } from '../data/licks';
-import type { Lick, LickNote } from '../data/licks';
+import type { LickNote } from '../data/licks';
 import { auditionLick, auditionNote } from '../audio/engine';
 import { LickTabView } from './LickTabView';
 import { COL_UNIT_BEATS } from './editGrid/gridMath';

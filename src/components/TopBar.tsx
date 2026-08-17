@@ -10,6 +10,7 @@ const VIEW_MODE_OPTIONS: { value: ViewMode; label: string }[] = [
   { value: 'edit', label: 'Edit' },
   { value: 'chordGrid', label: 'Chord Grid' },
   { value: 'leadSheet', label: 'Lead Sheet' },
+  { value: 'practice', label: 'Practice' },
 ];
 
 const MIN_TEMPO = 40;
