@@ -4,14 +4,23 @@ import type { ScaleName } from '../data/progressions';
 import type { SongPreset } from '../data/songPresets';
 import { SongPresetFileControls } from './SongPresetFileControls';
 import { APP_NAME, APP_TITLE } from '../appInfo';
-import type { ViewMode } from '../App';
+import type { AppMode, ViewMode } from '../App';
 
 const VIEW_MODE_OPTIONS: { value: ViewMode; label: string }[] = [
   { value: 'edit', label: 'Edit' },
   { value: 'chordGrid', label: 'Chord Grid' },
   { value: 'leadSheet', label: 'Lead Sheet' },
-  { value: 'practice', label: 'Practice' },
 ];
+
+// Which of the 3 ViewModes each of TopBar's two AppModes actually shows --
+// Compose is Edit-only (so its own tab switcher is pointless and doesn't
+// render at all, see below); Play Along switches between the two read-only
+// chart views. TopBar never renders for 'menu'/'practice' at all (see
+// App.tsx's early-return branches), so this only needs the other two.
+const VIEW_MODES_BY_APP_MODE: Record<'compose' | 'playAlong', ViewMode[]> = {
+  compose: ['edit'],
+  playAlong: ['chordGrid', 'leadSheet'],
+};
 
 const MIN_TEMPO = 40;
 const MAX_TEMPO = 220;
@@ -26,6 +35,10 @@ const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const BEATS_PER_BAR_OPTIONS = [3, 4, 5, 6, 7, 8, 9, 12];
 
 type Props = {
+  // Always 'compose' or 'playAlong' in practice -- App.tsx only ever renders
+  // TopBar for those two modes (see its own early returns for 'menu'/'practice').
+  appMode: AppMode;
+  onBackToMenu: () => void;
   songPresets: SongPreset[];
   onLoadSongPreset: (preset: SongPreset) => void;
   currentSongName: string;
@@ -59,6 +72,8 @@ function TopBarField({ label, children }: { label: string; children: React.React
 }
 
 export function TopBar({
+  appMode,
+  onBackToMenu,
   songPresets,
   onLoadSongPreset,
   currentSongName,
@@ -82,6 +97,11 @@ export function TopBar({
   onOpenLickEditor,
 }: Props) {
   const tapTimesRef = useRef<number[]>([]);
+  // Guaranteed to be 'compose' or 'playAlong' in practice (see Props' own
+  // comment) -- the fallback here is just so a stray/impossible appMode value
+  // degrades to "show every tab" rather than showing none.
+  const allowedViewModes = VIEW_MODES_BY_APP_MODE[appMode as 'compose' | 'playAlong'] ?? VIEW_MODE_OPTIONS.map((o) => o.value);
+  const visibleViewModeOptions = VIEW_MODE_OPTIONS.filter((o) => allowedViewModes.includes(o.value));
 
   const handleTapTempo = () => {
     const now = performance.now();
@@ -104,6 +124,9 @@ export function TopBar({
     <header className="top-bar">
       <div className="top-bar-inner">
         <div className="top-bar-brand">
+          <button type="button" className="top-bar-back-to-menu" onClick={onBackToMenu} title="Back to Menu">
+            ← Menu
+          </button>
           <h1 className="app-title">{APP_TITLE}</h1>
           <a
             href="https://www.buymeacoffee.com/andrewsg"
@@ -210,22 +233,26 @@ export function TopBar({
           </select>
         </TopBarField>
 
-        <TopBarField label="View">
-          <div className="view-mode-switch" role="tablist" aria-label="View">
-            {VIEW_MODE_OPTIONS.map(({ value, label }) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={viewMode === value}
-                className={`view-mode-button${viewMode === value ? ' view-mode-button-active' : ''}`}
-                onClick={() => onViewModeChange(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </TopBarField>
+        {/* Compose only ever shows Edit -- nothing to switch between, so no tab
+            switcher at all rather than a single, pointless tab. */}
+        {visibleViewModeOptions.length > 1 && (
+          <TopBarField label="View">
+            <div className="view-mode-switch" role="tablist" aria-label="View">
+              {visibleViewModeOptions.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === value}
+                  className={`view-mode-button${viewMode === value ? ' view-mode-button-active' : ''}`}
+                  onClick={() => onViewModeChange(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </TopBarField>
+        )}
 
         <TopBarField label="Tempo">
           <div className="top-bar-tempo-group">

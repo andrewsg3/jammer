@@ -1,11 +1,18 @@
 # Backing Track Generator — Project Guide
 
 ## What this is
-A web app for guitarists/musicians to build a chord progression and hear it played back by
-a full band (drums, bass, keys/pads, optional melody) in any key, tempo, and style — rendered
-as an actual lead sheet (staff, clef, key/time signature, chord symbols) rather than a plain
-form. Portfolio piece. Long past its original v0 scope — see "Current shape" below for what's
-actually here now.
+**A Hookpad clone, an iReal Pro clone, and a Duolingo for jazz guitar, living on one site** — the
+user's own framing for the app's three separate identities, and the headline to actually think of
+this project as now. A web app for guitarists/musicians to build a chord progression (Compose,
+the Hookpad-clone half) and hear it played back by a full band (drums, bass, keys/pads, optional
+melody) in any key, tempo, and style (Play Along, the iReal-Pro-clone half) — rendered as an
+actual lead sheet (staff, clef, key/time signature, chord symbols) rather than a plain form — plus
+a growing bank of guitar-practice exercises (Practice, the Duolingo half). Portfolio piece. Long
+past its original v0 scope — see "Current shape" below for what's actually here now, and "App
+shell: Menu + three modes" for how the three identities above are actually separated in the UI.
+**Priority note, per direct user guidance:** Compose (the Hookpad-clone half) is currently the
+*least* important of the three to keep developing — Play Along and, especially, Practice are
+where new work should be weighted going forward.
 
 ## Stack
 - **Vite + React + TypeScript.**
@@ -300,41 +307,75 @@ opt-in transform — not a side effect of touching the Meter dropdown.
   not narrowed down further) before Phase 1 existed, and is exactly the mistake the tag-and-filter
   approach exists to avoid repeating.
 
-## Four desktop views: Edit / Chord Grid / Lead Sheet / Practice
-Desktop used to have one always-editable view (the old `ChordGrid.tsx`, a staff with drag/resize/
-select chord placements and a click/drag melody editor) plus a little-used `compactGridView`
-toggle that swapped it for `BeatGridSheet.tsx` (the same read-only cell chart `MobilePlayer.tsx`
-uses). That's now four explicit, purpose-built modes, switched via a segmented control in
-`TopBar.tsx` (`App.tsx`'s `viewMode: 'edit' | 'chordGrid' | 'leadSheet' | 'practice'`, persisted the
-same way `compactGridView` used to be, with a one-time migration from that old boolean). **Editing
-chord placements and melody notes is exclusive to Edit mode** — the other three are read-only views
-of the same underlying song — but playback (Play/Stop) and the full mixer (`ChannelStrip`
-volume/mute/instrument/style pickers, a sibling panel outside whichever view renders — nothing
-about it needed to change) work identically in all four.
+## App shell: Menu + three modes (done)
+The app used to open straight into one always-visible `TopBar` with a 4-way view switcher (Edit/
+Chord Grid/Lead Sheet/Practice) and every song control (song picker, key, tempo, meter) always on
+screen regardless of which of those four you were in. Per direct user feedback ("There are two (or
+three) apps living on the same site... the separation isn't clear enough"), the app now opens on a
+landing `MenuView.tsx` instead, and Compose/Play Along/Practice are genuinely separate top-level
+`AppMode`s (`App.tsx`'s `appMode: 'menu' | 'compose' | 'playAlong' | 'practice'`), not tabs sharing
+one persistent header.
 
-- **Edit** — `EditGrid.tsx` (Milestone 2's Hookpad-style rebuild; the staff-based `ChordGrid.tsx`
-  it replaced no longer exists — see below).
-- **Chord Grid** — `BeatGridSheet.tsx`, unchanged since Milestone 1 (confirmed with the user
-  directly: "Beat grid is perfect as-is"). Purely a re-gating of the exact JSX `compactGridView`
-  used to render.
-- **Practice** — `PracticeView.tsx`, a placeholder for a bank of practice exercises (trading fours,
-  licks keyed to harmonic context, scale/arpeggio drilling, scale substitutions over changes) —
-  none of the four are built yet, see "Practice philosophy" below. Used to show fretboard fingering
-  diagrams for the last-clicked chord in v1; that job moved to a floating popover usable from every
-  view instead, per direct user feedback ("I don't think we should need to go to a new view to see
-  chord fingering") — see "Chord fingering popover" below for what actually replaced it.
-- **Lead Sheet** — `components/LeadSheet.tsx`, real engraved notation via VexFlow (`vexflow` in
-  `package.json`). This is what used to be an unscoped export idea — built as a first-class in-app
-  *view* instead, passive-only by the user's explicit choice (a playhead that follows playback, no
-  click-to-scrub, no draggable loop range — matching Chord Grid's own restrained, non-interactive
-  character rather than reproducing Edit's scrub/loop UI a third time). Its chord symbols are
-  native VexFlow `ChordSymbol` modifiers, not a React overlay (see the component's own doc comment)
-  — clicking one for the fingering popover below reads its position via the same
-  bar-x0/x1-interpolation math the playhead overlay already uses, not the VexFlow SVG itself.
+- **Menu** (`MenuView.tsx`) — three cards: Compose ("a Hookpad-style editor"), Play Along ("an
+  iReal Pro-style chart reader"), Practice ("a jazz guitar exercise bank") — the same three
+  identities named in "What this is" above. Default landing state on a fresh visit; a `?song=`
+  deep link skips straight to Play Along instead (sharing a song link is about hearing/reading that
+  chart, not necessarily editing it, so it shouldn't dump the recipient on a menu first).
+- **Compose** and **Play Along** are a *view gate* on top of exactly the same song state/`TopBar`/
+  mixer that existed before this split — picking one doesn't reset or duplicate anything, it just
+  constrains `App.tsx`'s existing `viewMode: 'edit' | 'chordGrid' | 'leadSheet'` to whichever subset
+  that mode actually shows (`TopBar.tsx`'s `VIEW_MODES_BY_APP_MODE`): Compose is Edit-only (so its
+  own tab switcher doesn't render at all — nothing to switch between), Play Along switches between
+  Chord Grid and Lead Sheet. Selecting Compose forces `viewMode` to `'edit'`; selecting Play Along
+  bumps it off `'edit'` to `'chordGrid'` only if it was still sitting on `'edit'` from a prior
+  Compose visit, otherwise leaves it alone. Play/Stop, the mixer, and the whole song data model are
+  identical in both — see "Compose and Play Along: two modes, three views" below for what used to
+  be "Four desktop views."
+- **Practice is fully separate, on purpose** (direct user request: "I think fully separate... a
+  Duolingo-for-jazz-guitar exercise and game bank") — no `TopBar`, no song state, no mixer, no
+  Play/Stop. `App.tsx` returns a minimal `.practice-shell` (a "← Menu" button plus `PracticeView`)
+  entirely outside the Compose/Play Along render tree, before any song-related JSX even runs.
+  `PracticeView` already took zero props (its Scale/Arpeggio trainer is fully self-contained --
+  see that section below), so detaching it cost nothing functionally.
+- **Back to Menu**: a small button in `TopBar`'s brand corner (`.top-bar-back-to-menu`) for
+  Compose/Play Along, and `.practice-shell-back` for Practice — both just set `appMode` back to
+  `'menu'`. The underlying song (placements/key/tempo/etc.) is untouched either way, so returning
+  to Compose or Play Along later resumes exactly where you left off.
+- **Not migrated**: a stale `viewMode: 'practice'` value from before this split (an existing user's
+  `localStorage`) falls back to `'edit'` on load, same as having nothing stored at all — see the
+  guard in `App.tsx`'s `viewMode` `useState` initializer.
+
+## Compose and Play Along: two modes, three views
+What used to be "Four desktop views: Edit / Chord Grid / Lead Sheet / Practice" is now two modes
+(Compose, Play Along — see "App shell" above) sharing three views between them, plus Practice as
+its own separate thing entirely (not a view here at all anymore). Desktop used to have one
+always-editable view (the old `ChordGrid.tsx`, a staff with drag/resize/select chord placements and
+a click/drag melody editor) plus a little-used `compactGridView` toggle that swapped it for
+`BeatGridSheet.tsx` (the same read-only cell chart `MobilePlayer.tsx` uses) — that history is why
+Chord Grid and Lead Sheet still read as "the same kind of view" today. **Editing chord placements
+and melody notes is exclusive to Edit mode (Compose)** — Chord Grid/Lead Sheet (Play Along) are
+read-only views of the same underlying song — but playback (Play/Stop) and the full mixer
+(`ChannelStrip` volume/mute/instrument/style pickers, a sibling panel outside whichever view
+renders — nothing about it needed to change) work identically in both modes.
+
+- **Edit** (Compose) — `EditGrid.tsx` (Milestone 2's Hookpad-style rebuild; the staff-based
+  `ChordGrid.tsx` it replaced no longer exists — see below).
+- **Chord Grid** (Play Along) — `BeatGridSheet.tsx`, unchanged since Milestone 1 (confirmed with
+  the user directly: "Beat grid is perfect as-is"). Purely a re-gating of the exact JSX
+  `compactGridView` used to render.
+- **Lead Sheet** (Play Along) — `components/LeadSheet.tsx`, real engraved notation via VexFlow
+  (`vexflow` in `package.json`). This is what used to be an unscoped export idea — built as a
+  first-class in-app *view* instead, passive-only by the user's explicit choice (a playhead that
+  follows playback, no click-to-scrub, no draggable loop range — matching Chord Grid's own
+  restrained, non-interactive character rather than reproducing Edit's scrub/loop UI a third time).
+  Its chord symbols are native VexFlow `ChordSymbol` modifiers, not a React overlay (see the
+  component's own doc comment) — clicking one for the fingering popover below reads its position
+  via the same bar-x0/x1-interpolation math the playhead overlay already uses, not the VexFlow SVG
+  itself.
 
 ## Chord fingering popover (done) — replaces Practice view's old job
-A floating "how do I play this" peek, opened by clicking *any* chord in *any* view — not just a
-dedicated tab (see "Four desktop views" above for why the old Practice-tab-only version was
+A floating "how do I play this" peek, opened by clicking *any* chord in Compose or Play Along —
+not just a dedicated tab (see "App shell" above for why the old Practice-tab-only version was
 replaced). `ChordFingeringPopover.tsx`, driven by `App.tsx`'s `chordPopover: { chord,
 showSubstitutions } | null` state:
 - **Edit mode** (`ChordPalette.tsx`'s click-to-add/Chord Finder, and `EditGrid.tsx`'s own chord
@@ -405,11 +446,12 @@ glance.
 
 **Metronome + auto-cycling positions, on request.** `audio/practiceMetronome.ts`'s
 `startPracticeMetronome(bpm, beatsPerBar)` is a standalone click, deliberately **not** built on the
-shared `Tone.Transport` the real song metronome (`audio/metronome.ts`) and song playback both use —
-Play/Stop already works identically in every desktop view (see "Four desktop views" above), so a
-song could genuinely be playing in the background while this runs, and this shouldn't touch that
-Transport's position/state at all. Uses `Tone.Clock` instead, Tone.js's own free-running-clock
-primitive, entirely separate from Transport. A plain module-level `beatCount` (not React state) is
+shared `Tone.Transport` the real song metronome (`audio/metronome.ts`) and song playback both use.
+Practice mode itself has no access to the loaded song or its Play/Stop at all (see "App shell"
+above) — but `App.tsx` doesn't unmount when `appMode` changes, so a song started in Compose/Play
+Along keeps running on the *shared* `Tone.Transport` even after navigating to Practice via "←
+Menu." This metronome shouldn't touch that Transport's position/state at all, so it uses
+`Tone.Clock` instead, Tone.js's own free-running-clock primitive, entirely separate from Transport. A plain module-level `beatCount` (not React state) is
 incremented inside the Clock callback; `ScaleArpeggioTrainer.tsx` polls it via `requestAnimationFrame`
 (same pattern `App.tsx`'s own playhead uses for `getCurrentBeat()`) rather than calling `setState`
 directly from the Tone-thread callback. With the metronome off, both curated positions render side

@@ -6,6 +6,8 @@ import { BeatGridSheet } from './components/BeatGridSheet';
 import { LeadSheet } from './components/LeadSheet';
 import { PracticeView } from './components/PracticeView';
 import { ChordFingeringPopover } from './components/ChordFingeringPopover';
+import { MenuView } from './components/MenuView';
+import type { MenuTarget } from './components/MenuView';
 import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
 import { MelodyNoteToolbar } from './components/MelodyNoteToolbar';
@@ -137,11 +139,20 @@ function setSongInUrl(name: string | null): void {
 // independent (grid style in particular is desktop-only; mobile has no editor).
 const DESKTOP_PREFS_STORAGE_KEY = 'jazzmate-desktop-prefs';
 // 'edit' = EditGrid.tsx (the only view where chords/melody can be added, moved, resized, or
-// deleted); 'chordGrid' = the same read-only BeatGridSheet.tsx MobilePlayer.tsx uses; 'leadSheet' =
-// a real-engraved, VexFlow-rendered view for printing/practicing; 'practice' = PracticeView.tsx,
-// guitar fretboard diagrams for whatever chord was last clicked anywhere else in the app. Playback
-// and the mixer work in all four — only editing is Edit-mode-exclusive.
-export type ViewMode = 'edit' | 'chordGrid' | 'leadSheet' | 'practice';
+// deleted) -- the sole view Compose mode shows. 'chordGrid' = the same read-only
+// BeatGridSheet.tsx MobilePlayer.tsx uses; 'leadSheet' = a real-engraved, VexFlow-rendered view for
+// printing/practicing -- both shown (switchably) by Play Along mode. Playback and the mixer work
+// in both modes. Practice is no longer a ViewMode at all -- see AppMode below.
+export type ViewMode = 'edit' | 'chordGrid' | 'leadSheet';
+
+// The app's three separate identities (the user's own framing: "a Hookpad clone, an iReal Pro
+// clone, and a Duolingo-for-jazz-guitar exercise bank") plus the landing Menu screen that picks
+// between them -- see MenuView.tsx's own doc comment and CLAUDE.md's "App shell: Menu + three
+// modes" section for the full reasoning. 'compose'/'playAlong' both still use the exact same
+// song state/TopBar/mixer as before this split existed -- appMode is purely a view gate on top of
+// that, not a second copy of any state. 'practice' is the one genuine exception: fully separate,
+// no song state, no TopBar, no mixer -- just PracticeView on its own, per direct user request.
+export type AppMode = 'menu' | 'compose' | 'playAlong' | 'practice';
 type DesktopStoredPrefs = {
   notationStyle?: NotationStyle;
   viewMode?: ViewMode;
@@ -181,11 +192,20 @@ function App() {
   );
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const stored = loadStoredDesktopPrefs();
-    if (stored.viewMode) return stored.viewMode;
+    // 'practice' is a stale value from before Practice became its own AppMode
+    // (see that type's own comment) -- an existing user with it stored falls
+    // back to Edit, same as having nothing stored at all.
+    if (stored.viewMode && stored.viewMode !== ('practice' as ViewMode)) return stored.viewMode;
     // One-time migration from the old boolean pref — an existing user who had
     // "Beat Grid" selected lands on the new Chord Grid mode, not back on Edit.
     return stored.compactGridView ? 'chordGrid' : 'edit';
   });
+  // The landing Menu, plus which of the app's three separate modes is active --
+  // see AppMode's own doc comment. Defaults to the Menu on a fresh visit
+  // ("home page" framing), except a deep link (?song=...) skips straight to
+  // Play Along -- sharing a song link is about hearing/reading that chart, not
+  // necessarily editing it, and shouldn't dump the recipient on a menu first.
+  const [appMode, setAppMode] = useState<AppMode>(() => (urlSongName ? 'playAlong' : 'menu'));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [lickEditorOpen, setLickEditorOpen] = useState(false);
   // Falls back to whatever --accent already resolved to (light/dark default) if
@@ -208,6 +228,25 @@ function App() {
   const handleResetAccent = () => {
     document.documentElement.style.removeProperty('--accent');
     setAccentColor(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  };
+
+  // Menu card -> AppMode, nudging viewMode into whichever of its own views that
+  // mode actually shows -- Compose only ever shows Edit; Play Along only ever
+  // shows Chord Grid/Lead Sheet, so a viewMode left on 'edit' from a prior
+  // Compose visit gets bumped to 'chordGrid' rather than showing Edit under a
+  // Play Along-labeled header. Practice needs no such nudge (it doesn't read
+  // viewMode at all). The song itself (placements/key/tempo/etc.) is untouched
+  // either way -- switching modes is a pure view change, not a reset.
+  const handleSelectMenuTarget = (target: MenuTarget) => {
+    if (target === 'compose') {
+      setAppMode('compose');
+      setViewMode('edit');
+    } else if (target === 'playAlong') {
+      setAppMode('playAlong');
+      setViewMode((v) => (v === 'edit' ? 'chordGrid' : v));
+    } else {
+      setAppMode('practice');
+    }
   };
   const [placements, setPlacements] = useState<ChordPlacement[]>(
     DEFAULT_SONG_PRESET
@@ -891,9 +930,30 @@ function App() {
     (o) => o.value === 'normal' || beatsPerBar % 2 === 0 || o.value === bassTimeFeel.value,
   );
 
+  // Menu and Practice are both full, self-contained replacements for the rest
+  // of this component's return tree below -- see AppMode's own doc comment.
+  // Neither touches song state at all (Menu just gates it; Practice doesn't
+  // read it), so returning early here is safe -- every hook above this point
+  // has already run regardless of which branch below actually renders.
+  if (appMode === 'menu') {
+    return <MenuView onSelect={handleSelectMenuTarget} />;
+  }
+  if (appMode === 'practice') {
+    return (
+      <div className="practice-shell">
+        <button type="button" className="practice-shell-back" onClick={() => setAppMode('menu')}>
+          ← Menu
+        </button>
+        <PracticeView />
+      </div>
+    );
+  }
+
   return (
     <>
       <TopBar
+        appMode={appMode}
+        onBackToMenu={() => setAppMode('menu')}
         songPresets={bundledSongPresets}
         onLoadSongPreset={handleLoadSongPreset}
         currentSongName={songTitle}
@@ -1026,7 +1086,6 @@ function App() {
                 />
               </div>
             )}
-            {viewMode === 'practice' && <PracticeView />}
             {viewMode === 'edit' && (
               <EditGrid
                 key={songLoadNonce}
