@@ -67,10 +67,12 @@ export const CAGED_SHAPES: Partial<Record<ChordQuality, ShapeFretting[]>> = {
   ],
 };
 
-/** Which of the 12 pitch classes a shape's root note actually names, purely
- * from where the diagram is fretted -- e.g. an E-shape barred at fret 3 names
- * G, because fret 3 on the low E string sounds G. */
-function pitchClassAt(stringNum: GuitarString, fret: number): number {
+/** Which of the 12 pitch classes a given string/fret actually sounds -- e.g.
+ * fret 3 on the low E string sounds G. Exported for data/scaleFretboard.ts,
+ * which needs the same string/fret -> pitch-class math for scale/arpeggio
+ * boxes (a different problem from a curated chord shape's own root fret, but
+ * the same underlying fretboard geometry). */
+export function pitchClassAt(stringNum: GuitarString, fret: number): number {
   return ((LOW_E_OPEN_SEMITONE + STRING_OFFSET_FROM_LOW_E[stringNum] + fret) % 12 + 12) % 12;
 }
 

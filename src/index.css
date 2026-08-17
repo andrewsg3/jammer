@@ -2173,9 +2173,8 @@ button:hover {
 }
 
 .practice-view-title {
-  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
   font-size: 28px;
-  font-weight: 400;
+  font-weight: 700;
   margin: 0 0 10px;
 }
 
@@ -2205,6 +2204,103 @@ button:hover {
 
 .practice-view-exercise-description {
   font-size: 12px;
+}
+
+.practice-view-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 24px 0 10px;
+}
+
+.scale-trainer-section {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(26, 26, 26, 0.15);
+}
+
+.scale-trainer-controls,
+.scale-trainer-metronome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.scale-trainer-mode-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.scale-trainer-mode-button {
+  font-size: 12px;
+  padding: 5px 12px;
+  border: 1px solid #1a1a1a;
+  background: transparent;
+  color: #1a1a1a;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.scale-trainer-mode-button--active {
+  background: #1a1a1a;
+  color: #fdfdfb;
+}
+
+.scale-trainer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.8;
+}
+
+.scale-trainer-field select,
+.scale-trainer-field input {
+  font-size: 13px;
+  padding: 4px 6px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.scale-trainer-field--narrow input {
+  width: 64px;
+}
+
+.scale-trainer-metronome-toggle {
+  font-size: 12px;
+  padding: 6px 14px;
+  border: 1px solid #1a1a1a;
+  background: #9f5fe0;
+  color: #fdfdfb;
+  cursor: pointer;
+  border-radius: 3px;
+  align-self: flex-end;
+}
+
+.scale-trainer-beat-indicator {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  align-self: flex-end;
+  padding-bottom: 6px;
+}
+
+.scale-trainer-beat-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid #1a1a1a;
+  background: transparent;
+}
+
+.scale-trainer-beat-dot--active {
+  background: #9f5fe0;
+}
+
+.scale-trainer-hint {
+  margin-top: 10px;
 }
 
 .fretboard-diagram-row {
@@ -2241,6 +2337,10 @@ button:hover {
 
 .fretboard-dot {
   fill: #9f5fe0;
+}
+
+.fretboard-dot--root {
+  fill: #1a1a1a;
 }
 
 .fretboard-mute {
@@ -2285,9 +2385,8 @@ button:hover {
 }
 
 .chord-fingering-popover-chord-name {
-  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
-  font-size: 24px;
-  font-weight: 400;
+  font-size: 22px;
+  font-weight: 700;
   margin: 0;
 }
 
@@ -2786,8 +2885,8 @@ button:hover {
 }
 
 .chord-block-name {
-  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
   font-size: 13px;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;

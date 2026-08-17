@@ -73,8 +73,14 @@ actually here now.
   data (a manual pick, not the app silently remembering unrelated state).
 
 ## Fonts / notation rendering
-- **Architects Daughter** (Google Fonts) — chord symbols and the sheet header text. Chosen over
-  a cursive script for legibility on dense chord symbols (e.g. "F#m7b5"); has no bold weight, so
+- **Architects Daughter** (Google Fonts) — chord symbols and the sheet header text, **exclusively
+  in Chord Grid and Lead Sheet** (`SheetMusicHeader.tsx`, `BeatGridSheet.tsx`'s chord/repeat marks,
+  `LeadSheet.tsx`'s VexFlow `ChordSymbol`s) — the two "real sheet music" views. Deliberately *not*
+  used in Edit mode (`EditGrid.tsx`'s chord blocks) or the Practice tab (`PracticeView.tsx` and its
+  `ChordFingeringPopover.tsx`), per direct user correction — those are working/utility UI, not a
+  page meant to look like a hand-copied chart, so they use the app's plain default UI font instead
+  (no explicit `font-family`, same as every other button/label with no override). Chosen over a
+  cursive script for legibility on dense chord symbols (e.g. "F#m7b5"); has no bold weight, so
   nothing here fakes one (synthetic bold looks blurry on a handwriting-style font).
 - **Noto Music** — self-declared `@font-face` in `index.css` with a `unicode-range` scoped to
   digits + the accidental symbols + the whole Musical Symbols Unicode plane (clef, repeat
@@ -367,6 +373,50 @@ showSubstitutions } | null` state:
   (`hasChordSubstitutions` returns false) renders nothing — same "hidden rather than
   offered-and-wrong" stance `SCALE_SUGGESTIONS`'s empty arrays and `CAGED_SHAPES`' quality gaps
   already take.
+
+## Practice tab: Scale/Arpeggio trainer (done) — first real exercise
+The first of the Practice tab's planned exercise categories (see "Practice philosophy" below) to
+actually get built, per direct user request. Any scale (all 19 from `data/exoticScales.ts`'s
+`EXOTIC_SCALE_GROUPS`, which already includes the 7 diatonic modes — see that file's own comment)
+or any arpeggio (any of the 28 `ChordQuality` values, reusing `QUALITY_INTERVALS`/`QUALITY_GROUPS`/
+`QUALITY_LABELS` — an arpeggio is just a chord's own tones treated as a linear scale, not a second
+vocabulary), any of the 12 roots, shown as CAGED-position fretboard boxes.
+
+**Generated, not curated — the opposite choice from `CAGED_SHAPES`, deliberately.** Chord shapes
+(`data/fretboard.ts`) are curated by hand because a chord voicing is a *specific fingering choice*
+a generator can't judge for playability/musicality — see that section's own reasoning. A scale/
+arpeggio box has no such judgment call: correctness is just "is this fret's pitch class a member
+of the scale," fully verifiable per note. `data/scaleFretboard.ts`'s `findPositionNotes(root,
+intervals, position)` walks every string × a 5-fret window and keeps whatever's in the scale's own
+semitone set (mod 12) — verified against 732 note/root/scale/position combinations (12 roots ×
+major + minor pentatonic × both positions), each checked for correct pitch class, correct `isRoot`
+flag, and correct fret-window bounds, all passing before this shipped.
+
+**Positions: E-shape/A-shape only, same honest scope as the chord fingering popover.** A scale box
+only actually needs a root string + anchor fret (not a full curated chord voicing), so in principle
+all 5 CAGED letters could anchor one here — deliberately not doing that yet, to keep "which
+positions this app shows" consistent with `CAGED_SHAPES`' own E/A-only gap rather than introducing
+C/G/D-shape positions nowhere else in the app has. `positionStartFret(root, position)` is the same
+"lowest fret where this string sounds the root" math as `fretboard.ts`'s `rootFretFor`, just not
+tied to a specific `ShapeFretting` object. `components/practice/ScaleFretboardDiagram.tsx` reuses
+`FretboardDiagram.tsx`'s hand-rolled-SVG approach almost verbatim, just wider (multiple dots per
+string, not one) and with root notes given a distinct fill so the box still reads as "rooted" at a
+glance.
+
+**Metronome + auto-cycling positions, on request.** `audio/practiceMetronome.ts`'s
+`startPracticeMetronome(bpm, beatsPerBar)` is a standalone click, deliberately **not** built on the
+shared `Tone.Transport` the real song metronome (`audio/metronome.ts`) and song playback both use —
+Play/Stop already works identically in every desktop view (see "Four desktop views" above), so a
+song could genuinely be playing in the background while this runs, and this shouldn't touch that
+Transport's position/state at all. Uses `Tone.Clock` instead, Tone.js's own free-running-clock
+primitive, entirely separate from Transport. A plain module-level `beatCount` (not React state) is
+incremented inside the Clock callback; `ScaleArpeggioTrainer.tsx` polls it via `requestAnimationFrame`
+(same pattern `App.tsx`'s own playhead uses for `getCurrentBeat()`) rather than calling `setState`
+directly from the Tone-thread callback. With the metronome off, both curated positions render side
+by side for reference; running, only the *current* position renders (large), advancing to the next
+one every `cycleEveryBeats` clicks (`Math.floor(beatCount / cycleEveryBeats) % SCALE_POSITIONS.length`
+— cycles E→A→E→A… with only two positions defined, extends naturally if more are ever added), with
+a small per-beat flash indicator (`.scale-trainer-beat-dot`) for the current beat-in-bar.
 
 ## Edit view: the Hookpad-style grid (`EditGrid.tsx`, Milestone 2, done)
 Replaced the old `ChordGrid.tsx` (a staff-based drag/resize/select editor, described in past-tense
@@ -1323,9 +1373,10 @@ argued from scratch.
    authoring/playing one lick at a time.
 3. **Scale/arpeggio technical fluency** — the actual hand-technique practice (running a scale or
    arpeggio cleanly, in position, up-tempo). `data/scaleSuggestions.ts` and the "Audition any scale"
-   modal (see "Chord-scale suggestions and auditioning" above) already cover the *listening* half of
-   this (hear what a scale sounds like over a chord); the *playing* half needs the same fretboard
-   model as skills 1-2, applied to scale/arpeggio shapes instead of chord shapes.
+   modal (see "Chord-scale suggestions and auditioning" above) cover the *listening* half of this
+   (hear what a scale sounds like over a chord); the *playing* half is now built too — see "Practice
+   tab: Scale/Arpeggio trainer" above (any scale/arpeggio, any root, E/A-shape fretboard boxes, an
+   optional standalone metronome that can auto-cycle positions).
 4. **Knowing which scale fits which chord, including substitutions** — functional harmony
    knowledge: Mixolydian over a plain dominant, but an altered scale or a tritone substitution's own
    scale once the harmony calls for it; Dorian over a minor 7, a different color once it's a ii°
@@ -1388,10 +1439,11 @@ Highest-leverage next pieces, in order:
    rendering/authoring via `LickEditor.tsx`/`LickTabView.tsx`/`data/licks.ts`). What's still missing
    is specifically the *trainer* itself — a lick *bank* keyed by harmonic context, and the
    loop-and-rotate exercise UI (reusing the existing loop mechanism and `MobilePlayer.tsx`'s
-   beat-countdown pattern) — not new fretboard modeling. This (plus trading-fours, scale/arpeggio
-   drilling, and scale-substitution practice) is what `PracticeView.tsx` is now explicitly reserved
-   for, per direct user redirection — see "Chord fingering popover" above for the feature that used
-   to occupy that tab and where it actually lives now.
+   beat-countdown pattern) — not new fretboard modeling. This (plus trading-fours and
+   scale-substitution practice — **scale/arpeggio drilling is now done**, see "Practice tab:
+   Scale/Arpeggio trainer" above) is what `PracticeView.tsx` is now explicitly reserved for, per
+   direct user redirection — see "Chord fingering popover" above for the feature that used to
+   occupy that tab and where it actually lives now.
 2. **AI trading-fours** (see its own section above) — the scoping questions are answered; building
    it is a genuinely large effort (lick bank/generator, turn scheduler) on top of pieces that now
    all actually exist (monophonic playback, the countdown-cue pattern, scale-rooted note generation,

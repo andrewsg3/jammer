@@ -93,7 +93,10 @@ const SEMITONE_TO_NOTE_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 
 
 // Intervals beyond 11 semitones (9ths etc.) are deliberately left un-mod'd — chordTones()
 // resolves them to the correct higher octave rather than collapsing them into the triad.
-const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
+// Exported for data/scaleFretboard.ts's arpeggio boxes -- an arpeggio is just
+// a chord's own tones treated as a linear scale, so this is the exact same
+// interval data chordTones() already uses, not a second definition of it.
+export const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   maj: [0, 4, 7],
   min: [0, 3, 7],
   dom7: [0, 4, 7, 10],
