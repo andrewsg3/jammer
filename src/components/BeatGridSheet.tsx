@@ -87,6 +87,11 @@ type Props = {
   // per bar" section. Defaults to 4 so existing callers (MobilePlayer.tsx, if
   // not yet updated) keep behaving exactly as before.
   beatsPerBar?: number;
+  // Optional — lets a click on a chord's name/repeat mark open a fingering peek
+  // (App.tsx's chordPopover) without giving up this view's read-only character;
+  // MobilePlayer.tsx doesn't pass it, so its own use of this component is
+  // unaffected. See CLAUDE.md's "Chord fingering popover" section.
+  onChordClick?: (chord: Chord) => void;
 };
 
 /**
@@ -108,6 +113,7 @@ export function BeatGridSheet({
   isPlaying,
   sections = [],
   beatsPerBar = 4,
+  onChordClick,
 }: Props) {
   const beatsPerRow = beatsPerBar * BARS_PER_ROW;
   // A flat list of beat cells — CSS grid auto-flow wraps every BEATS_PER_ROW (four
@@ -205,14 +211,26 @@ export function BeatGridSheet({
           >
             {run.mark === 'repeat' && run.placement && (
               <span
-                className="beat-grid-sheet-repeat"
+                className={'beat-grid-sheet-repeat' + (onChordClick ? ' beat-grid-sheet-chord--clickable' : '')}
                 aria-label={`Same as previous bar: ${chordName(resolveSelection(musicalKey, scale, run.placement.selection), notationStyle)}`}
+                onClick={
+                  onChordClick && run.placement
+                    ? () => onChordClick(resolveSelection(musicalKey, scale, run.placement!.selection))
+                    : undefined
+                }
               >
                 %
               </span>
             )}
             {run.mark === 'name' && run.placement && (
-              <span className="beat-grid-sheet-chord">
+              <span
+                className={'beat-grid-sheet-chord' + (onChordClick ? ' beat-grid-sheet-chord--clickable' : '')}
+                onClick={
+                  onChordClick && run.placement
+                    ? () => onChordClick(resolveSelection(musicalKey, scale, run.placement!.selection))
+                    : undefined
+                }
+              >
                 <ChordLabel
                   chord={resolveSelection(musicalKey, scale, run.placement.selection)}
                   notation={notationStyle}

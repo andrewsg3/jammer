@@ -585,7 +585,7 @@ const SECONDARY_DOMINANT_DEGREES: Partial<Record<ScaleName, ScaleDegree[]>> = {
   minor: [0, 1, 2, 3, 4, 5],
 };
 
-function shiftRoot(key: string, offset: number): string {
+export function shiftRoot(key: string, offset: number): string {
   const shifted = (rootSemitone(key) + offset) % 12;
   return SEMITONE_TO_NOTE[shifted];
 }

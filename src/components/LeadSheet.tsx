@@ -30,6 +30,11 @@ type Props = {
   beatsPerBar: number;
   playheadBeat: number;
   isPlaying: boolean;
+  // Optional: lets a click on a rendered chord symbol open a fingering peek
+  // (App.tsx's chordPopover) even though this view stays otherwise read-only —
+  // see CLAUDE.md's "Chord fingering popover" section. Undefined means no
+  // click handling at all, same as before this existed.
+  onChordClick?: (chord: Chord) => void;
 };
 
 // Same page-layout convention ChordGrid.tsx/BeatGridSheet.tsx both use, so bars
@@ -120,6 +125,7 @@ export function LeadSheet({
   beatsPerBar,
   playheadBeat,
   isPlaying,
+  onChordClick,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -480,6 +486,24 @@ export function LeadSheet({
     return { x: x0 + fracInBar * (x1 - x0), y };
   }, [isPlaying, playheadBeat, barLayout, beatsPerBar]);
 
+  // Invisible click targets over each rendered ChordSymbol, positioned with the
+  // exact same bar-x0/x1-interpolation math as playheadPos above rather than
+  // reading anything back off the VexFlow SVG itself (that symbol is a native
+  // VexFlow modifier now, not a tracked React element -- see this component's
+  // own doc comment above -- so there's no x/y state already available from the
+  // draw effect to reuse). Approximate, not pixel-exact against the real glyph
+  // bounds, but a click region roughly the width of a beat is plenty forgiving
+  // for a chord symbol that's only ever a few characters wide.
+  const chordMarkers = useMemo(() => {
+    if (barLayout.length === 0) return [];
+    return chords.map(({ placement, chord }) => {
+      const bar = Math.min(barLayout.length - 1, Math.max(0, Math.floor(placement.startBeat / beatsPerBar)));
+      const { x0, x1, y } = barLayout[bar];
+      const fracInBar = (((placement.startBeat % beatsPerBar) + beatsPerBar) % beatsPerBar) / beatsPerBar;
+      return { x: x0 + fracInBar * (x1 - x0), y: y - ROW_TOP_PADDING, chord, key: placement.startBeat };
+    });
+  }, [chords, barLayout, beatsPerBar]);
+
   return (
     <div className="lead-sheet" ref={wrapperRef}>
       <div ref={containerRef} className="lead-sheet-svg" />
@@ -490,6 +514,17 @@ export function LeadSheet({
             style={{ left: playheadPos.x, top: playheadPos.y - ROW_TOP_PADDING, height: ROW_HEIGHT - 20 }}
           />
         )}
+        {onChordClick &&
+          chordMarkers.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              className="lead-sheet-chord-hit"
+              style={{ left: m.x, top: m.y }}
+              aria-label={`Show fingering for ${m.chord.root}${m.chord.quality}`}
+              onClick={() => onChordClick(m.chord)}
+            />
+          ))}
       </div>
     </div>
   );

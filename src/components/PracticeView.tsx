@@ -1,51 +1,40 @@
-import { chordNameParts } from '../data/progressions';
-import type { Chord, NotationStyle } from '../data/progressions';
-import { CAGED_SHAPES } from '../data/fretboard';
-import { FretboardDiagram } from './practice/FretboardDiagram';
+// Desktop's 4th view mode -- a bank of practice exercises, not yet built (see
+// CLAUDE.md's "Practice philosophy for jazz guitar improvisation" section).
+// Used to show fretboard fingering diagrams for the last-clicked chord; that
+// job moved to a floating popover usable from every view instead (see
+// ChordFingeringPopover.tsx), per direct user feedback -- "I don't think we
+// should need to go to a new view to see chord fingering" -- so this tab was
+// freed up for its own, bigger purpose: a real exercise bank (trading fours,
+// licks/riffs keyed to specific chord changes, scale/arpeggio drilling, scale
+// substitutions over changes), same categories the user named when redirecting
+// this view's scope. None of the four are built yet -- this is a placeholder
+// naming what's planned, not a functioning exercise picker.
+const PLANNED_EXERCISES = [
+  { title: 'Trading fours', description: 'Alternate 4-bar blocks with a bot soloist over a backing track.' },
+  { title: 'Licks over changes', description: 'A bank of short phrases, browsable by the harmonic context they fit.' },
+  { title: 'Scales & arpeggios', description: 'Drill scale/arpeggio shapes on the neck, in position, up to tempo.' },
+  {
+    title: 'Scale substitutions',
+    description: 'Which scale (and which substitution) fits which chord, including reharm ideas.',
+  },
+];
 
-type Props = {
-  chord: Chord | null;
-  notationStyle: NotationStyle;
-};
-
-/** Desktop's 4th view mode -- guitar fretboard diagrams for whatever chord
- * was last clicked/auditioned anywhere else in the app (ChordPalette, Chord
- * Finder, and Edit grid's chord blocks all already funnel every click through
- * App.tsx's onAuditionChord/handleAudition; this view just also remembers
- * the most recent one -- see App.tsx's practiceChord state). Chord Grid and
- * Lead Sheet are read-only and don't audition on click, so they don't feed
- * this. Read-only itself too -- nothing here edits the song. */
-export function PracticeView({ chord, notationStyle }: Props) {
-  if (!chord) {
-    return (
-      <div className="practice-view practice-view-empty">
-        <p className="chord-grid-hint">Click any chord anywhere in the app to see how to play it here.</p>
-      </div>
-    );
-  }
-
-  const { root, core, ext, bass } = chordNameParts(chord, notationStyle);
-  const shapes = CAGED_SHAPES[chord.quality];
-
+export function PracticeView() {
   return (
     <div className="practice-view">
-      <h2 className="practice-view-chord-name">
-        {root}
-        {core}
-        {ext && <sup className="chord-ext">{ext}</sup>}
-        {bass}
-      </h2>
-      {!shapes || shapes.length === 0 ? (
-        <p className="chord-grid-hint">
-          No fingering diagrams yet for this chord quality — see CLAUDE.md's "Guitar fingering diagrams" section.
-        </p>
-      ) : (
-        <div className="fretboard-diagram-row">
-          {shapes.map((shape) => (
-            <FretboardDiagram key={shape.shape} root={chord.root} shape={shape} />
-          ))}
-        </div>
-      )}
+      <h2 className="practice-view-title">Practice</h2>
+      <p className="chord-grid-hint">
+        A bank of practice exercises is planned here — click any chord anywhere in the app to see its fingering (and,
+        in Edit mode, substitution ideas) in a popover instead.
+      </p>
+      <ul className="practice-view-exercise-list">
+        {PLANNED_EXERCISES.map((ex) => (
+          <li key={ex.title} className="practice-view-exercise">
+            <span className="practice-view-exercise-title">{ex.title}</span>
+            <span className="practice-view-exercise-description">{ex.description}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

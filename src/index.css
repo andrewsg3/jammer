@@ -2143,6 +2143,13 @@ button:hover {
   z-index: 1;
 }
 
+/* Opt-in (App.tsx passes onChordClick on desktop's Chord Grid, not
+   MobilePlayer.tsx's) — a chord name/repeat mark becomes a fingering-peek
+   click target without otherwise changing this view's read-only character. */
+.beat-grid-sheet-chord--clickable {
+  cursor: pointer;
+}
+
 /* "N.C." (No Chord) — real-book convention for a gap between placements, styled
    as a marking rather than a literal chord (italic, slightly smaller) even
    though it sits in the exact same spot a chord name would. */
@@ -2165,18 +2172,39 @@ button:hover {
   min-height: 200px;
 }
 
-.practice-view-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
+.practice-view-title {
+  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
+  font-size: 28px;
+  font-weight: 400;
+  margin: 0 0 10px;
 }
 
-.practice-view-chord-name {
-  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
-  font-size: 32px;
-  font-weight: 400;
-  margin: 0 0 20px;
+.practice-view-exercise-list {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.practice-view-exercise {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid rgba(26, 26, 26, 0.15);
+  border-radius: 4px;
+  opacity: 0.7;
+}
+
+.practice-view-exercise-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.practice-view-exercise-description {
+  font-size: 12px;
 }
 
 .fretboard-diagram-row {
@@ -2228,6 +2256,90 @@ button:hover {
   letter-spacing: 0.04em;
 }
 
+/* Floating "how do I play this" peek -- see ChordFingeringPopover.tsx's own
+   doc comment for why this is fixed-position (bottom-right, always) rather
+   than anchored to the exact click pixel. Same white/dark-text popover chrome
+   as .section-style-popover, just bigger. */
+.chord-fingering-popover {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  width: 280px;
+  max-height: min(70vh, 480px);
+  overflow-y: auto;
+  background: #fdfdfb;
+  color: #1a1a1a;
+  border: 1px solid #1a1a1a;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  padding: 14px;
+}
+
+.chord-fingering-popover-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.chord-fingering-popover-chord-name {
+  font-family: 'Architects Daughter', Georgia, 'Times New Roman', serif;
+  font-size: 24px;
+  font-weight: 400;
+  margin: 0;
+}
+
+.chord-fingering-popover-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: #1a1a1a;
+  padding: 0 2px;
+}
+
+.chord-fingering-popover-hint {
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 0;
+}
+
+.chord-fingering-popover .fretboard-diagram-row {
+  gap: 12px;
+}
+
+.chord-fingering-popover-subs {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(26, 26, 26, 0.2);
+}
+
+.chord-fingering-popover-subs-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  margin: 0 0 8px;
+}
+
+.chord-fingering-popover-sub {
+  margin-bottom: 10px;
+}
+
+.chord-fingering-popover-sub-label {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.fretboard-diagram-row--compact {
+  transform: scale(0.75);
+  transform-origin: top left;
+  margin-bottom: -30px;
+}
+
 /* Same "paper" treatment as .beat-grid-sheet-page — see that rule's own comment. */
 .lead-sheet-page {
   overflow-y: auto;
@@ -2257,6 +2369,21 @@ button:hover {
   width: 2px;
   background: var(--accent);
   opacity: 0.7;
+}
+
+/* Invisible click target over a rendered chord symbol -- re-enables pointer
+   events just for itself, since .lead-sheet-overlay is otherwise click-through
+   so it never blocks scrubbing/other interaction on the staff beneath it. */
+.lead-sheet-chord-hit {
+  position: absolute;
+  width: 44px;
+  height: 22px;
+  transform: translate(-4px, -2px);
+  pointer-events: auto;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
 
 /* Hookpad-style Edit grid (components/EditGrid.tsx + components/editGrid/*) —

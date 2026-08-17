@@ -5,6 +5,7 @@ import { BeatGridSheet } from './components/BeatGridSheet';
 
 import { LeadSheet } from './components/LeadSheet';
 import { PracticeView } from './components/PracticeView';
+import { ChordFingeringPopover } from './components/ChordFingeringPopover';
 import { SheetMusicHeader } from './components/SheetMusicHeader';
 import { ChordPalette } from './components/ChordPalette';
 import { MelodyNoteToolbar } from './components/MelodyNoteToolbar';
@@ -274,10 +275,11 @@ function App() {
   // ChordPalette.tsx's onSelectionChange. Stays set after a placement (not
   // auto-cleared) so repeated clicks "stamp" the same chord across cells.
   const [pendingChord, setPendingChord] = useState<PendingChord | null>(null);
-  // The most recently clicked/auditioned chord anywhere in the app -- what
-  // PracticeView shows fretboard diagrams for. See handleAudition below for
-  // where this actually gets set.
-  const [practiceChord, setPracticeChord] = useState<Chord | null>(null);
+  // The floating fingering/substitutions peek (ChordFingeringPopover) -- set
+  // by clicking any chord anywhere in the app. showSubstitutions is true only
+  // when the click came from Edit mode (handleAudition below); Chord Grid/
+  // Lead Sheet's own onChordClick (handleChordPeek) always passes false.
+  const [chordPopover, setChordPopover] = useState<{ chord: Chord; showSubstitutions: boolean } | null>(null);
   // Whether EditGrid's melody cursor/selection is live -- drives the swap
   // between ChordPalette and MelodyNoteToolbar just below. editGridRef is how
   // the toolbar's buttons reach back in to actually modify the selected note
@@ -474,12 +476,19 @@ function App() {
   const handleAudition = (chord: Chord) => {
     auditionChord(chord);
     // Every chord click that already triggers an audible preview (palette,
-    // Chord Finder, Edit grid's chord blocks) routes through here -- Practice
-    // mode piggybacks on that instead of adding its own click wiring, so
-    // "click a chord, see it in Practice" is free wherever clicking a chord
-    // was already a meaningful action. Chord Grid/Lead Sheet are read-only
-    // (no click-to-audition there at all), so they don't feed this.
-    setPracticeChord(chord);
+    // Chord Finder, Edit grid's chord blocks) routes through here -- all
+    // Edit-mode-only components, so substitutions are always relevant here,
+    // unlike handleChordPeek below (Chord Grid/Lead Sheet's own chord clicks).
+    setChordPopover({ chord, showSubstitutions: true });
+  };
+
+  // Chord Grid's/Lead Sheet's own chord-label click (onChordClick) -- unlike
+  // handleAudition above, this doesn't play the chord (both views stay
+  // otherwise read-only/non-interactive) and never shows substitutions
+  // (those are an Edit-mode-only idea, reharm suggestions for a chord you're
+  // actively placing, not something either read-only chart view needs).
+  const handleChordPeek = (chord: Chord) => {
+    setChordPopover({ chord, showSubstitutions: false });
   };
 
   const handleAuditionExoticScale = (chord: Chord, scaleRoot: string, intervals: number[]) => {
@@ -928,6 +937,16 @@ function App() {
         </div>
       )}
       <main className="app">
+        {chordPopover && (
+          <ChordFingeringPopover
+            chord={chordPopover.chord}
+            notationStyle={notationStyle}
+            showSubstitutions={chordPopover.showSubstitutions}
+            musicalKey={musicalKey}
+            scale={scale}
+            onClose={() => setChordPopover(null)}
+          />
+        )}
         {viewMode === 'edit' &&
           (melodyEditActive ? (
             <MelodyNoteToolbar
@@ -975,6 +994,7 @@ function App() {
                   isPlaying={isPlaying && !countInActive}
                   sections={sections}
                   beatsPerBar={beatsPerBar}
+                  onChordClick={handleChordPeek}
                 />
               </div>
             )}
@@ -1002,10 +1022,11 @@ function App() {
                   beatsPerBar={beatsPerBar}
                   playheadBeat={playheadBeat}
                   isPlaying={isPlaying && !countInActive}
+                  onChordClick={handleChordPeek}
                 />
               </div>
             )}
-            {viewMode === 'practice' && <PracticeView chord={practiceChord} notationStyle={notationStyle} />}
+            {viewMode === 'practice' && <PracticeView />}
             {viewMode === 'edit' && (
               <EditGrid
                 key={songLoadNonce}

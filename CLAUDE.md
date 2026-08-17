@@ -210,6 +210,17 @@ Applying that split:
   `DrumStyle.beatsPerBar`) and `App.tsx`'s `visibleDrumStyles`. No 3/4 (or other non-4/4) grooves are
   bundled yet — the mechanism is built, content isn't. This is where the `beatsPerBar`-tag-and-filter
   half of the pattern above actually originated, before bass/keys reused it for category 2.
+- **A style can be tagged for a meter *other* than 4, too — same mechanism, inverse direction.**
+  `bass.ts`'s `takeFiveVampEvents` ("Take Five Vamp" in `baseBassStyles`) is a Category 2 fixed
+  idiom for Take Five's own 5/4 chart, tagged `beatsPerBar: 5` and filtered out of the bass style
+  picker *outside* 5/4 by the same `visibleBassStyles` mechanism, just the mirror image of hiding
+  a 4/4-only style outside 4/4. Take Five's own harmonic rhythm alternates a 3-beat chord and a
+  2-beat chord within every 5-beat bar (Ebmin7 for 3, Bbmin7 for 2) — two separate
+  `ChordPlacement`s, not one 5-beat placement — so `takeFiveVampEvents` picks its cell shape from
+  each placement's own `lengthBeats` (3 → root/5th/root/5th on 1, "and" of 1, "and" of 2, 3; not-3
+  → root/5th straight on beats 1-2) rather than needing next-chord lookahead the way `tumbaoEvents`
+  does. A chart that doesn't actually alternate 3-then-2 just gets the 2-beat cell tiled across
+  whatever length it has — a plain root-5th pulse, not idiomatic, but not a crash either.
 
 **MIDI importer bar-rounding (done).** `DrumPattern`/`BassPattern` gained their own
 `beatsPerBar?: number` (defaults to 4) — a pure bar *count* stays in `.bars`; `beatsPerBar` is the
@@ -291,24 +302,71 @@ uses). That's now four explicit, purpose-built modes, switched via a segmented c
 `TopBar.tsx` (`App.tsx`'s `viewMode: 'edit' | 'chordGrid' | 'leadSheet' | 'practice'`, persisted the
 same way `compactGridView` used to be, with a one-time migration from that old boolean). **Editing
 chord placements and melody notes is exclusive to Edit mode** — the other three are read-only views
-either of the same underlying song (Chord Grid, Lead Sheet) or of whatever chord was last clicked
-(Practice, see "Guitar fingering diagrams" below) — but playback (Play/Stop) and the full mixer
-(`ChannelStrip` volume/mute/instrument/style pickers, a sibling panel outside whichever view
-renders — nothing about it needed to change) work identically in all four.
+of the same underlying song — but playback (Play/Stop) and the full mixer (`ChannelStrip`
+volume/mute/instrument/style pickers, a sibling panel outside whichever view renders — nothing
+about it needed to change) work identically in all four.
 
 - **Edit** — `EditGrid.tsx` (Milestone 2's Hookpad-style rebuild; the staff-based `ChordGrid.tsx`
   it replaced no longer exists — see below).
 - **Chord Grid** — `BeatGridSheet.tsx`, unchanged since Milestone 1 (confirmed with the user
   directly: "Beat grid is perfect as-is"). Purely a re-gating of the exact JSX `compactGridView`
   used to render.
-- **Practice** — `PracticeView.tsx`, guitar fretboard diagrams for the last-clicked chord — see
-  "Guitar fingering diagrams" below for the full mechanics. The newest of the four, and the first
-  view driven by "whatever was last clicked" rather than "the currently loaded song."
+- **Practice** — `PracticeView.tsx`, a placeholder for a bank of practice exercises (trading fours,
+  licks keyed to harmonic context, scale/arpeggio drilling, scale substitutions over changes) —
+  none of the four are built yet, see "Practice philosophy" below. Used to show fretboard fingering
+  diagrams for the last-clicked chord in v1; that job moved to a floating popover usable from every
+  view instead, per direct user feedback ("I don't think we should need to go to a new view to see
+  chord fingering") — see "Chord fingering popover" below for what actually replaced it.
 - **Lead Sheet** — `components/LeadSheet.tsx`, real engraved notation via VexFlow (`vexflow` in
   `package.json`). This is what used to be an unscoped export idea — built as a first-class in-app
   *view* instead, passive-only by the user's explicit choice (a playhead that follows playback, no
   click-to-scrub, no draggable loop range — matching Chord Grid's own restrained, non-interactive
-  character rather than reproducing Edit's scrub/loop UI a third time).
+  character rather than reproducing Edit's scrub/loop UI a third time). Its chord symbols are
+  native VexFlow `ChordSymbol` modifiers, not a React overlay (see the component's own doc comment)
+  — clicking one for the fingering popover below reads its position via the same
+  bar-x0/x1-interpolation math the playhead overlay already uses, not the VexFlow SVG itself.
+
+## Chord fingering popover (done) — replaces Practice view's old job
+A floating "how do I play this" peek, opened by clicking *any* chord in *any* view — not just a
+dedicated tab (see "Four desktop views" above for why the old Practice-tab-only version was
+replaced). `ChordFingeringPopover.tsx`, driven by `App.tsx`'s `chordPopover: { chord,
+showSubstitutions } | null` state:
+- **Edit mode** (`ChordPalette.tsx`'s click-to-add/Chord Finder, and `EditGrid.tsx`'s own chord
+  blocks) already routed every click through `App.tsx`'s `handleAudition` — that now sets
+  `chordPopover` with `showSubstitutions: true` instead of just remembering the chord for Practice
+  view. Both call sites are Edit-mode-only components, so `showSubstitutions` can just always be
+  `true` there without needing to check `viewMode` explicitly.
+- **Chord Grid** (`BeatGridSheet.tsx`) and **Lead Sheet** (`LeadSheet.tsx`) — previously had *no*
+  chord-click behavior at all (genuinely read-only). Both gained an optional `onChordClick?:
+  (chord) => void` prop (`App.tsx`'s `handleChordPeek`, wired only from desktop — `MobilePlayer.tsx`
+  doesn't pass it to its own `BeatGridSheet` instances, so mobile is unaffected), which opens the
+  same popover with `showSubstitutions: false` — a chord lookup, not a reharm suggestion, staying
+  consistent with those two views never suggesting edits. `BeatGridSheet`'s chord/repeat-mark spans
+  get a plain `onClick`; `LeadSheet` has no React-tracked position for its (now-native-VexFlow)
+  chord symbols to hang a click on, so it instead renders an invisible `.lead-sheet-chord-hit`
+  button per chord in the existing `.lead-sheet-overlay` layer, positioned with the same
+  bar-x0/x1-interpolation the playhead line already uses (`pointer-events: auto` on just the
+  button, since `.lead-sheet-overlay` itself stays click-through).
+- **Rendering**: fixed-position (bottom-right, not anchored to the click pixel — the various click
+  sites are too structurally different to thread real coordinates through cleanly), reuses
+  `CAGED_SHAPES`/`FretboardDiagram.tsx` from the old Practice view for the main chord's fingering.
+  Closes on Escape, on an outside click (document-level capture-phase `mousedown`, same pattern
+  `MelodyNoteToolbar`'s own dismiss listener uses), or its own × button; clicking a *different*
+  chord just replaces the content in place rather than needing a close-then-reopen.
+- **Substitutions** (`data/chordSubstitutions.ts`'s `getChordSubstitutions`), shown only when
+  `showSubstitutions` is true: a deliberately narrow, honest slice of the not-yet-built chord
+  progression analyzer (see that section further down) — only the four reharm rules that are
+  genuinely properties of a chord *alone*, no neighboring-chord or key-center context needed, so
+  nothing here risks the wrong-substitution problem a context-dependent rule (secondary dominants,
+  turnarounds) would raise without real lookahead: **dom7** → tritone substitution (root+6
+  semitones, same quality) and the related ii (root+7 semitones, min7); **maj7/maj** → relative
+  minor (root+9 semitones, min7); **min7/min** → relative major (root+3 semitones, maj7). Root
+  spelling picks sharp-vs-flat from the *song's* key/scale (`shiftRoot`/`shiftRootFlat`, the same
+  tables diatonic chord roots already use), applied to the *chord's* own root, not the song's —
+  mirrors how `CAGED_SHAPES`' movable fingerings already stay chord-relative. Any other quality
+  (`hasChordSubstitutions` returns false) renders nothing — same "hidden rather than
+  offered-and-wrong" stance `SCALE_SUGGESTIONS`'s empty arrays and `CAGED_SHAPES`' quality gaps
+  already take.
 
 ## Edit view: the Hookpad-style grid (`EditGrid.tsx`, Milestone 2, done)
 Replaced the old `ChordGrid.tsx` (a staff-based drag/resize/select editor, described in past-tense
@@ -1033,15 +1091,11 @@ actual catalog of patterns this would need to recognize, worked out in more deta
 pass would need, on the theory that scoping the intelligence first is cheaper than re-deriving it
 mid-implementation.
 
-## Guitar fingering diagrams (CAGED system) (v1 done — Practice view, 5 qualities, 2 positions each)
-Desktop's 4th view mode: `App.tsx`'s `ViewMode` gained `'practice'` alongside `edit`/`chordGrid`/
-`leadSheet`, rendering `PracticeView.tsx`. Clicking a chord anywhere that already triggers an
-audible preview (`ChordPalette.tsx`'s palette row and Chord Finder, Edit grid's chord blocks — all
-already call `App.tsx`'s `handleAudition`) also sets a new `practiceChord` state there, so Practice
-mode shows fretboard diagrams for whatever chord was last clicked, with zero new click wiring
-needed in any of those components. Chord Grid and Lead Sheet don't audition on click at all (still
-read-only, unchanged), so they don't feed this — consistent with how those two views have always
-worked.
+## Guitar fingering diagrams (CAGED system) (done — 5 qualities, 2 positions each)
+Originally Desktop's 4th view mode (a dedicated Practice tab); now surfaced through the chord
+fingering popover instead (see "Chord fingering popover" above), reachable by clicking any chord
+in any view rather than needing a tab switch. The data/rendering below are unchanged by that
+move — only *where* they're shown changed.
 
 **Curated, not generated** — deliberately decided against the fretboard-shape-generator approach
 this section used to float, in favor of hand-verified real shapes: a generator can't be play-tested
@@ -1072,8 +1126,8 @@ VexFlow `TabStave`/`TabNote` usage, for rendering a *lick* as real guitar TAB, s
 different problem: a fixed melodic phrase's actual fret/string choices, not a movable chord shape).
 
 **Real, not-yet-closed gaps**: the other three CAGED letters (C/G/D-shape) and the ~24 remaining
-chord qualities have no diagram at all yet — `PracticeView.tsx` shows an honest "no fingering
-diagrams yet for this chord quality" message rather than a wrong or missing-tone shape, same
+chord qualities have no diagram at all yet — `ChordFingeringPopover.tsx` shows an honest "no
+fingering diagrams yet for this chord quality" message rather than a wrong or missing-tone shape, same
 "hidden/gapped rather than offered-and-wrong" stance this app already takes elsewhere (meter-
 mismatched drum/bass/keys styles, scale suggestions with no diatonic-mode answer). Extending
 `CAGED_SHAPES` for any of those is additive — new entries in the same curated table, verified the
@@ -1241,9 +1295,9 @@ argued from scratch.
 1. **Chord knowledge** — voicings for a given chord across the whole neck, not just one shape.
    This app already shows the *symbol* (`ChordGrid.tsx`/`EditGrid.tsx`'s chord labels) and can
    *play* a voicing (`keys.ts`); the fretboard/fingering gap is now partly closed — see "Guitar
-   fingering diagrams" above for the Practice view's v1 (5 chord qualities, 2 movable positions
-   each, curated and verified rather than generated). Still a real gap for the other ~24 qualities
-   and the C/G/D-shape positions, just no longer a *total* one.
+   fingering diagrams" above (5 chord qualities, 2 movable positions each, curated and verified
+   rather than generated, surfaced via the chord fingering popover — see that section above). Still
+   a real gap for the other ~24 qualities and the C/G/D-shape positions, just no longer a *total* one.
 2. **A "bag of licks"** — real vocabulary, tied to *harmonic context* (a lick you reach for over a
    ii-V-I in a major key is a different lick than one over a minor ii-V, a turnaround, or a
    backdoor progression — see the chord progression analyzer's own Layer 1 catalog above for the
@@ -1316,11 +1370,14 @@ target, not a judgment that composition matters less.
 Highest-leverage next pieces, in order:
 1. **The spaced-repetition lick trainer** (see "Practice philosophy" above) — now the actual next
    thing, not blocked on missing fretboard/TAB infrastructure the way it used to be: both halves of
-   that prerequisite exist now (CAGED chord diagrams in Practice mode, and TAB rendering/authoring
-   via `LickEditor.tsx`/`LickTabView.tsx`/`data/licks.ts`). What's still missing is specifically the
-   *trainer* itself — a lick *bank* keyed by harmonic context, and the loop-and-rotate exercise UI
-   (reusing the existing loop mechanism and `MobilePlayer.tsx`'s beat-countdown pattern) — not new
-   fretboard modeling.
+   that prerequisite exist now (CAGED chord diagrams via the chord fingering popover, and TAB
+   rendering/authoring via `LickEditor.tsx`/`LickTabView.tsx`/`data/licks.ts`). What's still missing
+   is specifically the *trainer* itself — a lick *bank* keyed by harmonic context, and the
+   loop-and-rotate exercise UI (reusing the existing loop mechanism and `MobilePlayer.tsx`'s
+   beat-countdown pattern) — not new fretboard modeling. This (plus trading-fours, scale/arpeggio
+   drilling, and scale-substitution practice) is what `PracticeView.tsx` is now explicitly reserved
+   for, per direct user redirection — see "Chord fingering popover" above for the feature that used
+   to occupy that tab and where it actually lives now.
 2. **AI trading-fours** (see its own section above) — the scoping questions are answered; building
    it is a genuinely large effort (lick bank/generator, turn scheduler) on top of pieces that now
    all actually exist (monophonic playback, the countdown-cue pattern, scale-rooted note generation,
