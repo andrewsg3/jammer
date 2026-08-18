@@ -151,8 +151,13 @@ export type ViewMode = 'edit' | 'chordGrid' | 'leadSheet';
 // between them -- see MenuView.tsx's own doc comment and CLAUDE.md's "App shell: Menu + three
 // modes" section for the full reasoning. 'compose'/'playAlong' both still use the exact same
 // song state/TopBar/mixer as before this split existed -- appMode is purely a view gate on top of
-// that, not a second copy of any state. 'practice' is the one genuine exception: fully separate,
-// no song state, no TopBar, no mixer -- just PracticeView on its own, per direct user request.
+// that, not a second copy of any state. 'practice' is still a genuine exception: no TopBar, no
+// mixer, no *editing* of song state -- just PracticeView on its own, per direct user request --
+// except that it's handed a read-only slice of the current song (title/placements/key/scale/
+// notation/sections/beatsPerBar) plus the app's real Play/Stop (onTogglePlay/isPlaying/
+// playheadBeat), so the Scale/Arpeggio trainer can play the loaded song and track its currently-
+// sounding chord; see CLAUDE.md's "Song-scoped practice mode" section for why sharing playback
+// this way doesn't reverse the separation (Practice still can't edit or load a different song).
 export type AppMode = 'menu' | 'compose' | 'playAlong' | 'practice';
 type DesktopStoredPrefs = {
   notationStyle?: NotationStyle;
@@ -161,6 +166,10 @@ type DesktopStoredPrefs = {
   // so an existing user's "Beat Grid" choice carries over, but never written again.
   compactGridView?: boolean;
   accentColor?: string;
+  // Which of the three modes was last active — see appMode's own useState
+  // below and CLAUDE.md's "Harmonized header" section for why a refresh now
+  // resumes wherever you were, not always the Menu.
+  appMode?: AppMode;
 };
 
 function loadStoredDesktopPrefs(): DesktopStoredPrefs {
@@ -181,6 +190,21 @@ function saveStoredDesktopPrefs(prefs: DesktopStoredPrefs): void {
   }
 }
 
+// Resolves what appMode should be on first render -- pulled out to a plain
+// function (rather than inlined only in appMode's own useState) so viewMode's
+// own initializer below can consult the same answer. Without this, a fresh
+// visitor landing on a shared song link (appMode resolves to 'playAlong')
+// still got viewMode's own separate default of 'edit' -- TopBar would show
+// Play Along's fields while the content area rendered Compose's ChordPalette/
+// EditGrid underneath it, exactly the mismatched-header bug the "harmonized
+// header" work below this function exists to prevent. See appMode's own
+// useState for the full reasoning on this priority order.
+function resolveInitialAppMode(): AppMode {
+  const stored = loadStoredDesktopPrefs().appMode;
+  if (stored) return stored;
+  return urlSongName ? 'playAlong' : 'menu';
+}
+
 function App() {
   const [songTitle, setSongTitle] = useState(DEFAULT_SONG_PRESET?.name ?? 'Untitled');
   const [songSubtitle, setSongSubtitle] = useState(DEFAULT_SONG_PRESET?.subtitle ?? '');
@@ -195,18 +219,25 @@ function App() {
     const stored = loadStoredDesktopPrefs();
     // 'practice' is a stale value from before Practice became its own AppMode
     // (see that type's own comment) -- an existing user with it stored falls
-    // back to Edit, same as having nothing stored at all.
+    // back to whatever the no-stored-value branch below picks, same as having
+    // nothing stored at all.
     if (stored.viewMode && stored.viewMode !== ('practice' as ViewMode)) return stored.viewMode;
+    // No stored viewMode at all -- pick a default that actually matches
+    // whatever appMode is about to resolve to, rather than always 'edit'
+    // regardless of mode (see resolveInitialAppMode's own comment for the
+    // header/content mismatch that caused). Play Along never shows 'edit' at
+    // all, so a fresh Play-Along-bound visit (a shared song link) defaults
+    // straight to Chord Grid.
+    if (resolveInitialAppMode() === 'playAlong') return 'chordGrid';
     // One-time migration from the old boolean pref — an existing user who had
     // "Beat Grid" selected lands on the new Chord Grid mode, not back on Edit.
     return stored.compactGridView ? 'chordGrid' : 'edit';
   });
   // The landing Menu, plus which of the app's three separate modes is active --
-  // see AppMode's own doc comment. Defaults to the Menu on a fresh visit
-  // ("home page" framing), except a deep link (?song=...) skips straight to
-  // Play Along -- sharing a song link is about hearing/reading that chart, not
-  // necessarily editing it, and shouldn't dump the recipient on a menu first.
-  const [appMode, setAppMode] = useState<AppMode>(() => (urlSongName ? 'playAlong' : 'menu'));
+  // see AppMode's own doc comment and resolveInitialAppMode's own comment
+  // above for the full priority order (stored appMode wins over ?song=,
+  // which only decides anything on a genuinely first visit).
+  const [appMode, setAppMode] = useState<AppMode>(resolveInitialAppMode);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [lickEditorOpen, setLickEditorOpen] = useState(false);
   // Falls back to whatever --accent already resolved to (light/dark default) if
@@ -223,8 +254,8 @@ function App() {
   }, [accentColor]);
 
   useEffect(() => {
-    saveStoredDesktopPrefs({ notationStyle, viewMode, accentColor });
-  }, [notationStyle, viewMode, accentColor]);
+    saveStoredDesktopPrefs({ notationStyle, viewMode, accentColor, appMode });
+  }, [notationStyle, viewMode, accentColor, appMode]);
 
   const handleResetAccent = () => {
     document.documentElement.style.removeProperty('--accent');
@@ -804,6 +835,20 @@ function App() {
         countInTimeoutRef.current = null;
       }, (countInBars * beatsPerBar * 60 * 1000) / tempo);
     }
+    // Per direct user request: pressing Play while a genuine loop range is set
+    // starts from the loop's own start, not wherever the playhead happens to
+    // be (which, right after a Stop, is always 0 -- see the stop branch above
+    // -- so this used to always mean "song start," silently ignoring the
+    // loop entirely until playback looped back around to it on its own).
+    // Same "is this a real sub-range, not just the trivial whole-song
+    // default every song starts with" check BeatGridSheet.tsx's own
+    // hasCustomLoop uses, duplicated rather than shared -- it's a four-line
+    // check with exactly two call sites in different modules, not worth a
+    // new shared utility for.
+    const totalBeats = placements.reduce((max, p) => Math.max(max, p.startBeat + p.lengthBeats), 0);
+    const hasCustomLoop = loopEnd > loopStart && !(loopStart <= 0 && loopEnd >= totalBeats);
+    const startBeat = hasCustomLoop ? loopStart : playheadBeat;
+
     // Per-section playstyle overrides -- resolve each section's own plain style
     // name (SectionMarker.drumStyle et al.) against the same style lists the
     // song-level pickers use, right here at the App.tsx/engine.ts boundary. A
@@ -831,7 +876,7 @@ function App() {
       placements,
       loopStartBeat: loopStart,
       loopEndBeat: loopEnd,
-      startBeat: playheadBeat,
+      startBeat,
       tempo,
       drums: drumStyle.pattern,
       drumsTimeFeel: drumsTimeFeel.value,
@@ -935,29 +980,29 @@ function App() {
     (o) => o.value === 'normal' || beatsPerBar % 2 === 0 || o.value === bassTimeFeel.value,
   );
 
-  // Menu and Practice are both full, self-contained replacements for the rest
-  // of this component's return tree below -- see AppMode's own doc comment.
-  // Neither touches song state at all (Menu just gates it; Practice doesn't
-  // read it), so returning early here is safe -- every hook above this point
-  // has already run regardless of which branch below actually renders.
+  // Menu is the one remaining full, self-contained replacement for the rest of
+  // this component's return tree below -- see AppMode's own doc comment. It
+  // doesn't touch song state at all, so returning early here is safe: every
+  // hook above this point has already run regardless of which branch below
+  // actually renders. Compose, Play Along, and Practice all now share the
+  // same TopBar/modals below instead of Practice having its own separate
+  // minimal shell -- see CLAUDE.md's "Harmonized header" section for why.
+  // Practice still can't *edit* song state (no chord/melody editing, no
+  // mixer) -- it just reads a read-only slice of it (title/placements/key/
+  // scale/notation/sections/beatsPerBar, to render the same BeatGridSheet
+  // chart Chord Grid uses) and shares the app's real Play/Stop
+  // (onTogglePlay/isPlaying/playheadBeat) so the Scale/Arpeggio trainer's
+  // chord grid can actually play the loaded song and track the currently-
+  // sounding chord -- see CLAUDE.md's "Song-scoped practice mode" section.
   if (appMode === 'menu') {
     return <MenuView onSelect={handleSelectMenuTarget} />;
-  }
-  if (appMode === 'practice') {
-    return (
-      <div className="practice-shell">
-        <button type="button" className="practice-shell-back" onClick={() => setAppMode('menu')}>
-          ← Menu
-        </button>
-        <PracticeView />
-      </div>
-    );
   }
 
   return (
     <>
       <TopBar
         appMode={appMode}
+        onAppModeChange={handleSelectMenuTarget}
         onBackToMenu={() => setAppMode('menu')}
         songPresets={bundledSongPresets}
         onLoadSongPreset={handleLoadSongPreset}
@@ -968,6 +1013,8 @@ function App() {
         onScaleChange={setScale}
         tempo={tempo}
         onTempoChange={setTempo}
+        countInBars={countInBars}
+        onCountInBarsChange={setCountInBars}
         beatsPerBar={beatsPerBar}
         onBeatsPerBarChange={setBeatsPerBar}
         viewMode={viewMode}
@@ -987,8 +1034,6 @@ function App() {
         onClose={() => setSettingsOpen(false)}
         notationStyle={notationStyle}
         onNotationStyleChange={setNotationStyle}
-        countInBars={countInBars}
-        onCountInBarsChange={setCountInBars}
         accentColor={accentColor}
         onAccentColorChange={setAccentColor}
         onResetAccent={handleResetAccent}
@@ -1012,6 +1057,28 @@ function App() {
             onClose={() => setChordPopover(null)}
           />
         )}
+        {appMode === 'practice' ? (
+          <PracticeView
+            currentSong={{
+              title: songTitle,
+              placements,
+              musicalKey,
+              scale,
+              notationStyle,
+              sections,
+              beatsPerBar,
+            }}
+            isPlaying={isPlaying}
+            countInActive={countInActive}
+            playheadBeat={playheadBeat}
+            instrumentsLoading={instrumentsLoading}
+            onTogglePlay={handleTogglePlay}
+            loopStart={loopStart}
+            loopEnd={loopEnd}
+            onLoopRangeChange={handleLoopChange}
+          />
+        ) : (
+          <>
         {viewMode === 'edit' &&
           (melodyEditActive ? (
             <MelodyNoteToolbar
@@ -1065,6 +1132,9 @@ function App() {
                   sections={sections}
                   beatsPerBar={beatsPerBar}
                   onChordClick={handleChordPeek}
+                  loopStart={loopStart}
+                  loopEnd={loopEnd}
+                  onLoopRangeChange={handleLoopChange}
                 />
               </div>
             )}
@@ -1308,6 +1378,8 @@ function App() {
           </div>
           </div>
         </div>
+          </>
+        )}
       </main>
     </>
   );

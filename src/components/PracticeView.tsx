@@ -1,4 +1,5 @@
 import { ScaleArpeggioTrainer } from './practice/ScaleArpeggioTrainer';
+import type { PracticeCurrentSong } from './practice/ScaleArpeggioTrainer';
 
 // Desktop's 4th view mode -- a bank of practice exercises (see CLAUDE.md's
 // "Practice philosophy for jazz guitar improvisation" section). Used to show
@@ -18,13 +19,61 @@ const PLANNED_EXERCISES = [
   },
 ];
 
-export function PracticeView() {
+type Props = {
+  // Read-only song state, plus the app's real Play/Stop -- see CLAUDE.md's
+  // "Song-scoped practice mode" section for why this is a deliberate,
+  // narrow exception to Practice otherwise having no editing/mixer of its
+  // own. currentSong is nullable so Practice keeps working (an honest empty
+  // state) if there's ever no song loaded at all.
+  currentSong: PracticeCurrentSong | null;
+  // Raw playback state -- the Play/Stop button reflects this directly (so it
+  // flips to "Stop" the instant playback is triggered, same as TopBar's own
+  // button). countInActive is separate: the chart highlight and the scale
+  // panel's "which chord is currently sounding" tracking both need to stay
+  // off during count-in silence, same as Chord Grid's own isPlaying prop
+  // (`isPlaying && !countInActive`) -- see ScaleArpeggioTrainer.tsx.
+  isPlaying: boolean;
+  countInActive: boolean;
+  playheadBeat: number;
+  instrumentsLoading: boolean;
+  onTogglePlay: () => void;
+  // App.tsx's own loopStart/loopEnd (the same state Compose's LoopRow and
+  // playback itself already use) plus a way to set it -- see CLAUDE.md's
+  // "Loop a section, from Play Along/Practice" section. Not part of the
+  // read-only currentSong slice above since it's app-wide playback state, not
+  // song data.
+  loopStart: number;
+  loopEnd: number;
+  onLoopRangeChange: (loopStart: number, loopEnd: number) => void;
+};
+
+export function PracticeView({
+  currentSong,
+  isPlaying,
+  countInActive,
+  playheadBeat,
+  instrumentsLoading,
+  onTogglePlay,
+  loopStart,
+  loopEnd,
+  onLoopRangeChange,
+}: Props) {
   return (
     <div className="practice-view">
       <h2 className="practice-view-title">Practice</h2>
       <section className="scale-trainer-section">
         <h3 className="practice-view-section-title">Scales &amp; Arpeggios</h3>
-        <ScaleArpeggioTrainer />
+        <ScaleArpeggioTrainer
+          currentSong={currentSong}
+          isPlaying={isPlaying}
+          countInActive={countInActive}
+          playheadBeat={playheadBeat}
+          instrumentsLoading={instrumentsLoading}
+          onTogglePlay={onTogglePlay}
+          loopStart={loopStart}
+          loopEnd={loopEnd}
+          onLoopRangeChange={onLoopRangeChange}
+        />
       </section>
       <section>
         <h3 className="practice-view-section-title">More exercises, planned</h3>

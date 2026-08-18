@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import type { CSSProperties } from 'react';
+import { useMemo, useRef } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { chordName, chordNameParts, resolveSelection } from '../data/progressions';
 import type { Chord, ChordPlacement, NotationStyle, ScaleName } from '../data/progressions';
 import type { SectionMarker } from '../data/sections';
@@ -90,8 +90,32 @@ type Props = {
   // Optional — lets a click on a chord's name/repeat mark open a fingering peek
   // (App.tsx's chordPopover) without giving up this view's read-only character;
   // MobilePlayer.tsx doesn't pass it, so its own use of this component is
-  // unaffected. See CLAUDE.md's "Chord fingering popover" section.
-  onChordClick?: (chord: Chord) => void;
+  // unaffected. See CLAUDE.md's "Chord fingering popover" section. The second
+  // argument (the clicked run's own startBeat) is new -- added for Practice's
+  // song-scoped trainer (see selectedBeat below), which needs to know exactly
+  // which bar was clicked, not just its chord. Existing callers that only
+  // declared a one-argument callback (App.tsx's handleChordPeek) keep working
+  // unchanged: a function with fewer declared parameters is assignable here,
+  // and simply never reads the extra argument.
+  onChordClick?: (chord: Chord, startBeat: number) => void;
+  // Optional — highlights whichever run starts at this beat, independent of
+  // isPlaying/playheadBeat. Practice's song-scoped trainer uses this to show
+  // which chord is currently selected (via a click, or the song's own first
+  // chord by default) when nothing is actively playing -- see
+  // ScaleArpeggioTrainer.tsx. No other caller passes this yet.
+  selectedBeat?: number | null;
+  // Loop range (App.tsx's own loopStart/loopEnd -- the same state Compose's
+  // LoopRow/playback already use), plus a way to set it from here. Optional --
+  // MobilePlayer.tsx doesn't pass either, so it gets no loop UI at all (this
+  // is a desktop-only convenience, matching "no editing on mobile"). Compose
+  // doesn't need this either (it already has full loop editing via
+  // LoopRow.tsx/RulerRow.tsx's own Shift-drag) -- this exists specifically
+  // for Play Along and Practice, which had no way to set a loop at all
+  // before this. See CLAUDE.md's "Loop a section, from Play Along/Practice"
+  // section for the full design.
+  loopStart?: number;
+  loopEnd?: number;
+  onLoopRangeChange?: (loopStart: number, loopEnd: number) => void;
 };
 
 /**
@@ -114,17 +138,34 @@ export function BeatGridSheet({
   sections = [],
   beatsPerBar = 4,
   onChordClick,
+  selectedBeat = null,
+  loopStart,
+  loopEnd,
+  onLoopRangeChange,
 }: Props) {
   const beatsPerRow = beatsPerBar * BARS_PER_ROW;
+  // The bar a Shift+drag started on -- a plain ref, not React state, since it
+  // only ever matters inside the document-level mousemove/mouseup listeners
+  // below (a re-render on every drag frame isn't needed for this value
+  // itself, only for the loopStart/loopEnd it produces via onLoopRangeChange,
+  // which the caller owns).
+  const dragAnchorBarRef = useRef<number | null>(null);
+  // Not rounded up to a full row — a song that ends mid-row (e.g. 12 Bar Blues'
+  // 10 bars, not a multiple of the 4-bars-per-row width) should just stop there,
+  // not trail off into empty bars with nothing in them. Pulled out of beatCells
+  // below so the loop indicator can also use it, to tell "a genuine sub-range
+  // loop is set" apart from "loopStart/loopEnd just happen to be the trivial
+  // whole-song default App.tsx always carries" (see the loop indicator's own
+  // comment further down).
+  const totalBeats = useMemo(
+    () => placements.reduce((max, p) => Math.max(max, p.startBeat + p.lengthBeats), 0),
+    [placements],
+  );
   // A flat list of beat cells — CSS grid auto-flow wraps every BEATS_PER_ROW (four
   // bars) into a new visual row, so the whole chart is one grid rather than a stack
   // of independently-bordered row boxes (a per-row version could show a hairline
   // seam between rows where two adjacent boxes' borders didn't quite meet).
   const beatCells = useMemo(() => {
-    // Not rounded up to a full row — a song that ends mid-row (e.g. 12 Bar Blues'
-    // 10 bars, not a multiple of the 4-bars-per-row width) should just stop there,
-    // not trail off into empty bars with nothing in them.
-    const totalBeats = placements.reduce((max, p) => Math.max(max, p.startBeat + p.lengthBeats), 0);
     // The chord actually sounding in the beat immediately before the one
     // being processed — compared against each new bar boundary to decide
     // "name" vs "%". Deliberately *not* "whatever chord last started a bar
@@ -193,44 +234,179 @@ export function BeatGridSheet({
     return runs;
   }, [beatCells]);
 
+  // A genuine, user-set sub-range, as opposed to loopStart/loopEnd just
+  // happening to carry App.tsx's own trivial "loop the whole song" default
+  // (0..totalBeats, what every song starts with before anyone drags
+  // anything) -- only the former gets a highlight/indicator. Showing a
+  // highlight across the *entire* chart for the default case would look like
+  // a real loop is active when nothing has actually been set yet.
+  const hasCustomLoop =
+    onLoopRangeChange != null &&
+    loopStart != null &&
+    loopEnd != null &&
+    loopEnd > loopStart &&
+    !(loopStart <= 0 && loopEnd >= totalBeats);
+
+  /** Shift+mousedown on a bar starts a loop-range drag -- a single Shift+click
+   * with no movement already loops just that one bar (immediately useful for
+   * "practice one chord change" when the change fits in a bar); dragging
+   * further extends the range live as the pointer crosses other bars. Mirrors
+   * EditGrid's own established "Shift-drag on the ruler" loop-range
+   * convention (see CLAUDE.md's "Loop a section, from Play Along/Practice"
+   * section) rather than inventing a new gesture -- and deliberately a
+   * modifier-gated drag, not a plain click, so it can't collide with this
+   * same cell's own plain-click chord-select/fingering-peek behavior
+   * (handleCellClick below). Tracked via document-level listeners (not this
+   * div's own onMouseMove) because the drag routinely leaves the cell it
+   * started on -- same reason EditGrid's own cross-system pointer math
+   * (App.tsx) resolves position via document.elementFromPoint rather than a
+   * single element's bounds.
+   *
+   * Real bug, fixed: the anchor used to always be the just-clicked bar, full
+   * stop -- fine for one continuous drag, but two *separate* Shift+clicks
+   * (click a start bar, release, click an end bar -- a completely reasonable
+   * way to try this gesture, not just a single unbroken drag) each reset the
+   * anchor to that click's own bar, so the loop collapsed back down to a
+   * single bar every time and only the *last* click ever stayed highlighted.
+   * Now: if a genuine loop is already active and the new click lands outside
+   * it, the anchor becomes that loop's own far edge instead of the clicked
+   * bar, so the click *extends* the existing range (in whichever direction)
+   * rather than replacing it -- both a second separate click and continuing
+   * to drag from here behave the same way. Clicking back inside the current
+   * range starts fresh from that bar, same as clicking with no loop active
+   * at all -- there's no single obviously-right meaning for "shrink from
+   * here" to make a stronger claim on. */
+  const handleLoopDragStart = (bar: number) => (e: ReactMouseEvent) => {
+    // Shift-gated -- see this function's own doc comment above for why a
+    // plain mousedown here must fall through untouched to the normal
+    // click-to-select-chord handling on the same cell.
+    if (!onLoopRangeChange || !e.shiftKey) return;
+    e.preventDefault();
+    let anchor = bar;
+    if (hasCustomLoop) {
+      const startBar = Math.floor(loopStart! / beatsPerBar);
+      const endBar = Math.ceil(loopEnd! / beatsPerBar) - 1;
+      if (bar < startBar) anchor = endBar;
+      else if (bar > endBar) anchor = startBar;
+    }
+    dragAnchorBarRef.current = anchor;
+    onLoopRangeChange(Math.min(anchor, bar) * beatsPerBar, (Math.max(anchor, bar) + 1) * beatsPerBar);
+    const handleMove = (ev: MouseEvent) => {
+      const currentAnchor = dragAnchorBarRef.current;
+      if (currentAnchor === null) return;
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('[data-bar]');
+      if (!el) return;
+      const bar2 = Number(el.dataset.bar);
+      const lo = Math.min(currentAnchor, bar2);
+      const hi = Math.max(currentAnchor, bar2);
+      onLoopRangeChange(lo * beatsPerBar, (hi + 1) * beatsPerBar);
+    };
+    const handleUp = () => {
+      dragAnchorBarRef.current = null;
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+  };
+
   return (
-    <div className="beat-grid-sheet" style={{ '--beat-grid-cols': beatsPerRow } as CSSProperties}>
+    <>
+      {/* Status/discoverability for the Shift+drag loop gesture below --
+          per direct user request ("really easily" loop a section, e.g. just
+          one chord change). A normal-flow row above the grid, not an
+          absolutely-positioned overlay on top of it -- the grid's own top-
+          right cells can hold real chord text, and this app's various "paper"
+          page wrappers (.beat-grid-sheet-page/.practice-song-grid-page) don't
+          reliably have spare padding above the grid to float into. Shown only
+          where the gesture is actually wired up (onLoopRangeChange passed at
+          all -- Compose doesn't pass it, already having LoopRow's own fuller
+          loop editing; MobilePlayer doesn't either).
+          No "Bars X-Y" text once a loop is active -- per direct user follow-up,
+          once the per-cell top-line highlight (below) actually shows every
+          looped bar correctly, spelling the same range out in text is
+          redundant. Kept as a title tooltip (hover) and an aria-label for
+          screen readers, rounded defensively (Math.floor/Math.ceil, not
+          assuming bar-alignment, since loopStart/loopEnd can also have been
+          set from Compose's own finer-grained LoopRow) -- just not shown as
+          permanent on-screen text anymore. */}
+      {onLoopRangeChange &&
+        (hasCustomLoop ? (
+          <div
+            className="beat-grid-sheet-loop-indicator"
+            title={`Looping bars ${Math.floor(loopStart! / beatsPerBar) + 1}–${Math.ceil(loopEnd! / beatsPerBar)}`}
+          >
+            <span aria-hidden="true">🔁</span>
+            <span className="sr-only">
+              Looping bars {Math.floor(loopStart! / beatsPerBar) + 1}–{Math.ceil(loopEnd! / beatsPerBar)}
+            </span>
+            <button
+              type="button"
+              className="beat-grid-sheet-loop-clear"
+              onClick={() => onLoopRangeChange(0, totalBeats)}
+              aria-label="Clear loop"
+              title="Clear loop"
+            >
+              ×
+            </button>
+          </div>
+        ) : (
+          <div className="beat-grid-sheet-loop-hint">Shift+drag a bar to loop it</div>
+        ))}
+      <div className="beat-grid-sheet" style={{ '--beat-grid-cols': beatsPerRow } as CSSProperties}>
       {beatRuns.map((run) => {
         const isActive =
-          isPlaying && run.placement && playheadBeat >= run.startBeat && playheadBeat < run.startBeat + run.length;
+          !!run.placement &&
+          ((isPlaying && playheadBeat >= run.startBeat && playheadBeat < run.startBeat + run.length) ||
+            selectedBeat === run.startBeat);
+        // Runs never cross a bar line (see BeatRun's own doc comment above),
+        // so this is always the one real bar this run belongs to.
+        const bar = Math.floor(run.startBeat / beatsPerBar);
+        const isInLoop = hasCustomLoop && run.startBeat >= loopStart! && run.startBeat < loopEnd!;
+        // The click target is the whole cell (bar), not just the small chord-
+        // name/"%" text inside it -- per direct user request. A run's div
+        // already spans its full held-duration width (gridColumn: span
+        // run.length, see beatRuns above), so putting the handler here rather
+        // than on the inner <span> makes the entire bar clickable, blank
+        // trailing space included, not just the glyph itself.
+        const handleCellClick =
+          onChordClick && run.placement
+            ? () => onChordClick(resolveSelection(musicalKey, scale, run.placement!.selection), run.startBeat)
+            : undefined;
         return (
           <div
             key={run.startBeat}
+            data-bar={bar}
             style={{ gridColumn: `span ${run.length}` }}
             className={
               'beat-grid-sheet-cell' +
               (run.startBeat % beatsPerRow === 0 ? ' beat-grid-sheet-cell--row-start' : '') +
               ((run.startBeat + run.length) % beatsPerBar === 0 ? ' beat-grid-sheet-cell--bar-end' : '') +
-              (isActive ? ' beat-grid-sheet-cell--active' : '')
+              (isActive ? ' beat-grid-sheet-cell--active' : '') +
+              (isInLoop ? ' beat-grid-sheet-cell--loop' : '') +
+              (handleCellClick ? ' beat-grid-sheet-cell--clickable' : '') +
+              (onLoopRangeChange ? ' beat-grid-sheet-cell--loopable' : '')
             }
+            // preventDefault() in handleLoopDragStart's own mousedown handler
+            // only suppresses the browser's default mousedown behavior (text
+            // selection, drag-start) -- it does *not* stop the click event
+            // that still fires afterward on the same element, so a Shift+
+            // click here would otherwise also fire handleCellClick and pop
+            // open the chord fingering peek right alongside setting the loop.
+            // Explicitly skipped on Shift here rather than relying on that.
+            onClick={handleCellClick && ((e) => { if (!e.shiftKey) handleCellClick(); })}
+            onMouseDown={onLoopRangeChange ? handleLoopDragStart(bar) : undefined}
           >
             {run.mark === 'repeat' && run.placement && (
               <span
-                className={'beat-grid-sheet-repeat' + (onChordClick ? ' beat-grid-sheet-chord--clickable' : '')}
+                className="beat-grid-sheet-repeat"
                 aria-label={`Same as previous bar: ${chordName(resolveSelection(musicalKey, scale, run.placement.selection), notationStyle)}`}
-                onClick={
-                  onChordClick && run.placement
-                    ? () => onChordClick(resolveSelection(musicalKey, scale, run.placement!.selection))
-                    : undefined
-                }
               >
                 %
               </span>
             )}
             {run.mark === 'name' && run.placement && (
-              <span
-                className={'beat-grid-sheet-chord' + (onChordClick ? ' beat-grid-sheet-chord--clickable' : '')}
-                onClick={
-                  onChordClick && run.placement
-                    ? () => onChordClick(resolveSelection(musicalKey, scale, run.placement!.selection))
-                    : undefined
-                }
-              >
+              <span className="beat-grid-sheet-chord">
                 <ChordLabel
                   chord={resolveSelection(musicalKey, scale, run.placement.selection)}
                   notation={notationStyle}
@@ -257,6 +433,7 @@ export function BeatGridSheet({
           </div>
         );
       })}
-    </div>
+      </div>
+    </>
   );
 }

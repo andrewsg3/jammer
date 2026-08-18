@@ -14,10 +14,18 @@ export type ScalePosition = 'E' | 'A';
 export const SCALE_POSITIONS: ScalePosition[] = ['E', 'A'];
 const POSITION_ROOT_STRING: Record<ScalePosition, GuitarString> = { E: 6, A: 5 };
 
-// How many frets wide a box is -- same FRETS_SHOWN a chord diagram already
-// uses (components/practice/FretboardDiagram.tsx), for the same reason: wide
-// enough to comfortably show a full scale run without needing to scale
-// per-scale, narrow enough to read as one position at a glance.
+// How many frets *beyond* the position's own start fret a box reaches -- so a
+// box actually spans SCALE_BOX_FRETS + 1 distinct fret positions (e.g. 4 means
+// startFret..startFret+4, a 5-fret-wide box), not SCALE_BOX_FRETS of them.
+// This isn't just headroom: a real CAGED-style scale box routinely needs a
+// pinky stretch to a 5th fret to pick up every scale tone within a position
+// (confirmed against every root/scale/E-or-A-position combination this app
+// can produce -- every single one has at least one string whose note at
+// startFret+4 has no closer duplicate within startFret..startFret+3, so a
+// box that only rendered 4 frets would silently be missing real notes, not
+// just cropping empty space). `ScaleFretboardDiagram.tsx` sizes its SVG off
+// this same constant so the rendered grid always matches what this function
+// actually produces.
 export const SCALE_BOX_FRETS = 4;
 
 /** The lowest fret (0-11) on a position's own root string where the given
@@ -30,7 +38,23 @@ export function positionStartFret(root: string, position: ScalePosition): number
   return ((target - openPitch) % 12 + 12) % 12;
 }
 
-export type ScaleFretboardNote = { string: GuitarString; fret: number; isRoot: boolean };
+// One label per semitone offset from the root, for the number printed inside
+// each dot -- per direct user request ("the 1 / b2 etc type notation"). A
+// single canonical spelling per semitone class, not a context-aware one: the
+// same honest simplification this app already accepts elsewhere (see
+// data/scaleSuggestions.ts's own note on this app's scale vocabulary) rather
+// than trying to re-derive real key-signature-aware enharmonic spelling for
+// an arbitrary interval set with no scale-degree metadata of its own attached
+// (unlike, say, progressions.ts's diatonic ScaleName machinery, which always
+// knows which major-scale mode it's building from). The one real ambiguity
+// this glosses over is semitone 8 -- #5 in an augmented/whole-tone context,
+// b6 in a natural-minor/Aeolian one -- resolved to "b6" as the more common
+// default across this app's own scale vocabulary (SCALE_INTERVALS has no
+// whole-tone/augmented scale at all -- see progressions.ts's ScaleName --
+// so b6 is right far more often here than #5 would be).
+const SEMITONE_DEGREE_LABELS = ['1', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'];
+
+export type ScaleFretboardNote = { string: GuitarString; fret: number; isRoot: boolean; degreeLabel: string };
 
 /**
  * Every fretted note within a position's own fret window that belongs to the
@@ -56,7 +80,13 @@ export function findPositionNotes(root: string, intervals: number[], position: S
     for (let fret = startFret; fret <= startFret + SCALE_BOX_FRETS; fret++) {
       const pitch = pitchClassAt(stringNum as GuitarString, fret);
       if (tones.has(pitch)) {
-        notes.push({ string: stringNum as GuitarString, fret, isRoot: pitch === rootPitch });
+        const semitoneFromRoot = ((pitch - rootPitch) % 12 + 12) % 12;
+        notes.push({
+          string: stringNum as GuitarString,
+          fret,
+          isRoot: pitch === rootPitch,
+          degreeLabel: SEMITONE_DEGREE_LABELS[semitoneFromRoot],
+        });
       }
     }
   }

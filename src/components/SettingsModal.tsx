@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { NotationStyle } from '../data/progressions';
-import { COUNT_IN_OPTIONS, type CountInBars } from '../audio/engine';
 import { AttributionsModal } from './AttributionsModal';
 
 type Props = {
@@ -8,8 +7,6 @@ type Props = {
   onClose: () => void;
   notationStyle: NotationStyle;
   onNotationStyleChange: (style: NotationStyle) => void;
-  countInBars: CountInBars;
-  onCountInBarsChange: (bars: CountInBars) => void;
   accentColor: string;
   onAccentColorChange: (color: string) => void;
   onResetAccent: () => void;
@@ -19,14 +16,16 @@ type Props = {
  * (backdrop + panel, an Appearance section of label/control rows), a separate
  * component rather than a shared one since the two hold different settings
  * (mobile also has per-track volume sliders here; desktop's mixer already lives
- * in the channel strips, so there's nothing to duplicate). */
+ * in the channel strips, so there's nothing to duplicate). Count-in used to
+ * live here too (a "Playback" section) -- moved up to TopBar itself, next to
+ * Tempo, so it's directly visible/editable in every mode (including Practice)
+ * rather than buried in a modal -- see CLAUDE.md's "Harmonized header"
+ * section. */
 export function SettingsModal({
   open,
   onClose,
   notationStyle,
   onNotationStyleChange,
-  countInBars,
-  onCountInBarsChange,
   accentColor,
   onAccentColorChange,
   onResetAccent,
@@ -76,23 +75,6 @@ export function SettingsModal({
           <button className="settings-modal-reset" onClick={onResetAccent} aria-label="Reset accent color to default">
             ↺
           </button>
-        </label>
-
-        <h3 className="settings-modal-subheading">Playback</h3>
-        <label className="settings-modal-row">
-          <span>Count-in</span>
-          <select
-            className="settings-modal-select"
-            value={countInBars}
-            onChange={(e) => onCountInBarsChange(Number(e.target.value) as CountInBars)}
-            aria-label="Count-in before play starts"
-          >
-            {COUNT_IN_OPTIONS.map((bars) => (
-              <option key={bars} value={bars}>
-                {bars === 0 ? 'Off' : `${bars} bar${bars === 1 ? '' : 's'}`}
-              </option>
-            ))}
-          </select>
         </label>
 
         <button

@@ -102,25 +102,6 @@ body {
   margin-bottom: 6px;
 }
 
-.top-bar-back-to-menu {
-  align-self: flex-start;
-  font-size: 11px;
-  font-weight: 600;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  padding: 3px 8px;
-  cursor: pointer;
-  margin-bottom: 4px;
-}
-
-.top-bar-back-to-menu:hover {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
 .app-title {
   /* Bembo if it's actually installed (a licensed/non-web-safe typeface — there's no
      web-font pipeline in this client-only app to embed it) — Georgia otherwise as a
@@ -2116,6 +2097,41 @@ button:hover {
   row-gap: 6px;
 }
 
+/* Loop status row, above the grid -- see BeatGridSheet.tsx's own comment for
+   why this is normal document flow rather than an absolute overlay. Same
+   amber (--loop-accent) as EditGrid's own loop row/handles, so it reads as
+   the same feature. */
+.beat-grid-sheet-loop-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-bottom: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--loop-accent);
+  background: color-mix(in srgb, var(--loop-accent) 14%, transparent);
+  border: 1px solid var(--loop-accent);
+  border-radius: 4px;
+}
+
+.beat-grid-sheet-loop-clear {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.beat-grid-sheet-loop-hint {
+  margin-bottom: 6px;
+  font-size: 11px;
+  opacity: 0.5;
+}
+
 /* Section marker badge (e.g. "A") — a plain absolutely-positioned overlay, not a
    real grid item (BeatGridSheet.tsx computes its pixel position from the same
    row-height/gap this rule's siblings use), so it can sit right on a cell's
@@ -2162,6 +2178,47 @@ button:hover {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+/* This bar is inside the current Shift+drag loop range -- a bold colored
+   line along the top edge, per direct user request, plus a faint background
+   tint so a whole run of looped bars still reads at a glance, not just
+   edge-on. The top line overrides .beat-grid-sheet-cell's own plain 1px grey
+   border-top outright (same property, this rule declared later in the
+   cascade) rather than layering on top of it. Deliberately not a box-shadow
+   ring (an earlier version of this) -- a top line reads faster than a full
+   ring when scanning a whole run of looped bars rather than looking at just
+   one. Same --loop-accent amber as EditGrid's own loop row
+   (.loop-row-active), so a loop reads as "the same concept" regardless of
+   which view set it. */
+.beat-grid-sheet-cell--loop {
+  border-top: 3px solid var(--loop-accent);
+  background: color-mix(in srgb, var(--loop-accent) 10%, transparent);
+}
+
+/* The currently-*playing* bar needs to stay visually distinct even when it's
+   also inside the loop range -- both classes set `background`, and without
+   this, --loop's own rule (declared after --active above) would silently win
+   outright for any cell carrying both classes, since backgrounds don't
+   "layer" the way the doc comment above used to (wrongly) claim -- the later
+   cascade rule simply replaces the earlier one. A real bug, caught per
+   direct user report ("current chord should still be highlighted... even if
+   it's part of loop"): every bar in an active loop looks identical while
+   playing, with no way to tell which one is actually sounding right now.
+   Two-class selector (0,2,0 specificity) beats either single-class rule
+   above regardless of source order, so this doesn't depend on staying
+   declared last -- explicit rather than fragile. The loop's own top line
+   isn't touched by any of this (a different property, always visible
+   either way) -- only the background needed a real fix. */
+.beat-grid-sheet-cell--active.beat-grid-sheet-cell--loop {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Every cell becomes a Shift+drag target once onLoopRangeChange is passed
+   (BeatGridSheet.tsx) -- declared before --clickable below so a chord cell's
+   own (more common) plain-click hover wins over this when both apply. */
+.beat-grid-sheet-cell--loopable:hover {
+  background: color-mix(in srgb, var(--loop-accent) 12%, transparent);
+}
+
 /* Same-as-last-bar mark. Architects Daughter has a plain "%" glyph (full Latin
    coverage, same as everywhere else it's used) — no need for Georgia here. Left at
    the font's own regular weight rather than faking bold: that font has no real
@@ -2192,10 +2249,17 @@ button:hover {
 }
 
 /* Opt-in (App.tsx passes onChordClick on desktop's Chord Grid, not
-   MobilePlayer.tsx's) — a chord name/repeat mark becomes a fingering-peek
-   click target without otherwise changing this view's read-only character. */
-.beat-grid-sheet-chord--clickable {
+   MobilePlayer.tsx's) — the whole cell (not just the chord-name/"%" text
+   inside it, per direct user request) becomes a fingering-peek/selection
+   click target without otherwise changing this view's read-only character.
+   A subtle hover wash gives the same "this whole bar is one target" feedback
+   before the click, distinct from --active's own (stronger) accent tint. */
+.beat-grid-sheet-cell--clickable {
   cursor: pointer;
+}
+
+.beat-grid-sheet-cell--clickable:hover {
+  background: rgba(26, 26, 26, 0.05);
 }
 
 /* "N.C." (No Chord) — real-book convention for a gap between placements, styled
@@ -2276,43 +2340,51 @@ button:hover {
   opacity: 0.85;
 }
 
-/* Practice's own minimal shell (App.tsx's appMode === 'practice' branch) --
-   deliberately no TopBar, no song controls, no mixer: Practice is fully
-   separate from the song editor by design (see App.tsx's AppMode comment). */
-.practice-shell {
-  min-height: 100vh;
-  padding: 20px 24px;
-}
-
-.practice-shell-back {
-  font-size: 12px;
-  font-weight: 600;
-  background: transparent;
+/* Practice tab's own page (PracticeView.tsx, components/practice/
+   FretboardDiagram.tsx). Used to be a fixed-light "paper" page, same
+   treatment as Chord Grid/Lead Sheet's own manuscript-paper styling -- but
+   unlike those two (which stay deliberately non-theme-aware, since real
+   sheet music is white regardless of app theme), Practice isn't meant to
+   *look like* a printed chart, so it switched to the app's own --text/--bg/
+   --border theme variables per direct user request ("should learn
+   dark-mode"). The embedded BeatGridSheet chart itself (practice-song-grid-
+   page below) is unaffected -- that's the one shared component still
+   deliberately fixed-light, matching Chord Grid everywhere else it's used. */
+.practice-view {
+  background: color-mix(in srgb, var(--text) 3%, var(--bg));
+  color: var(--text);
   border: 1px solid var(--border);
   border-radius: 4px;
-  color: var(--text);
-  padding: 5px 10px;
-  cursor: pointer;
-  margin-bottom: 16px;
-}
-
-.practice-shell-back:hover {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-/* Practice tab's own page (PracticeView.tsx, components/practice/
-   FretboardDiagram.tsx) -- same "paper" page treatment the song editor's
-   three views use, for visual consistency even though Practice is no longer
-   part of that same view switcher. */
-.practice-view {
-  background: #fdfdfb;
-  color: #1a1a1a;
-  border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--text) 8%, transparent);
   padding: 24px;
-  min-height: 200px;
+  box-sizing: border-box;
+  /* Full width of .app, not a narrower centered card -- per direct user
+     request. Used to be max-width: 1200px + margin: 0 auto, which (for
+     reasons that trace back to this being a flex item of .app's own column
+     flex layout, not a plain block) actually shrink-wrapped to content
+     instead of stretching, well short of even that 1200px cap -- explicit
+     width: 100% sidesteps whatever that sizing quirk was rather than
+     depending on align-items: stretch behaving the way it should have here.
+     This incidentally fixed the scrollbar complaint below too: narrower than
+     intended meant .practice-song-trainer's two columns (chord grid + scale
+     panel) didn't have room to sit side by side and wrapped to stacking
+     instead, roughly doubling the page's real height. */
+  width: 100%;
+  /* Practice now renders as the sole child of .app (see App.tsx's shared
+     TopBar/main structure -- there's no more separate .practice-shell), the
+     same flex column every other mode's content sizes itself within. This
+     app deliberately has no page-level scrollbar (body is overflow: hidden;
+     every pane scrolls itself -- see .app's own comment) -- flex: 1 lets this
+     pane claim .app's remaining height (below TopBar) instead of growing
+     past it, and overflow-y: auto is what actually makes content taller than
+     that height reachable, rather than silently clipped, in the genuine
+     edge case (a very long chart, or a short viewport) where it still
+     doesn't all fit even at full width -- not the everyday case anymore now
+     that the width fix above lets the two-column layout actually go
+     side-by-side. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .practice-view-title {
@@ -2325,8 +2397,14 @@ button:hover {
   list-style: none;
   margin: 20px 0 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  /* A row of cards, not a stacked column -- now that .practice-view uses the
+     page's full width (see that rule's own comment), stacking these three
+     placeholder items vertically wasted the newly-available width and was
+     the single biggest remaining contributor to the page needing to scroll
+     at all. auto-fit/minmax so it still wraps sanely on a narrower window
+     instead of squeezing three columns into too little space. */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
 
@@ -2335,7 +2413,7 @@ button:hover {
   flex-direction: column;
   gap: 2px;
   padding: 10px 14px;
-  border: 1px solid rgba(26, 26, 26, 0.15);
+  border: 1px solid var(--border);
   border-radius: 4px;
   opacity: 0.7;
 }
@@ -2352,21 +2430,106 @@ button:hover {
 .practice-view-section-title {
   font-size: 15px;
   font-weight: 600;
-  margin: 24px 0 10px;
+  margin: 16px 0 10px;
 }
 
 .scale-trainer-section {
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(26, 26, 26, 0.15);
+  border-bottom: 1px solid var(--border);
 }
 
-.scale-trainer-controls,
-.scale-trainer-metronome {
+.scale-trainer-panel {
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 6px;
+  padding: 16px 18px;
+}
+
+.scale-trainer-panel + .scale-trainer-panel {
+  margin-top: 16px;
+}
+
+/* Two columns: the song's real chart (BeatGridSheet) on the left, the
+   currently-selected/-sounding chord's scale panel on the right -- see
+   ScaleArpeggioTrainer.tsx's own doc comment for the interaction model. */
+.practice-song-trainer {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.practice-song-trainer-grid-col {
+  flex: 1 1 480px;
+  min-width: 0;
+}
+
+.practice-song-trainer-scale-col {
+  /* Widened alongside ScaleFretboardDiagram.tsx's own much-larger dimensions
+     (per direct user request) so the box actually fits the panel instead of
+     overflowing it. */
+  flex: 0 0 460px;
+}
+
+.practice-song-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.practice-song-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.practice-play-button {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 18px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.practice-play-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.practice-song-grid-page {
+  max-height: 560px;
+}
+
+.scale-trainer-chord-name {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.scale-trainer-controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.scale-trainer-suggestion-toggle {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.scale-trainer-position-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
 }
 
 .scale-trainer-mode-toggle {
@@ -2377,69 +2540,16 @@ button:hover {
 .scale-trainer-mode-button {
   font-size: 12px;
   padding: 5px 12px;
-  border: 1px solid #1a1a1a;
+  border: 1px solid var(--text);
   background: transparent;
-  color: #1a1a1a;
+  color: var(--text);
   cursor: pointer;
   border-radius: 3px;
 }
 
 .scale-trainer-mode-button--active {
-  background: #1a1a1a;
-  color: #fdfdfb;
-}
-
-.scale-trainer-field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  opacity: 0.8;
-}
-
-.scale-trainer-field select,
-.scale-trainer-field input {
-  font-size: 13px;
-  padding: 4px 6px;
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-.scale-trainer-field--narrow input {
-  width: 64px;
-}
-
-.scale-trainer-metronome-toggle {
-  font-size: 12px;
-  padding: 6px 14px;
-  border: 1px solid #1a1a1a;
-  background: #9f5fe0;
-  color: #fdfdfb;
-  cursor: pointer;
-  border-radius: 3px;
-  align-self: flex-end;
-}
-
-.scale-trainer-beat-indicator {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  align-self: flex-end;
-  padding-bottom: 6px;
-}
-
-.scale-trainer-beat-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1px solid #1a1a1a;
-  background: transparent;
-}
-
-.scale-trainer-beat-dot--active {
-  background: #9f5fe0;
+  background: var(--text);
+  color: var(--bg);
 }
 
 .scale-trainer-hint {
@@ -2486,6 +2596,64 @@ button:hover {
   fill: #1a1a1a;
 }
 
+/* Scale/arpeggio boxes only (ScaleFretboardDiagram.tsx) -- inverted from the
+   chord-shape defaults above, per direct user request: plain scale tones in
+   the theme's own text color, the root in the app's own customizable accent
+   color, so the root pops the same way it does everywhere else --accent is
+   used, rather than a fixed purple. Scoped to .scale-fretboard-diagram
+   specifically so this never touches FretboardDiagram.tsx's chord-popover
+   diagrams, which only ever use the un-modified .fretboard-dot rule above
+   (they have no root/non-root distinction at all) and stay deliberately
+   fixed-light regardless of theme (see .chord-fingering-popover's own
+   "paper" background further down). */
+.scale-fretboard-diagram .fretboard-dot {
+  fill: var(--text);
+}
+
+.scale-fretboard-diagram .fretboard-dot--root {
+  fill: var(--accent);
+}
+
+/* The grid itself (strings/frets) and the start-fret label also need to
+   track the theme -- the base rules above are deliberately fixed-dark for
+   FretboardDiagram.tsx's own fixed-light popover, so (same scoping as the
+   dot overrides) only the scale/arpeggio boxes get switched to var(--text).
+   The label is also larger and bold, per direct user request ("shouldn't
+   foul the diagram") -- paired with the extra vertical clearance
+   ScaleFretboardDiagram.tsx's own LABEL_OFFSET_Y/HEIGHT now give it, so
+   growing the text doesn't just make it overlap the strings worse. */
+.scale-fretboard-diagram .fretboard-string,
+.scale-fretboard-diagram .fretboard-fret {
+  stroke: var(--text);
+}
+
+.scale-fretboard-diagram .fretboard-fret-label {
+  font-size: 20px;
+  font-weight: 700;
+  fill: var(--text);
+}
+
+/* Scale-degree number inside each dot ("1", "b3", "5"...) -- per direct user
+   request. Colored to contrast with whichever dot fill it's sitting on top
+   of, not a single fixed color: plain scale-tone dots fill with var(--text)
+   (see .scale-fretboard-diagram .fretboard-dot above), so their label flips
+   to var(--bg) -- the same background-on-foreground inversion this app
+   already uses for e.g. .scale-trainer-mode-button--active. Root dots stay
+   the app's accent color per direct user request, so their own label uses
+   plain white, matching the white-on-accent convention already established
+   elsewhere (.practice-play-button, e.g.). */
+.fretboard-dot-label {
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--bg);
+  pointer-events: none;
+  user-select: none;
+}
+
+.fretboard-dot-label--root {
+  fill: #fff;
+}
+
 .fretboard-mute {
   font-size: 10px;
   fill: #1a1a1a;
@@ -2497,6 +2665,20 @@ button:hover {
   opacity: 0.7;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* A flat root (e.g. "Bb7") is spelled with a plain lowercase "b" -- see
+   progressions.ts's SEMITONE_TO_NOTE_FLAT -- and the base rule's blind
+   uppercase above turns that into "BB7", indistinguishable from a capital B
+   for the flat itself, per direct user report. Only ScaleFretboardDiagram.tsx's
+   label ever embeds a chord name (FretboardDiagram.tsx's own label is just
+   "E-shape", no root, so it keeps the base rule's uppercase untouched) --
+   scoped off here and replaced with explicit uppercase text in the JSX for
+   the parts that are actually safe to uppercase (the position and the scale/
+   arpeggio word), leaving the chord name's own casing alone. */
+.scale-fretboard-diagram .fretboard-diagram-label {
+  text-transform: none;
+  font-size: 14px;
 }
 
 /* Floating "how do I play this" peek -- see ChordFingeringPopover.tsx's own

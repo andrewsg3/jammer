@@ -331,19 +331,268 @@ one persistent header.
   Compose visit, otherwise leaves it alone. Play/Stop, the mixer, and the whole song data model are
   identical in both — see "Compose and Play Along: two modes, three views" below for what used to
   be "Four desktop views."
-- **Practice is fully separate, on purpose** (direct user request: "I think fully separate... a
-  Duolingo-for-jazz-guitar exercise and game bank") — no `TopBar`, no song state, no mixer, no
-  Play/Stop. `App.tsx` returns a minimal `.practice-shell` (a "← Menu" button plus `PracticeView`)
-  entirely outside the Compose/Play Along render tree, before any song-related JSX even runs.
-  `PracticeView` already took zero props (its Scale/Arpeggio trainer is fully self-contained --
-  see that section below), so detaching it cost nothing functionally.
-- **Back to Menu**: a small button in `TopBar`'s brand corner (`.top-bar-back-to-menu`) for
-  Compose/Play Along, and `.practice-shell-back` for Practice — both just set `appMode` back to
-  `'menu'`. The underlying song (placements/key/tempo/etc.) is untouched either way, so returning
-  to Compose or Play Along later resumes exactly where you left off.
+- **Practice used to be fully separate** (direct user request: "I think fully separate... a
+  Duolingo-for-jazz-guitar exercise and game bank") — its own minimal `.practice-shell`, no
+  `TopBar`, no mixer, entirely outside the Compose/Play Along render tree. **Superseded** — see
+  "Harmonized header: one TopBar across all three modes" below for the redesign that gave Practice
+  the same shared header every other mode uses. What's still true, unchanged by that redesign:
+  Practice still can't *edit* song state — no mixer, no chord/melody editing, no song *picking* —
+  only a read-only slice of the current song (for its own chart) and the app's real Play/Stop (so
+  it can actually play that chart) cross into Practice at all.
+- **Back to Menu**: a small button in `TopBar`'s brand corner (`.top-bar-back-to-menu`), present in
+  all three modes now that they share one header — sets `appMode` back to `'menu'`. A separate
+  **Mode switcher** right next to it moves sideways between Compose/Play Along/Practice without
+  going back to Menu at all (see "Harmonized header" below) — "← Menu" is for the landing screen
+  specifically, the mode switcher is for lateral movement between the three modes. The underlying
+  song (placements/key/tempo/etc.) is untouched by either, so returning to any mode later resumes
+  exactly where you left off.
 - **Not migrated**: a stale `viewMode: 'practice'` value from before this split (an existing user's
   `localStorage`) falls back to `'edit'` on load, same as having nothing stored at all — see the
   guard in `App.tsx`'s `viewMode` `useState` initializer.
+
+## Harmonized header: one TopBar across all three modes (done)
+Per direct user request — Practice had no tempo/key/count-in control at all, switching modes meant
+going all the way back to Menu, and the whole app "should always feel like we're on the same app."
+`TopBar` is now shared across Compose, Play Along, *and* Practice (previously Practice's own
+`.practice-shell` rendered no header at all — see "App shell" above for what that used to look
+like), with a new in-header mode switcher for moving between them, and the whole thing (plus which
+song is loaded) now survives a page refresh instead of only the song doing so.
+
+**Mode switcher, not just "← Menu."** A new `TopBarField label="Mode"` (`APP_MODE_OPTIONS`, reusing
+the exact `.view-mode-switch`/`.view-mode-button` tab styling the existing View switcher already
+established, so it reads as the same kind of control) sits right after the brand corner. It calls
+`App.tsx`'s existing `handleSelectMenuTarget` directly (the same handler `MenuView`'s own cards
+call) via a new `onAppModeChange` prop — same mode-appropriate `viewMode` nudging either entry point
+already did (Compose → `'edit'`, Play Along → bumps off `'edit'` to `'chordGrid'` only if it was
+still sitting there), no new logic duplicated. "← Menu" still exists alongside it, unchanged — a
+genuinely different action (back to the landing screen) from lateral movement between the three
+modes.
+
+**TopBar fields, per mode:**
+- **Mode switcher, Settings, Lick Editor**: all three modes, unchanged/always available — this was
+  the actual "settings always available from top" ask.
+- **Song picker + save/import/print, Key/Scale, Meter**: visible in all three modes (so Practice's
+  header shows *what's* loaded, for context, same as everywhere else), but **disabled in Practice**
+  (`isPractice` = `appMode === 'practice'`) — save/import/print are hidden outright rather than just
+  grayed out, same as the Play button below. This is the direct, deliberate consequence of the
+  answered design question from this redesign: Practice shows Key/Scale/Meter read-only, changing
+  them only ever happens in Compose — Practice still can't *write* song state, this header sharing
+  it doesn't reverse that.
+- **Tempo**: all three modes, **fully editable in Practice too** — unlike Key/Scale/Meter, tempo is
+  a performance parameter, not song structure, and was one of the two things explicitly requested
+  for Practice by name.
+- **Count-in**: new field, next to Tempo, all three modes, fully editable everywhere including
+  Practice — the other of the two things explicitly requested. **Moved out of the Settings modal
+  entirely** (`SettingsModal.tsx`'s whole "Playback" section, previously the only place it lived) —
+  see that component's own updated doc comment. Not duplicated in both places: one control, one
+  location, directly visible instead of buried in a modal.
+- **View tabs**: unchanged for Compose (hidden, Edit-only)/Play Along (Chord Grid/Lead Sheet);
+  Practice gets a new `practice: []` entry in `VIEW_MODES_BY_APP_MODE` so its own tab row correctly
+  never renders (Practice has exactly one page, same "hide rather than show a pointless single tab"
+  reasoning Compose's own Edit-only case already established).
+- **Play/Stop**: **hidden from TopBar entirely in Practice**, per direct user feedback ("play button
+  should maybe be moved out to a page-specific location") — Practice already had its own dedicated
+  Play button next to its own chart (see "Song-scoped practice mode" above), wired to the exact same
+  `onTogglePlay`/`isPlaying` App.tsx state TopBar's button uses, so hiding TopBar's copy avoids a
+  confusing duplicate rather than needing new plumbing. Compose/Play Along's own Play button stays
+  exactly where it already was — the "maybe" in that feedback was resolved by *not* moving it there,
+  since it was never reported as a problem for those two modes.
+
+**Persistence: the whole page now survives a refresh, not just the song.** `DesktopStoredPrefs`
+gained an `appMode` field, saved by the same effect that already persists `notationStyle`/
+`viewMode`/`accentColor`. The actual design problem here was priority order against the existing
+`?song=` URL mechanism, and it's worth spelling out because the first attempt got it backwards and
+broke persistence outright before landing on the right answer:
+- **`setSongInUrl` keeps `?song=` in the address bar in sync with whatever song is loaded, on every
+  normal save/switch, in every mode** — not only when someone shares a link. So the URL's mere
+  presence doesn't distinguish "a fresh share link someone just clicked" from "this browser's own
+  address bar remembering a previous Compose/Practice session." Treating `?song=` as always meaning
+  "force Play Along" (the original, pre-this-redesign behavior) — which is exactly what a first
+  attempt at appMode persistence did, by checking `urlSongName` *before* the newly-stored `appMode`
+  — meant a returning visitor's own address bar (still carrying `?song=` from their last session)
+  silently overrode their persisted mode on every single refresh, bouncing a Compose or Practice
+  session back to Play Along every time. Caught by an explicit scripted test (start in Practice,
+  reload, check the Practice heading was still there — it wasn't) before this ever shipped.
+- **Fixed priority, in `resolveInitialAppMode()`** (`App.tsx`, a plain module-level function, not
+  inlined only in `appMode`'s own `useState` — see below for why it needs to be callable from two
+  places): stored `appMode` wins whenever it exists; `?song=` only gets to decide anything on a
+  genuinely first visit (nothing stored at all yet), where it still skips straight to Play Along —
+  sharing a song link is about hearing/reading that chart, not necessarily editing it, and a
+  first-time recipient shouldn't be dumped on a menu (or a stranger's leftover session state, which
+  can't exist yet anyway on a genuinely first visit) first.
+- **A second, related bug the same investigation surfaced**: `viewMode`'s own initializer had
+  *always* defaulted to `'edit'` when nothing was stored, completely independent of what `appMode`
+  resolved to — so a fresh visitor clicking a shared link (`appMode` → `'playAlong'`) got a Play
+  Along-labeled TopBar sitting above Compose's own `ChordPalette`/`EditGrid` content underneath it,
+  since the content area keys directly off `viewMode`, not `appMode`. This bug predates this
+  session's changes entirely (nothing before today ever exercised a truly fresh visit with no
+  stored `viewMode` *and* a `?song=` link at the same time) but directly undermines the exact
+  "always feels like the same app" goal this whole redesign is for, so it's fixed here too:
+  `resolveInitialAppMode()` was pulled out specifically so `viewMode`'s own initializer could consult
+  the same answer `appMode`'s does, and now defaults to `'chordGrid'` (never `'edit'`) whenever that
+  resolves to `'playAlong'`. Verified via a scripted check: a fresh context hitting `?song=...`
+  directly now shows the Chord Grid chart, not the Edit grid, under a correctly-labeled Play Along
+  header.
+
+**Practice's own scroll containment (done, follow-up bug found while restructuring).** This app
+deliberately has no page-level scrollbar — `body` is `overflow: hidden`, and every pane scrolls
+itself (see that rule's own comment in `index.css`). The old `.practice-shell` never gave its content
+its own scroll boundary at all (just `min-height: 100vh`), which — now that Practice renders as a
+plain child of `.app` (a bounded-height flex column, not a full-viewport standalone branch) alongside
+every other mode's content — would have clipped anything taller than the space left under TopBar.
+`.practice-view` now carries `flex: 1; min-height: 0; overflow-y: auto;`, the same shape every other
+scrollable pane in this app already uses, so its own content (which can genuinely run long — a real
+song's full chart plus the scale panel plus the planned-exercises list) stays reachable.
+
+**Verified end to end**, all via scripted Playwright checks (not just visual screenshots): the mode
+switcher moves between all three modes and back; Key/Scale/Meter/Song/save-import-print are
+correctly disabled or hidden in Practice while Tempo/Count-in stay editable; Practice's own Play
+button still works with no TopBar duplicate; a fresh `?song=` visit lands on a correctly-populated
+Play Along (not a mismatched Compose-under-Play-Along-header); Practice and Compose both survive a
+real page reload, landing back on the same mode with the same song; navigating Menu → Practice →
+Menu mid-playback (from the previous session's work) still holds. Zero console errors throughout,
+clean typecheck.
+
+**Follow-up fixes (done), both per direct user feedback after living with the redesign above:**
+- **"← Menu" folded into the Mode switcher itself**, rather than staying a separate button in the
+  brand corner — having two different navigation controls in two different parts of the header read
+  as redundant even though they're technically different actions (back to the landing screen vs.
+  lateral movement between modes). Now it's just the first, non-"tab" button in the same
+  `.view-mode-switch` row as Compose/Play Along/Practice, so it reads as one navigation cluster. The
+  old standalone `.top-bar-back-to-menu` button and its CSS are gone, not just hidden.
+- **Meter (beatsPerBar) locked to Compose only, not just "not Practice"** — Key/Scale/Song stayed
+  editable in Play Along (unchanged from before this whole redesign; transposing to follow along in
+  a different key is a legitimate Play Along use, a real distinction the user drew), but Meter is
+  real song *structure* (changing it reflows every bar), not a listening preference, so it's now
+  `disabled={appMode !== 'compose'}` specifically — its own `meterLocked` flag, separate from
+  `isPractice`, per direct user feedback: "Should not be able to change time signature in play along
+  mode."
+
+## Loop a section, from Play Along/Practice (done)
+Compose already has full loop-range editing (`LoopRow.tsx`/`RulerRow.tsx`'s own Shift-drag on the
+ruler), but Play Along and Practice — both of which render `BeatGridSheet.tsx` for their chart, not
+`EditGrid.tsx` — had no way to set a loop at all before this, short of switching to Compose. Per
+direct user request: "users need to be able to easily — really easily — loop sections of their own
+definition. for instance, they might just want to practice one chord change."
+
+**Same gesture as Compose's own loop row, deliberately, not a new one: Shift+drag across bars.**
+`BeatGridSheet.tsx` gained `loopStart?`/`loopEnd?`/`onLoopRangeChange?` props (all optional — Compose
+doesn't pass them, already having its own fuller loop editing; `MobilePlayer.tsx` doesn't either, so
+mobile gets no loop-setting UI, matching this app's "no editing on mobile" stance even though setting
+a loop isn't really *editing* a song). A **single Shift+click on a bar loops just that one bar
+immediately** — no drag required — which is exactly the "just want to practice one chord change"
+case when the change fits in a bar; dragging further extends the range live as the pointer crosses
+other bars, mirroring Compose's own drag-to-define behavior. Every run's div already spans exactly
+one bar (`BeatRun`'s own doc comment: "a run never crosses a bar line"), so resolving a run's own
+`startBeat` to a bar index is exact, no rounding needed at the click site itself.
+
+**Mousedown-driven drag tracked via document-level listeners, not the cell's own `onMouseMove`** —
+same reasoning as `App.tsx`'s own cross-system pointer math for `EditGrid.tsx`: a drag routinely
+leaves the cell it started on, so resolving "which bar is the pointer over now" needs
+`document.elementFromPoint(x, y)` + `closest('[data-bar]')` (a new `data-bar` attribute on every
+cell, not just clickable ones) rather than relying on hover events from the origin cell alone.
+**Shift-gated specifically so it can't collide with the cell's own plain-click behavior** — the whole
+cell was already made clickable last session (chord-select in Practice, fingering-peek in Play
+Along); a plain mousedown here still falls through untouched to that, only `e.shiftKey` triggers the
+loop drag.
+
+**Visual: an inset amber ring, not a background tint** (`.beat-grid-sheet-cell--loop`, `box-shadow:
+inset 0 0 0 2px var(--loop-accent)` — the exact same `--loop-accent` amber `LoopRow.tsx`'s own
+`.loop-row-active` uses, so a loop reads as "the same concept" regardless of which view set it).
+Deliberately not a background, unlike the existing playhead-active highlight
+(`.beat-grid-sheet-cell--active`, an accent-tinted background) — a bar can be *both* currently
+playing *and* inside the loop range at once, and a ring composes cleanly on top of a background
+rather than one silently winning over the other.
+
+**Status/discoverability row above the grid** (not an absolute overlay on top of it — the grid's own
+top-right cells can hold real chord text, and this app's "paper" page wrappers don't reliably have
+spare padding above the grid to float into): a subtle "Shift+drag a bar to loop it" hint when no
+custom range is set, replaced by "🔁 Bars X–Y ✕" once one is — the × resets to `[0, totalBeats)`,
+i.e. loop the whole song, App.tsx's own trivial default. That default is exactly why a **"genuine
+custom loop" check exists** (`hasCustomLoop`) rather than always showing the indicator: `loopStart`/
+`loopEnd` always have *some* value (every song starts with the whole-song default), so showing a
+highlight/indicator unconditionally would misleadingly suggest an active loop before anyone's
+touched anything. Bar numbers in the indicator round defensively (`Math.floor`/`Math.ceil`, not
+assumed bar-aligned) since the same `loopStart`/`loopEnd` can also have been set from Compose's own
+finer-grained `LoopRow` before switching to Play Along or Practice.
+
+**Wiring**: both call sites pass the exact same `loopStart`/`loopEnd` state and `handleLoopChange`
+handler `EditGrid.tsx` already uses (`App.tsx`, no new state) — `BeatGridSheet` in Play Along's Chord
+Grid view directly, and threaded down through `PracticeView` → `ScaleArpeggioTrainer` for Practice's
+own chart. Since it's the same underlying state playback already reads (`loopStartBeat`/
+`loopEndBeat` in `handleTogglePlay`'s call to `play()`), a loop set from Play Along or Practice takes
+effect immediately on the next Play — no new engine plumbing needed, only the UI to set it from these
+two views was missing. Lead Sheet (`LeadSheet.tsx`, VexFlow-rendered) doesn't get this gesture —
+real engraved notation doesn't have the same simple per-bar cell surface `BeatGridSheet` does, and
+switching to Chord Grid to set a loop (which then still applies when switching back to Lead Sheet,
+same shared state) covers the need without a separate VexFlow-specific interaction model.
+
+**Verified**: a Shift-drag from bar 1 to bar 3 in Play Along shows "Bars 1–3" with the correct three
+bars ringed; a single Shift+click in Practice loops just that one bar ("Bars 4–4"); clearing reverts
+to the hint text; both confirmed in light and dark mode via scripted Playwright mouse/keyboard
+sequences, zero console errors.
+
+**Highlight changed to a top line + faint tint (done, follow-up)**, replacing the original inset-ring
+treatment, per direct user request ("a coloured line atop each cell"). `.beat-grid-sheet-cell--loop`
+now sets `border-top: 3px solid var(--loop-accent)` (overriding the cell's own plain 1px grey
+border-top outright — same property, this rule declared later in the cascade) plus a faint
+`color-mix(in srgb, var(--loop-accent) 10%, transparent)` background, rather than
+`box-shadow: inset 0 0 0 2px`. Background over box-shadow specifically because it composes more
+predictably with `--active`'s own background (the playhead can be inside the loop range while
+playing, and two backgrounds still just... apply, no ordering surprises the way a shadow layering on
+top of a shadow could have); a top line also reads faster than a full ring when scanning a whole run
+of looped bars at once rather than examining one cell. Confirmed no layout shift from the thicker
+border (`getBoundingClientRect().height` — looped and plain cells both still exactly 40px, the fixed
+`grid-auto-rows` track height) in both Play Along and Practice, light and dark.
+
+**Four more real bugs, all found and fixed in the same follow-up round:**
+- **A second, separate Shift+click only ever highlighted the last bar clicked.** The drag-anchor
+  logic always reset `dragAnchorBarRef.current` to whatever bar was just clicked, on every
+  `mousedown` — correct for one continuous drag, but two genuinely *separate* Shift+clicks (click a
+  start bar, release, click an end bar — a completely reasonable way to try this gesture) each threw
+  away the previous range and collapsed back to a single bar, so only the most recent click ever
+  stayed highlighted. Fixed in `handleLoopDragStart`: if a genuine loop is already active and the new
+  click lands *outside* it, the anchor becomes that loop's own far edge instead of the clicked bar,
+  so the click extends the existing range in whichever direction rather than replacing it — both a
+  second click and continuing to drag from that same click now behave the same way. Clicking back
+  *inside* the current range starts fresh from that bar (no single obviously-right "shrink" meaning
+  to build a stronger claim on). Verified: two separate clicks on bar 1 then bar 4 now correctly
+  highlight all four bars in between, and a third click further out extends again rather than
+  resetting.
+- **Shift+clicking a chord also popped open its fingering peek.** `e.preventDefault()` inside the
+  `mousedown` handler only suppresses the browser's own default mousedown behavior (text selection,
+  drag-start) — it does *not* stop the `click` event that still fires afterward on the same element,
+  so a Shift+click was firing `handleCellClick` right alongside setting the loop. Fixed by having the
+  cell's `onClick` explicitly bail out when `e.shiftKey` is set, rather than assuming
+  `preventDefault()` on the earlier `mousedown` already covered it.
+- **The "Bars X–Y" indicator text is gone**, per direct user follow-up — once the per-cell highlight
+  actually shows every looped bar correctly (the two fixes above), spelling the same range out in
+  text next to it is redundant. The indicator is now just the 🔁 icon and the ✕ clear button; the
+  range itself moved to a `title` tooltip and an `aria-label`-equivalent `.sr-only` span, so it's
+  still available on hover / to screen readers without being permanent on-screen text.
+- **Pressing Play while a loop was active still started from song start, not the loop's own start.**
+  `handleTogglePlay` (`App.tsx`) always passed the plain `playheadBeat` as `startBeat` to `play()` —
+  and stopping playback always resets `playheadBeat` to 0 (see the `isPlaying` branch just above), so
+  in practice this meant "press Play" *always* meant "from the top," silently ignoring whatever loop
+  was set until playback happened to loop back around to it on its own. Fixed with the same
+  "genuine sub-range, not the trivial whole-song default" check `BeatGridSheet.tsx`'s own
+  `hasCustomLoop` uses (duplicated rather than shared — a four-line check with exactly two call sites
+  in different modules isn't worth a new shared utility for) — `startBeat` becomes `loopStart`
+  whenever a real loop is active, `playheadBeat` otherwise. Verified: with a loop set over bars 5–7,
+  pressing Play immediately shows bar 5 (not bar 1) as the active cell.
+- **The currently-playing bar became visually indistinguishable from an ordinary looped bar once it
+  was inside the loop range**, per direct user report — every bar in an active loop looked identical
+  while playing, no way to tell which one was actually sounding. The real cause: `--active` and
+  `--loop` both set `background`, and since `--loop` happens to be declared later in the stylesheet,
+  it silently won outright for any cell carrying both classes — CSS backgrounds don't "layer," the
+  later cascade rule just replaces the earlier one (this rule's own doc comment used to claim
+  otherwise; that claim was wrong, corrected in the same pass). Fixed with an explicit
+  `.beat-grid-sheet-cell--active.beat-grid-sheet-cell--loop` rule — two-class specificity (0,2,0)
+  beats either single-class rule regardless of source order, so the fix doesn't depend on staying
+  declared last. The loop's own top line is a different property (`border-top`, untouched by any of
+  this) and was never actually hidden — only the background needed the fix. Verified: the cell
+  currently sounding inside an active loop now shows the accent-tinted background *and* the amber top
+  line at once, distinct from the other looped-but-not-currently-sounding bars around it.
 
 ## Compose and Play Along: two modes, three views
 What used to be "Four desktop views: Edit / Chord Grid / Lead Sheet / Practice" is now two modes
@@ -428,10 +677,29 @@ vocabulary), any of the 12 roots, shown as CAGED-position fretboard boxes.
 a generator can't judge for playability/musicality — see that section's own reasoning. A scale/
 arpeggio box has no such judgment call: correctness is just "is this fret's pitch class a member
 of the scale," fully verifiable per note. `data/scaleFretboard.ts`'s `findPositionNotes(root,
-intervals, position)` walks every string × a 5-fret window and keeps whatever's in the scale's own
-semitone set (mod 12) — verified against 732 note/root/scale/position combinations (12 roots ×
-major + minor pentatonic × both positions), each checked for correct pitch class, correct `isRoot`
-flag, and correct fret-window bounds, all passing before this shipped.
+intervals, position)` walks every string × a window from the position's own start fret out to
+`startFret + SCALE_BOX_FRETS` **inclusive** — a real 5-fret span, not 4, despite the constant's own
+name (see that file's doc comment) — and keeps whatever's in the scale's own semitone set (mod 12).
+Verified against 732 note/root/scale/position combinations (12 roots × major + minor pentatonic ×
+both positions), each checked for correct pitch class, correct `isRoot` flag, and correct
+fret-window bounds, all passing before this shipped.
+
+**Rendering bug, since fixed — the box was too narrow for its own data, not the other way round.**
+`ScaleFretboardDiagram.tsx`'s SVG originally only drew 4 fret-gaps' worth of grid, one short of the
+5 fret positions `findPositionNotes` actually produces, so that 5th column's dots floated past the
+box's right edge with no fret lines behind them. **First attempt at a fix got this backwards**:
+trimming the data's own fret loop to match the 4-fret grid instead of widening the grid to match the
+data — which silently dropped real scale tones rather than just fixing a rendering glitch. Checked
+by brute-force simulation across every root × 6 representative scales × both positions: **144/144
+combinations** had at least one string whose note at the would-be-dropped 5th fret column had no
+closer duplicate within the first 4 frets, meaning that "fix" was quietly deleting real, correct
+scale tones from the box, not just cropping empty overflow space — caught before landing, per direct
+user pushback ("we're now dropping notes"). The actual fix went the other direction:
+`ScaleFretboardDiagram.tsx` now sizes its SVG (`BOX_FRET_COUNT = SCALE_BOX_FRETS + 1`) to cover all
+5 fret positions the data really spans, confirmed by rendering Dorian in both positions and checking
+every dot now sits inside the grid with a fret line on both sides. Worth remembering: a real
+CAGED-style scale box routinely needs a pinky stretch to that 5th fret to pick up every scale tone
+within a position — that's not a generator quirk, it's a genuine, common shape on the instrument.
 
 **Positions: E-shape/A-shape only, same honest scope as the chord fingering popover.** A scale box
 only actually needs a root string + anchor fret (not a full curated chord voicing), so in principle
@@ -444,21 +712,357 @@ tied to a specific `ShapeFretting` object. `components/practice/ScaleFretboardDi
 string, not one) and with root notes given a distinct fill so the box still reads as "rooted" at a
 glance.
 
-**Metronome + auto-cycling positions, on request.** `audio/practiceMetronome.ts`'s
-`startPracticeMetronome(bpm, beatsPerBar)` is a standalone click, deliberately **not** built on the
-shared `Tone.Transport` the real song metronome (`audio/metronome.ts`) and song playback both use.
-Practice mode itself has no access to the loaded song or its Play/Stop at all (see "App shell"
-above) — but `App.tsx` doesn't unmount when `appMode` changes, so a song started in Compose/Play
-Along keeps running on the *shared* `Tone.Transport` even after navigating to Practice via "←
-Menu." This metronome shouldn't touch that Transport's position/state at all, so it uses
-`Tone.Clock` instead, Tone.js's own free-running-clock primitive, entirely separate from Transport. A plain module-level `beatCount` (not React state) is
-incremented inside the Clock callback; `ScaleArpeggioTrainer.tsx` polls it via `requestAnimationFrame`
-(same pattern `App.tsx`'s own playhead uses for `getCurrentBeat()`) rather than calling `setState`
-directly from the Tone-thread callback. With the metronome off, both curated positions render side
-by side for reference; running, only the *current* position renders (large), advancing to the next
-one every `cycleEveryBeats` clicks (`Math.floor(beatCount / cycleEveryBeats) % SCALE_POSITIONS.length`
-— cycles E→A→E→A… with only two positions defined, extends naturally if more are ever added), with
-a small per-beat flash indicator (`.scale-trainer-beat-dot`) for the current beat-in-bar.
+**Superseded: the standalone practice metronome + position-auto-cycling this section used to
+describe here (`audio/practiceMetronome.ts`, a `Tone.Clock`-based click independent of the app's own
+`Tone.Transport`, plus BPM/"cycle position every N beats" controls) no longer exists.** It was built
+because, at the time, "Practice mode itself has no access to the loaded song or its Play/Stop at
+all." That's no longer true — see "Song-scoped practice mode" below for the redesign that gave
+Practice real access to the app's actual Play/Stop, at which point a second, independent, silent
+metronome had no remaining reason to exist alongside it and was deleted outright (file included),
+not just hidden. The E-shape/A-shape boxes it used to auto-cycle through now just render side by
+side, unconditionally, same as this section's own "with the metronome off" behavior used to describe
+as the *inactive* state.
+
+## Practice direction check-in: Jens Larsen's jazz-practice pedagogy (findings, informs the roadmap)
+Prompted by direct user request to step back and reconsider what actually makes this app a *helpful*
+jazz-guitar learning tool, checked against a real jazz-guitar teacher's own written pedagogy (Jens
+Larsen, "How to Practice Jazz Guitar Smarter (and Save Time) in 2025"). His core claims, condensed:
+
+- **"Learn all scales/arpeggios in all keys and positions" is a named anti-pattern, not a starting
+  point** — his own words: "I don't think that has ever worked for anyone." The fix he actually
+  teaches: take one easy song, learn one position, and only the scales/arpeggios that song's own
+  changes need. Same critique applies to comping — not "all drop2/drop3 in all keys," but simple,
+  common voicings learned *in* a song.
+- **Technique in isolation doesn't transfer** — timing, phrasing, and holding the form are separate,
+  harder skills that only develop by playing real music over changes, not by drilling exercises and
+  "applying them later." Practicing scales/arpeggios divorced from a song produces exactly what
+  you'd expect: someone who can only play the scales and arpeggios they drilled, not music.
+  Comping's real content — hearing how chords function in a song, playing solid rhythm, choosing the
+  right color — has the identical problem if it's learned as a table of voicings instead of inside
+  songs.
+- **Listening (and learning by ear) matters more than any technical drill** — "50% of your practice
+  time should be spent listening," per Joe Diorio, quoted approvingly. Learning solos by ear is
+  named as one of the most valuable habits, gated on doing it right: short, easy solos (not Bird on
+  "Cherokee"), listened to 50-100 times *before* attempting to play any of it, with tooling that
+  makes looping/slowing a short phrase painless (he specifically credits cheap headphones + loop/
+  slow-down software — Audacity, or "Transcribe!" — as the practical unlock, not talent or "more
+  discipline").
+
+**Direct, honest self-assessment against this app's own current practice feature.** The Scale/
+Arpeggio trainer (see above) — the one real, shipped exercise in the Practice tab — is, as built,
+close to a textbook example of the exact anti-pattern Larsen calls out: free-roam, any of 12 roots ×
+19 scales × 28 arpeggios, entirely decoupled from any song. It's correctly built and genuinely
+useful as a *reference* tool (see a position, hear a scale), but as the app's flagship practice
+exercise it's optimizing the wrong thing — breadth-of-drilling instead of "one song's worth of
+material, actually applied." Nothing currently on the Practice roadmap (the lick trainer, trading
+fours, scale substitutions) addresses his single most emphatic point either: this app has **no
+listening or ear-training feature of any kind** today.
+
+**Three concrete responses, ranked by how directly they close the gap above (not by build size):**
+1. **Song-scoped practice mode** (chosen as the next thing to build — see its own scoped section
+   right below this one) — turns the existing Scale/Arpeggio trainer's "any root/scale/arpeggio"
+   free-roam into what Larsen actually prescribes: pick a song, walk its own real chords one at a
+   time, see only the scale/arpeggio *that chord* needs. Cheapest of the three (near-total reuse of
+   existing data/components) and the most direct fix to the anti-pattern named above.
+2. **An ear-training / slow-down looper** (idea, not scoped yet) — the actual missing piece per
+   Larsen's own strongest claim, not a refinement of anything already built. Loop a short phrase (a
+   lick, an imported melody) at a reduced, pitch-preserved rate, notation/TAB hidden until revealed
+   — same shape as the "Transcribe!" workflow he credits directly. Buildable on infrastructure this
+   app already has (the loop-range mechanism, Tone.js, `MelodyNote[]`-shaped lick/melody data) — a
+   genuinely new capability, not a variant of an existing one, and the natural #2 once song-scoped
+   practice ships.
+3. **A timed comping drill** (idea, not scoped, lower priority) — chord voicings flash just ahead of
+   the beat they belong to as a loop plays, so switching in time (not memorizing more inversions) is
+   the thing being drilled, per Larsen's comping critique above. No audio input exists in this app,
+   so this can only ever be a rhythm *cue*, not a grader — smaller, less differentiated payoff than
+   the other two, kept in mind rather than scoped now.
+
+This check-in doesn't overturn anything already shipped (chord-scale suggestions/auditioning, the
+CAGED fingering popover, and the Scale/Arpeggio trainer itself are all still real, useful, correctly
+built pieces) — it changes what gets built *next*, per "Direction: what this app needs next" below,
+which now leads with #1 above instead of the lick trainer.
+
+## Song-scoped practice mode (done, then substantially redesigned per direct user follow-up)
+Replaces "Free Explore" (any of 12 roots x 19 scales x 28 arpeggios, decoupled from any song) as
+the Scale/Arpeggio trainer's *only* mode — no toggle between the two anymore, Free Explore is gone
+outright. Directly operationalizes Larsen's "one song, one position, only what that song needs" —
+see the pedagogy check-in section just above for why this was the top practice priority.
+
+**v1 (chord-stepper, prev/next buttons, a standalone practice metronome) shipped first, then was
+substantially redesigned the same session** per direct, detailed user follow-up asking for: the
+song rendered as its own real chord grid (not a text stepper), click-to-select a chord on that grid,
+and — the actually new, bigger ask — pressing Play plays the real song through with the chart
+highlighting the currently-sounding chord and the scale panel live-tracking it, "as in chord grid
+mode." That last part meant Practice needed real playback for the first time ever, which is the
+significant part of this redesign, not the UI reshuffle around it. What's below describes the
+*current, shipped* design — the chord-stepper/standalone-metronome v1 this replaced is gone, code
+included (`audio/practiceMetronome.ts` deleted, `data/songPresets.ts`'s `uniqueChordsInOrder` helper
+removed — both fully unused once chord selection moved to clicking the real chart instead of
+stepping through a deduped list).
+
+**Chord source narrowed to exactly one: whatever's currently loaded.** v1 also let Practice browse
+any bundled song directly, independent of what Compose/Play Along had loaded. That stopped being
+workable once Play needed to be real: playing a song for real needs its actual instruments/tempo/
+styles, and only "the currently loaded song" has that state in `App.tsx` at all — a bundled preset
+picked from inside Practice would have nothing to actually play back with. So "This Song" now really
+does mean *this* song, singular — the exact one Compose/Play Along already have loaded, with no
+picker at all. Simpler than v1 in this one respect, and a direct consequence of Play becoming real
+rather than a scope cut.
+
+**Chart: `BeatGridSheet.tsx`, the same component Play Along's Chord Grid view renders — not a new
+one.** `ScaleArpeggioTrainer.tsx` renders it directly, inside the same `.beat-grid-sheet-page`
+"paper" wrapper Chord Grid uses, fed the real `placements`/`musicalKey`/`scale`/`notationStyle`/
+`sections`/`beatsPerBar`/`playheadBeat` — all read-only props now carried on `PracticeCurrentSong`
+(expanded from v1's narrower `{title, placements, musicalKey, scale}` to cover everything
+`BeatGridSheet` itself needs). Clicking a chord uses `BeatGridSheet`'s existing `onChordClick?:
+(chord: Chord) => void` prop (built originally for the chord fingering popover — see that section
+above) wired straight to `setSelectedChord`, no new click-handling code needed on this end at all.
+
+**Play is the app's real Play/Stop, not a second playback path.** `App.tsx`'s `handleTogglePlay` —
+the exact function TopBar's own Play/Stop button already calls, running the real `audio/engine.ts`
+`play()` against whatever drums/bass/keys styles and instruments are currently selected — is handed
+straight down to `PracticeView` → `ScaleArpeggioTrainer` as `onTogglePlay`, alongside the same
+`isPlaying`/`playheadBeat` state Chord Grid/Lead Sheet already read. Practice runs **zero playback
+logic of its own**: pressing Play in Practice *is* pressing Play anywhere else in the app, on the
+same shared `Tone.Transport` that already keeps running across `appMode` switches (see the
+Metronome section above) — confirmed by a scripted test that starts playback in Practice, navigates
+to Menu and back, and finds it still correctly playing. This is also why the mixer/instrument
+pickers still don't need to exist inside Practice: the accompaniment is whatever's already dialed in
+elsewhere, exactly "as in chord grid mode."
+
+**Two different `isPlaying` values, and mixing them up was a real bug caught and fixed before
+shipping.** Chord Grid suppresses `isPlaying` during the count-in (`isPlaying && !countInActive`)
+so the chart doesn't highlight a bar before the beat actually arrives — TopBar's own Play/Stop
+button, by contrast, uses the *raw* `isPlaying`, so it reads "Stop" the instant playback is
+triggered, count-in included. The first pass here reused the suppressed value for everything,
+including Practice's own Play button — which meant the button silently stayed on "▶ Play" through
+the whole count-in with no visible feedback that anything had happened (caught via a scripted
+Playwright check: clicked Play, read the button's text back immediately, got "▶ Play" instead of
+"■ Stop"). Fixed by threading `countInActive` down as its own prop alongside raw `isPlaying`, and
+computing a local `chartActive = isPlaying && !countInActive` inside `ScaleArpeggioTrainer` — used
+for `BeatGridSheet`'s highlighting and for the "which chord is currently sounding" scale-tracking
+below, while the Play/Stop button itself uses raw `isPlaying`, matching TopBar exactly.
+
+**Scale panel tracks whichever chord is actually sounding during playback, falls back to the last
+click otherwise.** `chordAtBeat(song, beat)` finds whichever placement contains the current
+(floored) `playheadBeat` and resolves it via `resolveSelection` — computed only while `chartActive`,
+so it stays null (falling back to `selectedChord`) during count-in or a gap, never flashing blank.
+`selectedChord` itself defaults to the song's own first chord (sorted by `startBeat`, since a live
+`placements` array isn't guaranteed to stay time-ordered after edits) via a `useState` lazy
+initializer — safe as a mount-time-only read because `ScaleArpeggioTrainer` fully unmounts whenever
+`appMode` leaves `'practice'` (App.tsx only renders `<PracticeView>` inside its `appMode ===
+'practice'` branch), so `currentSong` can never actually change out from under an already-mounted
+instance.
+
+**Scale suggestion / arpeggio logic is unchanged from v1**, just now driven by `displayedChord`
+(whichever of playing/selected wins) instead of a stepper's current index: `SCALE_SUGGESTIONS
+[chord.quality]` → `SCALE_INTERVALS[name]` for the scale side, `QUALITY_INTERVALS[chord.quality]`
+always available for Arpeggio, the same honest "no fit in this app's scale set" message when
+`SCALE_SUGGESTIONS` is empty (verified for real on "A Night in Tunisia"'s Eb7#11 via a scripted
+sweep before the redesign; behavior here is untouched), and the same small pill toggle when a
+quality has more than one suggested scale (e.g. `min` → Dorian/Minor).
+
+**Root notes in the app's accent color, every other scale tone in black — per direct user
+request, inverted from the chord-shape popover's own scheme.** `ScaleFretboardDiagram.tsx`'s outer
+wrapper now also carries a `scale-fretboard-diagram` class; `index.css` scopes the override to just
+that class (`.scale-fretboard-diagram .fretboard-dot { fill: #1a1a1a }` /
+`.scale-fretboard-diagram .fretboard-dot--root { fill: var(--accent) }`) rather than touching the
+shared `.fretboard-dot`/`.fretboard-dot--root` rules directly — `FretboardDiagram.tsx` (the CAGED
+chord-shape popover) also uses `.fretboard-dot` but never `.fretboard-dot--root` at all (a chord
+voicing has no root/non-root distinction the way a scale box does), so touching the shared rule
+would have silently recolored the popover's diagrams too, which nothing here asked for. Tied to
+`var(--accent)` (the user's own customizable accent color) rather than a hardcoded purple, so the
+root color follows whatever accent they've picked, same as everywhere else `--accent` is used.
+
+**Layout: chord grid left, scale panel right (`.practice-song-trainer`, a two-column flex), a small
+toolbar above the grid with the song's title and the real Play/Stop button.** `.practice-view`'s own
+`max-width` was widened from 900px (right for the old free-roam form) to 1200px, since a real chart
+plus a 320px-wide scale panel need materially more room side by side.
+
+**What still doesn't change.** Practice still can't *edit* song state — no mixer, no chord/melody
+editing, matching "App shell" above (this was still true even after Practice later gained a shared
+`TopBar` — see "Harmonized header" below). `FretboardDiagram.tsx`/the chord fingering popover are
+untouched. No new data files, no new persistence.
+
+**Selected chord is highlighted on the chart too (done, follow-up), not just the sounding one
+during playback.** Clicking a chord already updated the scale panel; the chart itself gave no visual
+feedback about which one you'd picked, per direct user follow-up. `BeatGridSheet.tsx` gained a new
+optional `selectedBeat?: number | null` prop — highlights whichever run starts at that beat,
+independent of `isPlaying`/`playheadBeat`, reusing the exact same `.beat-grid-sheet-cell--active` CSS
+treatment the playhead highlight already uses (the two are never shown at once by construction, so
+one shared visual is enough — see below). `onChordClick`'s signature widened from `(chord: Chord) =>
+void` to `(chord: Chord, startBeat: number) => void` — the *run's* own `startBeat` (which bar was
+actually clicked), not the placement's, since a chord held across a bar line renders as two runs
+(a "name" run and a "repeat" run) sharing one placement, and only the specific box clicked should
+light up, not the whole held duration — matching the playhead highlight's own existing convention of
+lighting up only the one run it's currently inside. Widening this signature needed no changes at the
+other call site (`App.tsx`'s `handleChordPeek`, used by Chord Grid/Lead Sheet's chord-fingering-
+popover clicks): a callback declared with fewer parameters is assignable wherever more are expected,
+so it keeps compiling and behaving identically, just never reading the new second argument.
+
+`ScaleArpeggioTrainer.tsx`'s `selectedChord` state became `selection: { chord: Chord; startBeat:
+number } | null` — one state instead of two, since both fields are always set together from the same
+click (or the same first-chord default) and were never meaningfully independent. `selectedBeat`
+passed to `BeatGridSheet` is `chartActive ? null : selection?.startBeat ?? null` — suppressed while
+actually playing, same precedence `displayedChord` (`playingChord ?? selectedChord`) already uses for
+the scale panel's own text/fretboard content, so the chart highlight and the scale panel never
+disagree about which chord is "current." Verified: default mount highlights the song's own first
+chord, clicking a different chord moves the highlight there and updates the scale panel together,
+starting playback overrides the highlight to follow the playhead (ignoring whatever was last
+clicked), and stopping reverts the highlight to that last click — all via scripted Playwright
+screenshots, zero console errors.
+
+**Click target widened to the whole cell, not just the chord-name/"%" text (done, follow-up).**
+`BeatGridSheet.tsx`'s click handler moved from the small inner `<span>` to the outer cell `<div>`
+itself — a run's div already spans its full held-duration width (`gridColumn: span run.length`), so
+the old span-only target left most of a wide bar (any blank space after the glyph) dead to clicks.
+`onChordClick` is now computed once per run and attached to the div's own `onClick`; the two spans
+lost their individual `onClick`s and the old `.beat-grid-sheet-chord--clickable` class, replaced by
+`.beat-grid-sheet-cell--clickable` on the div (cursor + a subtle hover wash, distinct from
+`--active`'s stronger accent tint, so "this whole bar is one target" reads before the click too).
+Verified by clicking near the right edge of a wide cell, away from its text — selection updated
+correctly.
+
+**One fretboard box at a time, picked from the full CAGED set (done, follow-up).** Previously the
+scale panel always rendered E-shape and A-shape side by side, permanently — the only two positions
+this app has real curated fretting math for (see "Practice tab: Scale/Arpeggio trainer" above). Per
+direct user request, that's now a picker over all five CAGED letters (`CAGED_LETTERS = ['C', 'A',
+'G', 'E', 'D']`, the acronym's own order, local to `ScaleArpeggioTrainer.tsx` — deliberately *not*
+added to `data/scaleFretboard.ts`'s own `ScalePosition` type, which stays exactly the two letters
+that type's real math supports), showing exactly one box for whichever letter is selected
+(`cagedPosition` state, defaults to `'E'`). Selecting `C`/`G`/`D` — the three letters this app has no
+curated fretting for at all — shows the same honest "not curated yet" message `CAGED_SHAPES` and the
+chord fingering popover already use elsewhere, naming which two letters *are* available, rather than
+a wrong or empty box. The always-visible "Only E-shape/A-shape are curated" hint that used to sit
+under the fretboard row is gone, replaced by this same message shown only in context (when an
+uncurated letter is actually selected) — no longer needed as a standing disclaimer once the picker
+itself makes the gap self-evident.
+
+**Start-fret label made larger/bold and moved further from the diagram (done, follow-up).**
+`ScaleFretboardDiagram.tsx`'s "8fr"/"3fr" label used to sit just 12px below the last string, sharing
+the SVG's plain symmetric bottom `MARGIN` with barely any clearance — close enough to read as
+fouling the diagram, per direct user feedback. A new `LABEL_OFFSET_Y` constant (30, up from the old
+implicit 12) repositions it, and the SVG's own `HEIGHT` grew independently to match (no longer just
+`MARGIN * 2 + strings`, now `MARGIN + strings + LABEL_OFFSET_Y + 14`) so the extra offset doesn't run
+the label off the bottom edge. `index.css` scopes a bigger, bold font (14px/700, up from the shared
+9px/400 `.fretboard-fret-label` rule) to `.scale-fretboard-diagram` only — the same scoping technique
+already used for the root-note accent color and (see below) the dark-mode fill overrides, so
+`FretboardDiagram.tsx`'s smaller, tighter chord-popover diagrams are untouched.
+
+**Practice UI made theme-aware (done, follow-up) — "should learn dark-mode."** `.practice-view` and
+everything under it (`.scale-trainer-panel`, the mode/position/suggestion toggle buttons, the Play
+button, exercise-list borders) used to be a fixed-light "paper" page, the same non-theme-aware
+treatment Chord Grid/Lead Sheet's manuscript-paper styling deliberately keeps (real sheet music reads
+as white regardless of app theme — see `.chord-grid-page`'s own comment). Practice isn't meant to
+*look like* a printed chart the way those two are, so its own chrome switched to the app's actual
+`--text`/`--bg`/`--border`/`--accent` theme variables (the same ones `:root`'s `@media
+(prefers-color-scheme: dark)` block already drives everywhere else in the app — no manual light/dark
+toggle exists anywhere, this app has only ever followed the OS/browser preference). Fixed hex colors
+(`#1a1a1a`, `#fdfdfb`, the `#9f5fe0` Play-button purple) became `var(--text)`/`var(--bg)`/
+`var(--accent)`; fixed `rgba(26, 26, 26, N%)` translucent overlays (panel backgrounds, subtle
+dividers) became `color-mix(in srgb, var(--text) N%, transparent)` — same idiom `.beat-grid-sheet-
+cell--active` already used for its own accent-tinted highlight, just parameterized by the text color
+instead of a fixed accent, so the tint direction (a touch of ink on paper vs. a touch of light on
+dark) flips correctly with the theme instead of just fading toward invisible in dark mode.
+
+The scale-box SVG needed the same treatment for a different reason: SVG `fill`/`stroke` don't inherit
+CSS `color` the way HTML text does, so simply fixing `.practice-view`'s own `color` doesn't reach the
+diagram's strings/frets/dots/label at all. Those live on the *shared, unscoped* `.fretboard-string`/
+`.fretboard-fret`/`.fretboard-dot`/`.fretboard-fret-label` rules FretboardDiagram.tsx's chord-popover
+diagrams also use, and that popover is itself deliberately fixed-light (`.chord-fingering-popover`'s
+own hardcoded white "paper" card, unaffected by this change) — so switching those shared rules to
+`var(--text)` directly would have made the popover's own black-on-fixed-white diagrams illegible.
+Fixed the same way the root-note accent color already was: scoped overrides under
+`.scale-fretboard-diagram` only (`stroke: var(--text)` for strings/frets, `fill: var(--text)` for
+plain dots and the fret label), leaving the base rules — and therefore the popover — untouched.
+`.practice-song-grid-page` (the embedded `BeatGridSheet` chart itself) is the one deliberate
+exception left fixed-light: it's the exact same component Chord Grid uses elsewhere, so keeping it as
+manuscript paper stays consistent with every other place it renders, rather than making the same
+shared component look different depending on where it's embedded. Verified in both color schemes via
+Playwright's `colorScheme` context option (no manual in-app toggle exists to test otherwise) — panel
+backgrounds, borders, toggle buttons, the Play button, and the fretboard diagrams (grid lines, plain
+dots, root dots, the fret label) all read correctly in both, zero console errors.
+
+**Real bug: a flat root rendered as a capital B (done, fix).** `.fretboard-diagram-label` (the
+"E-SHAPE · Bb△7 · MAJOR" caption under a scale box) has always been `text-transform: uppercase` —
+harmless for `FretboardDiagram.tsx`'s own plain "E-shape" label, but `ScaleFretboardDiagram.tsx`'s
+richer label embeds a real chord name, and a flat root is spelled with a plain lowercase "b" (see
+`progressions.ts`'s `SEMITONE_TO_NOTE_FLAT`) — so "Bb△7" was silently becoming "BB△7" on screen,
+reading as if a capital B stood in for the flat, per direct user report. Fixed with the same scoping
+technique used throughout this section: `.scale-fretboard-diagram .fretboard-diagram-label {
+text-transform: none; }` turns off the blind uppercase for just this component (`FretboardDiagram.tsx`'s
+own label, having no chord name in it, keeps the base rule untouched), and the parts that *are* safe
+to uppercase moved into explicit uppercase text instead — `ScaleFretboardDiagram.tsx` now hardcodes
+`{position}-SHAPE` in the JSX, and `ScaleArpeggioTrainer.tsx` builds `activeLabel` with
+`SCALE_LABELS[chosenScale].toUpperCase()` / a literal `"ARPEGGIO"` — while `chordName(displayedChord)`
+itself is left at whatever casing it naturally has. Verified by clicking a flat-rooted chord
+(Autumn Leaves' Bbmaj7) and confirming the label reads "Bb△7", not "BB△7".
+
+**Scale box made much larger (done, per direct user request).** `ScaleFretboardDiagram.tsx`'s
+`MARGIN`/`STRING_GAP`/`FRET_GAP`/`DOT_RADIUS` roughly doubled (22→40, 18→40, 30→62, 6→11), taking the
+rendered SVG from ~194×156 to ~390×306 — deliberately dominant in the scale panel now, since (unlike
+`FretboardDiagram.tsx`'s small chord-popover diagrams) this is the Practice tab's own primary visual,
+on screen the whole time a chord's being practiced. `LABEL_OFFSET_Y` and the fret-label/caption font
+sizes grew proportionally alongside it (20px/14px, up from 14px/11px) so the larger box doesn't leave
+the now-bigger text looking small or cramped again. `.practice-song-trainer-scale-col`'s own
+`flex-basis` grew from 320px to 460px to actually fit the wider box — without this the diagram would
+have silently overflowed its own panel. Verified visually in both color schemes; no layout overflow.
+
+**Scale-degree numbers inside every dot (done, follow-up).** Per direct user request, each dot now
+shows its own degree relative to the chord/scale root — "1", "b3", "5", "b7", etc. — not just a
+plain undifferentiated circle. `data/scaleFretboard.ts`'s `ScaleFretboardNote` gained a `degreeLabel`
+field, computed in `findPositionNotes` from the same `semitoneFromRoot` math that already decides
+`isRoot`, via a new `SEMITONE_DEGREE_LABELS` lookup table (one canonical spelling per semitone class
+— "1, b2, 2, b3, 3, 4, b5, 5, b6, 6, b7, 7"). **One real, documented ambiguity accepted rather than
+solved**: semitone 8 is #5 in an augmented/whole-tone context but b6 in a natural-minor/Aeolian one,
+and this table has no per-scale context to pick between them (unlike `progressions.ts`'s diatonic
+`ScaleName` machinery, which always knows which major-scale mode it's building from) — resolved to
+"b6" since this app's own `ScaleName`/`SCALE_INTERVALS` has no whole-tone or augmented scale at all,
+so b6 is right far more often here. Same honest-simplification stance `data/scaleSuggestions.ts`
+already takes elsewhere in this app, not a new one invented for this.
+
+**Root dots keep the app's accent color, per direct user request** ("keep the root dots accent
+coloured") — unchanged from the earlier dark-mode work. The label text itself is what adapts:
+`.fretboard-dot-label` fills with `var(--bg)` by default (a background-colored number on top of a
+`var(--text)`-colored plain dot — the same background-on-foreground inversion `.scale-trainer-mode-
+button--active` already uses), and `.fretboard-dot-label--root` overrides to plain white, matching
+the white-on-accent convention `.practice-play-button` already established. Rendered as a `<text>`
+element paired with each `<circle>` inside a new `<g>` wrapper (`ScaleFretboardDiagram.tsx`), sized
+at 10px/700 — small enough that even two-character labels ("b3", "b7") sit comfortably inside the
+now-large (`DOT_RADIUS = 11`) dots without overflowing, confirmed via a cropped screenshot of a dense
+7-note scale box in both color schemes.
+
+**Full page width, and a real bug behind the scrollbar (done, follow-up).** Per direct user request
+("use full page width and avoid a scrollbar"). `.practice-view` used to be `max-width: 1200px;
+margin: 0 auto;`, the same "centered card" treatment applied without checking whether it actually
+behaved that way here — it didn't. Measured empirically (`getBoundingClientRect`, not just eyeballed):
+the card was rendering at **761px**, nowhere near either the 1200px cap or `.app`'s own 1400px width.
+The cause: `.practice-view` is a flex item of `.app`'s own `display: flex; flex-direction: column`
+layout, and `margin: 0 auto` on a flex item's cross axis (width, in a column container) cancels the
+container's default `align-items: stretch` for that item, so it shrink-wraps to content instead of
+filling available width — a real CSS interaction, not a hunch; confirmed by removing just the
+`margin: 0 auto` and watching the width jump to the full 1352px available. Fixed with an explicit
+`width: 100%` (plus `box-sizing: border-box` so the existing padding doesn't push it past that),
+sidestepping the shrink-wrap question entirely rather than fighting it.
+
+**This was also the real cause of the scrollbar being asked about, not a separate issue.** At 761px
+wide, `.practice-song-trainer`'s two columns (chord grid `flex: 1 1 480px` + scale panel `flex: 0 0
+460px`, needing ~960px combined to sit side by side) had no choice but to wrap to stacking, which
+roughly doubled the page's real content height. Fixing the width let them sit side by side again,
+which alone cut the overflow from **645px down to 49px** at a deliberately short 900px-tall test
+viewport — and to **zero** at any viewport 1000px or taller (the realistic case for actual desktop
+use). The remaining sliver at 900px came from `.practice-view-exercise-list` (the "More exercises,
+planned" cards) still stacking vertically despite the same newly-available width — changed from a
+flex column to `display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))`, a real
+row of cards now that there's finally room, `auto-fit`/`minmax` so it still wraps sanely on a
+narrower window rather than squeezing three columns into too little space. That plus a small
+`.practice-view-section-title` top-margin trim (24px → 16px) brought the 900px-viewport overflow down
+to 33px — accepted as a reasonable floor rather than chased further (real desktop browser windows
+this short are genuinely atypical), since every realistic viewport already shows no scrollbar at all.
+`overflow-y: auto` itself stays on `.practice-view` as a safety net for genuine edge cases (a very
+long chart, a short viewport) rather than removed outright — removing it would reintroduce the
+original clipping bug this same rule's own comment already documents from the "Harmonized header"
+work, just for a now-much-rarer case instead of the everyday one it used to be.
 
 ## Edit view: the Hookpad-style grid (`EditGrid.tsx`, Milestone 2, done)
 Replaced the old `ChordGrid.tsx` (a staff-based drag/resize/select editor, described in past-tense
@@ -1549,30 +2153,37 @@ is the newer, far-less-built half of the two, so it's what the next few pieces o
 target, not a judgment that composition matters less.
 
 Highest-leverage next pieces, in order:
-1. **The spaced-repetition lick trainer** (see "Practice philosophy" above) — now the actual next
-   thing, not blocked on missing fretboard/TAB infrastructure the way it used to be: both halves of
-   that prerequisite exist now (CAGED chord diagrams via the chord fingering popover, and TAB
-   rendering/authoring via `LickEditor.tsx`/`LickTabView.tsx`/`data/licks.ts`). What's still missing
-   is specifically the *trainer* itself — a lick *bank* keyed by harmonic context, and the
-   loop-and-rotate exercise UI (reusing the existing loop mechanism and `MobilePlayer.tsx`'s
-   beat-countdown pattern) — not new fretboard modeling. This (plus trading-fours and
-   scale-substitution practice — **scale/arpeggio drilling is now done**, see "Practice tab:
-   Scale/Arpeggio trainer" above) is what `PracticeView.tsx` is now explicitly reserved for, per
-   direct user redirection — see "Chord fingering popover" above for the feature that used to
-   occupy that tab and where it actually lives now.
-2. **AI trading-fours** (see its own section above) — the scoping questions are answered; building
+1. **An ear-training / slow-down looper** (idea, not scoped yet — see the pedagogy check-in above) —
+   now the top of the list: **song-scoped practice mode (below it) is done**, which was the other of
+   the two most-direct responses that check-in produced. This is the one that check-in's critique
+   leaned on hardest and that nothing else on this list, done or planned, actually addresses ("50% of
+   practice time should be listening," easy short solos looped/slowed before attempting them) — not a
+   refinement of anything already built, a genuinely new capability.
+2. **The spaced-repetition lick trainer** (see "Practice philosophy" above) — not blocked on missing
+   infrastructure (CAGED diagrams via the chord fingering popover and TAB rendering/authoring via
+   `LickEditor.tsx`/`LickTabView.tsx`/`data/licks.ts` both exist), just no longer judged the most
+   direct next fix after the pedagogy check-in above. What's still missing is specifically the
+   *trainer* itself — a lick bank keyed by harmonic context, and the loop-and-rotate exercise UI.
+3. **AI trading-fours** (see its own section above) — the scoping questions are answered; building
    it is a genuinely large effort (lick bank/generator, turn scheduler) on top of pieces that now
    all actually exist (monophonic playback, the countdown-cue pattern, scale-rooted note generation,
    a real melody editor to build/audition licks against), and shares real infrastructure with the
    lick trainer above (a lick bank, a turn/loop-driven cue) — worth deciding whether these two
    share one lick bank or want separate ones before building either bank in earnest.
-3. **Guitar fingering diagrams: the remaining gap** (see "Guitar fingering diagrams" above) — the
+4. **A timed comping drill** (idea, not scoped — see the check-in section above) — a rhythm *cue*,
+   not a grader (this app has no audio input to listen to what's actually played), so a smaller,
+   less differentiated payoff than the ideas above it; kept in mind rather than scoped now.
+5. **Guitar fingering diagrams: the remaining gap** (see "Guitar fingering diagrams" above) — the
    other three CAGED letters (C/G/D-shape) and ~24 more chord qualities, once there's a concrete
    need (a lick/exercise that specifically wants one of them) rather than filling the table
    speculatively.
-4. **Finish the Electronic drum kit's samples** (see "Sample-based drum playback" above) — most of
+6. **Finish the Electronic drum kit's samples** (see "Sample-based drum playback" above) — most of
    it is already done (Acoustic kit, real bass/piano samples); still a real loose end, just no
    longer ahead of anything guitar-practice-facing.
+
+**Song-scoped practice mode is done** (see its own section above, right after the Scale/Arpeggio
+trainer) — the cheapest and most direct of the pedagogy check-in's three responses, and the reason
+the ear-training looper above is now #1 rather than #2.
 
 Chord-scale suggestions/auditioning (done) is worth naming here too, not just above — it's the
 existing feature that already proves this practice-aid direction has real traction, not just a
